@@ -1,0 +1,85 @@
+{
+  "codex_execution": {
+    "name": "Codex technical execution",
+    "destination": "Codex",
+    "topics": [
+      "powershell",
+      "azure_function",
+      "iac",
+      "intune"
+    ],
+    "body": "## Task\n{TASK}\n\n## Task contract\n- Scope: {SCOPE}\n- Inputs: {INPUTS}\n- Tools allowed: {TOOLS}\n- Constraints: {CONSTRAINTS}\n- Expected outputs: {OUTPUTS}\n\n## Working rules\n1. Orient from the nearest AGENTS.md before changing anything.\n2. Load only the smallest relevant local files.\n3. Execute one coherent slice at a time.\n4. Capture evidence (commands run, output, test results).\n5. Verify before claiming completion.\n6. Leave a handoff note if work remains.\n\n## Verification\n{VERIFICATION}"
+  },
+  "chatgpt_planning": {
+    "name": "ChatGPT planning / advisory",
+    "destination": "ChatGPT web",
+    "topics": [],
+    "body": "## Context\nI work in IT backend/system administration. {TASK}\n\n## What I need from you\n- Recommend an approach with trade-offs.\n- List risks, prerequisites, and open questions.\n- Produce a step-by-step plan I can hand to an execution agent.\n\n## Constraints\n{CONSTRAINTS}\n\n## Output format\n1. Recommended approach (short)\n2. Plan (numbered steps)\n3. Risks and rollback considerations\n4. Verification checklist"
+  },
+  "jira_ticket": {
+    "name": "Jira ticket drafting",
+    "destination": "ChatGPT web",
+    "topics": [
+      "jira"
+    ],
+    "body": "Draft a Jira ticket for the following work. {TASK}\n\nInclude:\n- Summary (one line)\n- Description with background/context\n- Acceptance criteria (testable bullet points)\n- Validation steps and evidence to attach\n- Suggested labels/components\n\nKeep wording clear and free of jargon. Constraints: {CONSTRAINTS}"
+  },
+  "atlassian_docs": {
+    "name": "Atlassian / Confluence documentation",
+    "destination": "ChatGPT web",
+    "topics": [
+      "confluence"
+    ],
+    "body": "Write internal Confluence documentation for: {TASK}\n\nStructure:\n- Purpose (2-3 sentences)\n- Audience\n- Prerequisites\n- Step-by-step instructions with expected results\n- Troubleshooting / common failure points\n- Rollback or undo steps\n- Owner and review date\n\nStyle: plain language, numbered steps, short paragraphs. Constraints: {CONSTRAINTS}"
+  },
+  "azure_function": {
+    "name": "Azure Function build",
+    "destination": "Codex",
+    "topics": [
+      "azure_function"
+    ],
+    "body": "Build an Azure Function. {TASK}\n\nRequirements:\n- Runtime/language: {TOOLS}\n- Inputs/trigger: {INPUTS}\n- Constraints: {CONSTRAINTS}\n- Outputs: {OUTPUTS}\n\nInclude:\n- Function code with error handling and logging\n- local.settings.json template (no secrets)\n- Deployment notes\n- Test instructions\n\nVerification: {VERIFICATION}"
+  },
+  "intune_deployment": {
+    "name": "Intune deployment",
+    "destination": "Both",
+    "topics": [
+      "intune"
+    ],
+    "body": "Help me with a Microsoft Intune deployment. {TASK}\n\nCover:\n- Packaging requirements (Win32/LOB/script)\n- Detection rules\n- Install/uninstall commands (silent)\n- Assignment strategy (pilot ring first, then production)\n- Rollback plan\n\nConstraints: {CONSTRAINTS}\nVerification: {VERIFICATION}"
+  },
+  "iac": {
+    "name": "Infrastructure as code",
+    "destination": "Codex",
+    "topics": [
+      "iac"
+    ],
+    "body": "Write infrastructure-as-code for: {TASK}\n\n- Tooling: {TOOLS}\n- Inputs/parameters: {INPUTS}\n- Constraints: {CONSTRAINTS}\n\nInclude idempotency notes, a plan/preview step before apply, and a teardown/rollback path.\n\nVerification: {VERIFICATION}"
+  },
+  "audit_evidence": {
+    "name": "Audit evidence workflow",
+    "destination": "ChatGPT web",
+    "topics": [
+      "audit",
+      "entra",
+      "okta"
+    ],
+    "body": "Help me prepare audit/access evidence. {TASK}\n\nProduce:\n- Evidence checklist (what to collect, from where)\n- Naming/storage convention for artifacts\n- Screenshot/export guidance for each system\n- A summary table mapping each control to its evidence\n\nSystems in scope: {INPUTS}\nConstraints: {CONSTRAINTS}"
+  },
+  "workspace_agent": {
+    "name": "ChatGPT workspace agent design",
+    "destination": "ChatGPT web",
+    "topics": [
+      "workspace_agent"
+    ],
+    "body": "Design a ChatGPT workspace agent. {TASK}\n\nThe agent definition must include:\n- Purpose and scope (what it does and does NOT do)\n- Allowed tools and forbidden actions\n- Memory/context strategy (memory is supplemental — durable source-of-truth files win)\n- Self-learning as local reflection notes, not uncontrolled autonomy\n- Instruction-bloat control: review and slim instructions regularly\n- Harness/task-contract workflow (scope, inputs, tools, constraints, outputs, verification)\n- Verification requirements before claiming completion\n- Handoff behavior when work remains\n\nConstraints: {CONSTRAINTS}"
+  },
+  "harness_setup": {
+    "name": "Harness / project setup",
+    "destination": "Both",
+    "topics": [
+      "harness"
+    ],
+    "body": "Set up a working harness for this project. {TASK}\n\nCreate:\n- AGENTS.md with orientation, conventions, and constraints\n- A task-contract template (scope, inputs, tools, constraints, outputs, verification)\n- An evidence/handoff convention\n\nWorking loop to encode:\n1. Orient from nearest AGENTS.md\n2. Load smallest relevant files\n3. Define bounded task contract\n4. Execute one coherent slice\n5. Capture evidence\n6. Update durable files\n7. Verify before claiming completion\n8. Leave a handoff\n\nLocal files are the source of truth; external systems (Jira, Confluence, SharePoint, etc.) are downstream copies.\n\nConstraints: {CONSTRAINTS}"
+  }
+}

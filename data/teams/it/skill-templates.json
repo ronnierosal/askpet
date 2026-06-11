@@ -1,0 +1,73 @@
+{
+  "jira_triage": {
+    "name": "Jira ticket triage skill",
+    "topics": [
+      "jira"
+    ],
+    "body": "Triage incoming Jira tickets: classify, set priority, draft first response, identify owner."
+  },
+  "intune_deploy": {
+    "name": "Intune deployment skill",
+    "topics": [
+      "intune"
+    ],
+    "body": "Package, detect, assign (pilot → production), validate, and document an Intune deployment."
+  },
+  "azure_function_build": {
+    "name": "Azure Function build skill",
+    "topics": [
+      "azure_function"
+    ],
+    "body": "Scaffold, implement, test locally, and document an Azure Function end to end."
+  },
+  "docs_publish": {
+    "name": "Documentation publishing skill",
+    "topics": [
+      "confluence"
+    ],
+    "body": "Draft, review, and publish internal documentation with owner and review-date metadata."
+  },
+  "audit_evidence": {
+    "name": "Audit evidence skill",
+    "topics": [
+      "audit"
+    ],
+    "body": "Collect, name, store, and summarize audit/access evidence mapped to controls."
+  },
+  "harness_setup": {
+    "name": "Harness setup skill",
+    "topics": [
+      "harness"
+    ],
+    "body": "Create AGENTS.md, task-contract template, and evidence/handoff conventions for a project."
+  },
+  "workspace_agent_design": {
+    "name": "ChatGPT workspace-agent design skill",
+    "topics": [
+      "workspace_agent"
+    ],
+    "body": "Design a workspace agent: purpose, scope, tools, memory model, verification, handoff."
+  },
+  "iac_workflow": {
+    "name": "Infrastructure-as-code workflow skill",
+    "topics": [
+      "iac"
+    ],
+    "body": "Author IaC, preview/plan, apply with approval, verify, and record rollback steps."
+  },
+  "powershell_automation": {
+    "name": "PowerShell automation skill",
+    "topics": [
+      "powershell"
+    ],
+    "body": "Write idempotent PowerShell with error handling, logging, -WhatIf support, and tests."
+  },
+  "okta_entra_access": {
+    "name": "Okta/Entra access workflow skill",
+    "topics": [
+      "okta",
+      "entra"
+    ],
+    "body": "Handle access requests: validate approval, apply group/app assignment, capture evidence."
+  }
+}

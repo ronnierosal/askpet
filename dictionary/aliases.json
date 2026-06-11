@@ -1,0 +1,17 @@
+{
+  "iac": "infrastructure as code",
+  "o365": "Microsoft 365",
+  "m365": "Microsoft 365",
+  "aad": "Microsoft Entra ID",
+  "entra": "Microsoft Entra ID",
+  "intune": "Microsoft Intune",
+  "ps": "PowerShell",
+  "pwsh": "PowerShell",
+  "kb": "knowledge base",
+  "repo": "repository",
+  "func": "Azure Function",
+  "grp": "group",
+  "grps": "groups",
+  "env": "environment",
+  "prod": "production"
+}

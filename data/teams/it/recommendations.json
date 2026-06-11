@@ -1,0 +1,208 @@
+{
+  "codex_signals": {
+    "code": 3,
+    "script": 3,
+    "scripts": 3,
+    "repository": 3,
+    "repo": 3,
+    "file": 2,
+    "files": 2,
+    "function": 2,
+    "functions": 2,
+    "build": 2,
+    "implement": 3,
+    "implementation": 3,
+    "test": 2,
+    "testing": 2,
+    "tests": 2,
+    "debug": 3,
+    "fix": 2,
+    "deploy": 2,
+    "deployment": 2,
+    "powershell": 3,
+    "pipeline": 2,
+    "automation": 2,
+    "yaml": 2,
+    "json": 1,
+    "api": 2,
+    "install": 2,
+    "refactor": 3,
+    "migration": 2,
+    "local": 1,
+    "run": 1
+  },
+  "chatgpt_signals": {
+    "plan": 3,
+    "planning": 3,
+    "architecture": 3,
+    "design": 2,
+    "strategy": 3,
+    "analysis": 3,
+    "analyze": 3,
+    "document": 2,
+    "documentation": 3,
+    "draft": 2,
+    "write": 1,
+    "summary": 2,
+    "summarize": 2,
+    "review": 2,
+    "refine": 3,
+    "advice": 3,
+    "advise": 3,
+    "explain": 2,
+    "compare": 2,
+    "ticket": 2,
+    "jira": 2,
+    "confluence": 3,
+    "runbook": 2,
+    "policy": 2,
+    "audit": 2,
+    "evidence": 2,
+    "process": 1,
+    "workflow": 1,
+    "agent": 2
+  },
+  "keyword_topics": {
+    "azure_function": [
+      "azure function",
+      "azure functions",
+      "function app"
+    ],
+    "intune": [
+      "intune"
+    ],
+    "m365": [
+      "microsoft 365",
+      "office 365",
+      "exchange",
+      "sharepoint",
+      "onedrive",
+      "mailbox"
+    ],
+    "entra": [
+      "entra",
+      "azure ad",
+      "active directory",
+      "conditional access",
+      "mfa",
+      "sso"
+    ],
+    "okta": [
+      "okta",
+      "scim",
+      "saml"
+    ],
+    "powershell": [
+      "powershell"
+    ],
+    "jira": [
+      "jira",
+      "ticket"
+    ],
+    "confluence": [
+      "confluence",
+      "documentation",
+      "knowledge base",
+      "runbook",
+      "how-to"
+    ],
+    "iac": [
+      "infrastructure as code",
+      "terraform",
+      "bicep",
+      "arm template"
+    ],
+    "audit": [
+      "audit",
+      "evidence",
+      "access review",
+      "compliance"
+    ],
+    "workspace_agent": [
+      "workspace agent",
+      "chatgpt agent",
+      "custom gpt"
+    ],
+    "harness": [
+      "harness",
+      "task contract",
+      "agents.md"
+    ],
+    "skill": [
+      "skill",
+      "reusable workflow"
+    ]
+  },
+  "context_checklist_by_topic": {
+    "azure_function": [
+      "Function app name/runtime",
+      "Trigger type and bindings",
+      "Resource group / subscription"
+    ],
+    "intune": [
+      "App installer + version",
+      "Target device groups",
+      "Detection rule details"
+    ],
+    "m365": [
+      "Tenant name",
+      "Affected users/groups",
+      "Relevant admin center settings"
+    ],
+    "entra": [
+      "Group/app names",
+      "Conditional access policies in scope",
+      "Approval/ticket reference"
+    ],
+    "okta": [
+      "Okta app/group names",
+      "SCIM/SAML config details",
+      "Approval/ticket reference"
+    ],
+    "powershell": [
+      "Existing script (if any)",
+      "Module versions in use",
+      "Execution context (local/runbook)"
+    ],
+    "jira": [
+      "Project key",
+      "Issue type and components",
+      "Related ticket links"
+    ],
+    "confluence": [
+      "Space and parent page",
+      "Existing doc to update (if any)",
+      "Audience"
+    ],
+    "iac": [
+      "Tooling (Terraform/Bicep)",
+      "State/backend location",
+      "Existing module structure"
+    ],
+    "audit": [
+      "Control framework / control IDs",
+      "Audit period",
+      "Systems in scope"
+    ],
+    "workspace_agent": [
+      "Agent purpose statement",
+      "Tools it may use",
+      "Example tasks"
+    ],
+    "harness": [
+      "Project root path",
+      "Existing AGENTS.md (if any)",
+      "Definition of done"
+    ],
+    "skill": [
+      "The workflow being repeated",
+      "Inputs that vary per run",
+      "Success criteria"
+    ]
+  },
+  "generic_checklist": [
+    "Relevant file paths or exports",
+    "Error messages / logs (sanitized)",
+    "Environment (prod/test) and change-window constraints"
+  ]
+}

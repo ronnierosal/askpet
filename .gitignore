@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.pyc
+
+# Build output (PyInstaller / Inno Setup)
+build/
+dist/
+installer/
+PromptMate.spec
+
+# Generated prompt output
+output/
+
+# Pet sprite artwork is NOT redistributed with this repo.
+# Pets are downloaded from codex-pets.net at the user's request and cached
+# in the local user-data folder. See README "Pets & artwork credits".
+assets/kogi/
+assets/*.webp
+assets/*.zip
+assets/promptmate.ico
+
+# Local scratch (the committed copy lives in docs/)
+/chat-screenshot.png
+launch-err.txt
+
+# Claude Code local settings
+.claude/settings.local.json
