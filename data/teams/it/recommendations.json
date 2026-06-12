@@ -83,7 +83,12 @@
     "deck": 2,
     "email": 1,
     "newsletter": 2,
-    "presentation": 2
+    "presentation": 2,
+    "essay": 2,
+    "homework": 2,
+    "research": 2,
+    "valuation": 2,
+    "study": 1
   },
   "keyword_topics": {
     "azure_function": [
@@ -309,8 +314,10 @@
       "open a case",
       "escalate",
       "microsoft support",
-      "evaluate",
-      "evaluation",
+      "evaluate a tool",
+      "evaluate a vendor",
+      "tool evaluation",
+      "vendor evaluation",
       "compare tools",
       "which tool"
     ],
@@ -1204,6 +1211,119 @@
       "sow review",
       "signature authority",
       "renewal terms"
+    ],
+    "game_design": [
+      "game design",
+      "game loop",
+      "game mechanic",
+      "level design",
+      "playtest",
+      "indie game",
+      "game balance",
+      "godot",
+      "unity",
+      "unreal",
+      "tabletop game",
+      "board game",
+      "video game",
+      "game idea",
+      "game dev",
+      "gamedev",
+      "rpg system",
+      "deck builder",
+      "deckbuilder",
+      "mechanics for",
+      "game economy",
+      "roguelike",
+      "platformer"
+    ],
+    "creative_art": [
+      "concept art",
+      "art direction",
+      "art style",
+      "illustration",
+      "book cover",
+      "logo",
+      "color palette",
+      "midjourney",
+      "stable diffusion",
+      "image prompt",
+      "character design",
+      "moodboard",
+      "mood board",
+      "album art",
+      "poster design",
+      "drawing of"
+    ],
+    "academic": [
+      "homework",
+      "study guide",
+      "study plan",
+      "for the exam",
+      "an exam",
+      "final exam",
+      "midterm",
+      "flashcards",
+      "essay",
+      "calculus",
+      "algebra",
+      "geometry",
+      "trigonometry",
+      "math problem",
+      "solve this equation",
+      "physics",
+      "chemistry",
+      "biology",
+      "history of",
+      "world war",
+      "ancient",
+      "thesis",
+      "citation",
+      "bibliography",
+      "term paper",
+      "apa format",
+      "mla format"
+    ],
+    "investing": [
+      "stock",
+      "invest",
+      "valuation",
+      "dcf",
+      "10-k",
+      "10k filing",
+      "earnings",
+      "portfolio",
+      "etf",
+      "ticker",
+      "market cap",
+      "p/e ratio",
+      "dividend",
+      "company evaluation",
+      "evaluate a company",
+      "due diligence",
+      "annual report",
+      "balance sheet",
+      "income statement",
+      "moat"
+    ],
+    "research": [
+      "deep research",
+      "research on",
+      "research about",
+      "literature review",
+      "lit review",
+      "market research",
+      "competitive analysis",
+      "research report",
+      "sources on",
+      "evidence on",
+      "systematic review",
+      "research the",
+      "research this",
+      "find sources",
+      "cite sources",
+      "fact check",
+      "fact-check"
     ]
   },
   "context_checklist_by_topic": {
@@ -1663,6 +1783,31 @@
       "The contract/document itself",
       "Your standard terms or last signed version",
       "Business context: money, term, what's exchanged"
+    ],
+    "game_design": [
+      "Genre, platform, and scope (jam/indie/hobby)",
+      "The player feeling you're going for",
+      "What exists already (prototype, doc, art)"
+    ],
+    "creative_art": [
+      "Where the art will live (cover, screen, print) and dimensions",
+      "2-3 reference works you like and why",
+      "What must NOT appear"
+    ],
+    "academic": [
+      "The exact problem/assignment text",
+      "Your current level and where you got stuck",
+      "Format requirements (APA/MLA, length, due date)"
+    ],
+    "investing": [
+      "Ticker/company and your timeframe",
+      "What you already hold or know",
+      "Risk tolerance and what decision this feeds"
+    ],
+    "research": [
+      "The precise question and scope",
+      "What you'll use the findings for",
+      "Sources you already have or trust"
     ]
   },
   "generic_checklist": [

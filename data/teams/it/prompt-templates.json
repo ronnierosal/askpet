@@ -220,8 +220,7 @@
     "name": "Conditional Access policy",
     "destination": "Both",
     "topics": [
-      "entra",
-      "security"
+      "entra"
     ],
     "body": "Design or change a Conditional Access policy. {TASK}\n\nRequirements:\n- Start in report-only mode; define what success looks like in the sign-in logs before enforcing\n- Exclude break-glass accounts and document them\n- State exactly who/what is in scope and excluded, and why\n- Lockout risk assessment and rollback steps\n\nPolicy intent: {INPUTS}\nConstraints: {CONSTRAINTS}\nVerification: {VERIFICATION}"
   },
@@ -289,6 +288,39 @@
       "azure"
     ],
     "body": "Azure administration task. {TASK}\n\nContext: {INPUTS}\n\nProvide:\n- Portal steps AND the az CLI / PowerShell equivalent\n- Resource group, tagging, and naming that fits convention\n- Least-privilege RBAC at the narrowest scope that works\n- Projected monthly cost of anything created, and the cheaper alternative considered\n- Rollback/teardown steps\n\nConstraints: {CONSTRAINTS}\nVerification: {VERIFICATION}"
+  },
+  "creative_brief": {
+    "name": "Creative / game design brief",
+    "destination": "ChatGPT web",
+    "topics": [
+      "creative_art",
+      "game_design"
+    ],
+    "body": "Work with me as a creative collaborator. {TASK}\n\nReferences and material: {INPUTS}\n\nProcess:\n1. Ask me the 2-3 questions that most change the direction (audience, mood, constraints) before producing anything\n2. Propose 3 distinct directions, each in a few sentences — different, not variations of one idea\n3. Develop the direction I pick, explaining choices in craft terms\n4. End with the concrete next step: prototype, sketch, playtest, or revision\n\nConstraints: {CONSTRAINTS}\nPush back where my idea has a known pitfall — agreement isn't the job."
+  },
+  "tutor_session": {
+    "name": "Tutoring session",
+    "destination": "ChatGPT web",
+    "topics": [
+      "academic"
+    ],
+    "body": "Act as my tutor. {TASK}\n\nMy current level and where I'm stuck: {INPUTS}\n\nHow to work with me:\n1. Work step-by-step, naming the concept each step uses\n2. Verify the answer independently (plug back in, check units/magnitude) before presenting it\n3. Then give me ONE similar problem to do alone and check my work\n4. If I'm writing (essay/report), improve MY argument and voice — don't replace them\n\nConstraints: {CONSTRAINTS}\nGoal is that I can do the next one without you."
+  },
+  "investment_research": {
+    "name": "Investment research (not advice)",
+    "destination": "ChatGPT web",
+    "topics": [
+      "investing"
+    ],
+    "body": "Research this as an equity analyst would. {TASK}\n\nWhat I already know or hold: {INPUTS}\n\nRequired structure:\n1. The business in plain language: how it actually makes money\n2. The numbers with dates: revenue trend, margins, cash flow, debt (note your data may be stale — tell me to verify current figures)\n3. Bull case AND bear case, equally seriously\n4. Valuation context: current multiples vs named peers, and what would have to be true to justify the price\n5. The 3 questions I should answer before deciding anything\n\nConstraints: {CONSTRAINTS}\nThis is information, not financial advice — say so, and for personal decisions point me to a licensed advisor."
+  },
+  "research_brief": {
+    "name": "Deep research brief",
+    "destination": "ChatGPT web",
+    "topics": [
+      "research"
+    ],
+    "body": "Research this thoroughly. {TASK}\n\nScope and what I'll use it for: {INPUTS}\n\nMethod:\n1. Restate the question and confirm scope before diving in\n2. Use independent source types: primary data, expert analysis, and at least one opposing view\n3. Cite which source supports each key claim; flag single-source claims as weak\n4. Name disagreements between sources — don't average them away\n5. Deliver: the answer, your confidence level, and what remains unknown\n\nConstraints: {CONSTRAINTS}\nClaims without sources don't go in the report."
   },
   "exec_brief": {
     "name": "Executive brief / decision memo",

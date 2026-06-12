@@ -27,8 +27,8 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 APP_NAME = "PromptMate"
-APP_VERSION = "0.16.0"
-CONTENT_VERSION = "2026.06.15"
+APP_VERSION = "0.17.0"
+CONTENT_VERSION = "2026.06.16"
 
 # ---------------------------------------------------------------------------
 # User data locations (never inside the install folder)
@@ -268,6 +268,7 @@ CHATGPT_SIGNALS = {
     "investigate": 2, "triage": 2, "risk": 2, "recommend": 2,
     "memo": 2, "briefing": 3, "agenda": 2, "slides": 2, "deck": 2,
     "email": 1, "newsletter": 2, "presentation": 2,
+    "essay": 2, "homework": 2, "research": 2, "valuation": 2, "study": 1,
 }
 
 KEYWORD_TOPICS = {
@@ -319,7 +320,8 @@ KEYWORD_TOPICS = {
     "backup": ["backup", "backups", "restore", "disaster recovery",
                "recovery point", "snapshot"],
     "vendor": ["vendor support", "vendor case", "support case", "open a case",
-               "escalate", "microsoft support", "evaluate", "evaluation",
+               "escalate", "microsoft support", "evaluate a tool",
+               "evaluate a vendor", "tool evaluation", "vendor evaluation",
                "compare tools", "which tool"],
     "fixit": ["not working", "doesnt work", "doesn't work", "stopped working",
               "broken", "crash", "crashes", "crashing", "keeps dropping",
@@ -542,6 +544,36 @@ KEYWORD_TOPICS = {
                   "review this contract", "nda", "redline", "msa",
                   "legal review", "terms of service", "sow review",
                   "signature authority", "renewal terms"],
+    # --- personal / creative / academic ---
+    "game_design": ["game design", "game loop", "game mechanic", "level design",
+                    "playtest", "indie game", "game balance", "godot", "unity",
+                    "unreal", "tabletop game", "board game", "video game",
+                    "game idea", "game dev", "gamedev", "rpg system",
+                    "deck builder", "deckbuilder", "mechanics for",
+                    "game economy", "roguelike", "platformer"],
+    "creative_art": ["concept art", "art direction", "art style", "illustration",
+                     "book cover", "logo", "color palette", "midjourney",
+                     "stable diffusion", "image prompt", "character design",
+                     "moodboard", "mood board", "album art", "poster design",
+                     "drawing of"],
+    "academic": ["homework", "study guide", "study plan", "for the exam",
+                 "an exam", "final exam", "midterm", "flashcards", "essay",
+                 "calculus", "algebra", "geometry", "trigonometry",
+                 "math problem", "solve this equation", "physics", "chemistry",
+                 "biology", "history of", "world war", "ancient",
+                 "thesis", "citation", "bibliography", "term paper",
+                 "apa format", "mla format"],
+    "investing": ["stock", "invest", "valuation", "dcf", "10-k", "10k filing",
+                  "earnings", "portfolio", "etf", "ticker", "market cap",
+                  "p/e ratio", "dividend", "company evaluation",
+                  "evaluate a company", "due diligence", "annual report",
+                  "balance sheet", "income statement", "moat"],
+    "research": ["deep research", "research on", "research about",
+                 "literature review", "lit review", "market research",
+                 "competitive analysis", "research report", "sources on",
+                 "evidence on", "systematic review", "research the",
+                 "research this", "find sources", "cite sources",
+                 "fact check", "fact-check"],
 }
 
 
@@ -992,7 +1024,7 @@ PROMPT_TEMPLATES = {
     "conditional_access": {
         "name": "Conditional Access policy",
         "destination": "Both",
-        "topics": ["entra", "security"],
+        "topics": ["entra"],
         "body": (
             "Design or change a Conditional Access policy. {TASK}\n\n"
             "Requirements:\n- Start in report-only mode; define what success "
@@ -1113,6 +1145,88 @@ PROMPT_TEMPLATES = {
             "- Projected monthly cost of anything created, and the cheaper "
             "alternative considered\n- Rollback/teardown steps\n\n"
             "Constraints: {CONSTRAINTS}\nVerification: {VERIFICATION}"
+        ),
+    },
+    "creative_brief": {
+        "name": "Creative / game design brief",
+        "destination": "ChatGPT web",
+        "topics": ["creative_art", "game_design"],
+        "body": (
+            "Work with me as a creative collaborator. {TASK}\n\n"
+            "References and material: {INPUTS}\n\n"
+            "Process:\n"
+            "1. Ask me the 2-3 questions that most change the direction "
+            "(audience, mood, constraints) before producing anything\n"
+            "2. Propose 3 distinct directions, each in a few sentences — "
+            "different, not variations of one idea\n"
+            "3. Develop the direction I pick, explaining choices in craft "
+            "terms\n"
+            "4. End with the concrete next step: prototype, sketch, "
+            "playtest, or revision\n\n"
+            "Constraints: {CONSTRAINTS}\n"
+            "Push back where my idea has a known pitfall — agreement isn't "
+            "the job."
+        ),
+    },
+    "tutor_session": {
+        "name": "Tutoring session",
+        "destination": "ChatGPT web",
+        "topics": ["academic"],
+        "body": (
+            "Act as my tutor. {TASK}\n\n"
+            "My current level and where I'm stuck: {INPUTS}\n\n"
+            "How to work with me:\n"
+            "1. Work step-by-step, naming the concept each step uses\n"
+            "2. Verify the answer independently (plug back in, check "
+            "units/magnitude) before presenting it\n"
+            "3. Then give me ONE similar problem to do alone and check "
+            "my work\n"
+            "4. If I'm writing (essay/report), improve MY argument and "
+            "voice — don't replace them\n\n"
+            "Constraints: {CONSTRAINTS}\n"
+            "Goal is that I can do the next one without you."
+        ),
+    },
+    "investment_research": {
+        "name": "Investment research (not advice)",
+        "destination": "ChatGPT web",
+        "topics": ["investing"],
+        "body": (
+            "Research this as an equity analyst would. {TASK}\n\n"
+            "What I already know or hold: {INPUTS}\n\n"
+            "Required structure:\n"
+            "1. The business in plain language: how it actually makes money\n"
+            "2. The numbers with dates: revenue trend, margins, cash flow, "
+            "debt (note your data may be stale — tell me to verify "
+            "current figures)\n"
+            "3. Bull case AND bear case, equally seriously\n"
+            "4. Valuation context: current multiples vs named peers, and "
+            "what would have to be true to justify the price\n"
+            "5. The 3 questions I should answer before deciding anything\n\n"
+            "Constraints: {CONSTRAINTS}\n"
+            "This is information, not financial advice — say so, and for "
+            "personal decisions point me to a licensed advisor."
+        ),
+    },
+    "research_brief": {
+        "name": "Deep research brief",
+        "destination": "ChatGPT web",
+        "topics": ["research"],
+        "body": (
+            "Research this thoroughly. {TASK}\n\n"
+            "Scope and what I'll use it for: {INPUTS}\n\n"
+            "Method:\n"
+            "1. Restate the question and confirm scope before diving in\n"
+            "2. Use independent source types: primary data, expert "
+            "analysis, and at least one opposing view\n"
+            "3. Cite which source supports each key claim; flag "
+            "single-source claims as weak\n"
+            "4. Name disagreements between sources — don't average them "
+            "away\n"
+            "5. Deliver: the answer, your confidence level, and what "
+            "remains unknown\n\n"
+            "Constraints: {CONSTRAINTS}\n"
+            "Claims without sources don't go in the report."
         ),
     },
     "exec_brief": {
@@ -2432,6 +2546,71 @@ AGENT_MODULES = {
             "buffer between them, and a day-of contact list. Always have "
             "the contingency: weather, no-show speaker, broken AV. "
             "Confirm everything in writing the week before."
+        ),
+    },
+    "game_designer": {
+        "name": "Game Design Agent",
+        "topics": ["game_design"],
+        "body": (
+            "Act as a game designer: start from the player experience (what "
+            "should the player FEEL), define the core loop in one sentence "
+            "before adding systems, and prototype the cheapest testable "
+            "version of every mechanic. Fun is found in playtests, not "
+            "design docs — every design comes with the playtest question "
+            "that would validate or kill it. Scope is the enemy: cut "
+            "features before polish."
+        ),
+    },
+    "art_director": {
+        "name": "Art Direction Agent",
+        "topics": ["creative_art"],
+        "body": (
+            "Act as an art director: establish intent before execution — "
+            "audience, mood, and the three reference works that define the "
+            "target. Give feedback in craft terms (composition, value "
+            "hierarchy, color temperature, silhouette) instead of 'make it "
+            "pop'. For AI image prompts, specify subject, style, lighting, "
+            "composition, and what to EXCLUDE — then iterate on one "
+            "variable at a time."
+        ),
+    },
+    "tutor": {
+        "name": "Tutor Agent",
+        "topics": ["academic", "learning"],
+        "body": (
+            "Act as a tutor, not an answer machine: work the problem "
+            "step-by-step showing the reasoning, name the concept each step "
+            "uses, then pose a similar practice problem to confirm "
+            "understanding. For essays and reports, improve the student's "
+            "own argument and voice rather than replacing them. Check "
+            "answers independently (units, magnitude, edge cases) before "
+            "presenting them as correct."
+        ),
+    },
+    "equity_analyst": {
+        "name": "Equity Research Agent",
+        "topics": ["investing"],
+        "body": (
+            "Act as an equity research analyst producing information, not "
+            "financial advice — say so, and recommend a licensed advisor "
+            "for personal decisions. Ground claims in filings and reported "
+            "numbers (10-K, earnings) with dates, since data may be stale. "
+            "Always present the bear case next to the bull case, state "
+            "valuation assumptions explicitly, and separate facts from the "
+            "narrative around them."
+        ),
+    },
+    "researcher": {
+        "name": "Research Agent",
+        "topics": ["research"],
+        "body": (
+            "Act as a research analyst: define the question precisely "
+            "before searching, triangulate every important claim across "
+            "independent sources, and cite which source supports what. "
+            "Distinguish primary sources from commentary, note publication "
+            "dates, name disagreements between sources instead of "
+            "averaging them, and list what remains unknown. A finding "
+            "without a source doesn't go in the report."
         ),
     },
     "legal_intake": {
@@ -3890,6 +4069,138 @@ SKILL_TEMPLATES = {
             "Track signature authority and the renewal/notice dates in your contract calendar.",
         ],
     },
+    "game_design_doc": {
+        "name": "Game design doc skill",
+        "topics": ["game_design"],
+        "body": "Write a one-page design doc that gets a game built, not admired.",
+        "steps": [
+            "One sentence: who the player is and what they should feel.",
+            "Core loop in 3-5 verbs (e.g. explore, collect, upgrade, repeat).",
+            "List the 3 mechanics that serve the loop; cut everything that doesn't.",
+            "Define the first 5 minutes of play in detail — that's what gets prototyped.",
+            "State the playtest question the prototype must answer.",
+        ],
+    },
+    "playtest_plan": {
+        "name": "Playtest plan skill",
+        "topics": ["game_design"],
+        "body": "Run playtests that produce decisions, not compliments.",
+        "steps": [
+            "Write the 1-3 questions this playtest must answer before recruiting anyone.",
+            "Watch silently; note where players stall, quit, or misunderstand — don't rescue them.",
+            "Ask what they were trying to do at each stall, not whether they liked it.",
+            "Log observations verbatim, separate from your interpretation.",
+            "Decide per question: confirmed, refuted, or needs another test — then change ONE thing.",
+        ],
+    },
+    "art_brief": {
+        "name": "Art brief skill",
+        "topics": ["creative_art"],
+        "body": "Brief an artist (human or AI) so round one is close.",
+        "steps": [
+            "State purpose and audience: where will this art live and who sees it.",
+            "Collect 3 reference works and say what specifically to take from each.",
+            "Define the constraints: dimensions, palette, style, what must NOT appear.",
+            "Describe the focal point and the feeling, not just the objects.",
+            "Plan two revision rounds max; consolidate feedback into one list per round.",
+        ],
+    },
+    "image_gen_prompt": {
+        "name": "AI image prompt skill",
+        "topics": ["creative_art"],
+        "body": "Get the image you mean out of Midjourney/DALL-E/Stable Diffusion.",
+        "steps": [
+            "Structure the prompt: subject, action, environment, style, lighting, composition.",
+            "Name a medium and era/artist family for style instead of adjectives like 'beautiful'.",
+            "Use negative prompts/exclusions for what keeps appearing wrongly.",
+            "Iterate one variable at a time; keep a log of prompt -> result.",
+            "Upscale/refine only the candidate that survives a day-later look.",
+        ],
+    },
+    "math_walkthrough": {
+        "name": "Math problem skill",
+        "topics": ["academic"],
+        "body": "Solve a math problem so you can solve the next one alone.",
+        "steps": [
+            "Restate what's given and what's asked; name the concept being tested.",
+            "Work step-by-step with the rule used at each step written out.",
+            "Verify independently: plug the answer back, check units and magnitude.",
+            "Note the step where YOU went wrong (if checking your work) and why.",
+            "Do one similar problem unaided to confirm it stuck.",
+        ],
+    },
+    "study_guide": {
+        "name": "Study guide skill",
+        "topics": ["academic"],
+        "body": "Build a study guide around recall, not re-reading.",
+        "steps": [
+            "List the testable concepts from syllabus/past exams; rank by weight and weakness.",
+            "Turn each concept into questions (flashcard-style), not summaries.",
+            "Schedule spaced repetition backwards from exam date; weakest topics first and most often.",
+            "Practice retrieval under exam conditions: closed book, timed.",
+            "Track misses; restudy ONLY what was missed.",
+        ],
+    },
+    "essay_outline": {
+        "name": "Essay outline skill",
+        "topics": ["academic", "writing"],
+        "body": "Outline an essay with an argument, not a topic.",
+        "steps": [
+            "Write the thesis as a claim someone could disagree with.",
+            "Each body section: one point supporting the thesis, with its evidence named.",
+            "Address the strongest counterargument honestly — it strengthens the essay.",
+            "Check the outline reads as a logical chain; reorder until it does.",
+            "Cite as you draft (required format: APA/MLA/Chicago), never at the end.",
+        ],
+    },
+    "company_research": {
+        "name": "Company research skill",
+        "topics": ["investing", "research"],
+        "body": "Research a company from filings, not headlines. Information, not financial advice.",
+        "steps": [
+            "Start with the 10-K/annual report: business model, revenue segments, stated risks.",
+            "Pull 3-5 years of revenue, margins, cash flow — note the trend, not the latest quarter.",
+            "Identify the moat claim and test it: would customers leave if prices rose 10%?",
+            "Write the bear case as seriously as the bull case.",
+            "Date every number used; markets move and data goes stale.",
+        ],
+    },
+    "valuation_sanity": {
+        "name": "Valuation sanity skill",
+        "topics": ["investing"],
+        "body": "Build a valuation whose assumptions are visible and attackable.",
+        "steps": [
+            "State the assumptions first: growth rate, margin, discount rate, terminal value.",
+            "Build the simple model (DCF or multiples) with those inputs visible, not buried.",
+            "Run the pessimistic case: what do the numbers say if growth halves?",
+            "Compare against current price/multiples of named peers.",
+            "Conclude with what would have to be TRUE for the price to make sense — then verify with a licensed advisor before acting.",
+        ],
+    },
+    "deep_research": {
+        "name": "Deep research skill",
+        "topics": ["research"],
+        "body": "Research a question across sources until the answer survives scrutiny.",
+        "steps": [
+            "Sharpen the question: scope, timeframe, what a satisfying answer looks like.",
+            "Gather from independent source types: primary data, expert analysis, opposing views.",
+            "Triangulate each key claim across 2+ unrelated sources; note single-source claims as weak.",
+            "Record disagreements between sources explicitly instead of averaging them.",
+            "Write up: answer, confidence level, citations per claim, and what remains unknown.",
+        ],
+    },
+    "lit_review": {
+        "name": "Literature review skill",
+        "topics": ["research", "academic"],
+        "body": "Survey what's known on a topic without drowning in it.",
+        "steps": [
+            "Define inclusion criteria first: years, fields, study types that count.",
+            "Snowball: start from 2-3 recent review papers and mine their citations.",
+            "Extract per source into one table: question, method, finding, limitation.",
+            "Group by finding, not by paper — where does the literature agree, conflict, go silent?",
+            "Write the synthesis around themes and gaps; the gap list is the contribution.",
+        ],
+    },
     "travel_itinerary": {
         "name": "Travel planning skill",
         "topics": ["travel", "calendar"],
@@ -3996,6 +4307,11 @@ CONTEXT_CHECKLIST_BY_TOPIC = {
     "exec_ops": ["Who the audience/principal is", "The decision needed and by when", "What's already been considered or rejected"],
     "events": ["Date, headcount, and budget", "Venue/vendor status so far", "What success looks like for the event"],
     "legal_ops": ["The contract/document itself", "Your standard terms or last signed version", "Business context: money, term, what's exchanged"],
+    "game_design": ["Genre, platform, and scope (jam/indie/hobby)", "The player feeling you're going for", "What exists already (prototype, doc, art)"],
+    "creative_art": ["Where the art will live (cover, screen, print) and dimensions", "2-3 reference works you like and why", "What must NOT appear"],
+    "academic": ["The exact problem/assignment text", "Your current level and where you got stuck", "Format requirements (APA/MLA, length, due date)"],
+    "investing": ["Ticker/company and your timeframe", "What you already hold or know", "Risk tolerance and what decision this feeds"],
+    "research": ["The precise question and scope", "What you'll use the findings for", "Sources you already have or trust"],
 }
 
 GENERIC_CHECKLIST = [
@@ -4295,6 +4611,7 @@ OFFICE_TOPICS = {
     "word_docs", "notebooklm", "travel", "hr", "sales", "marketing",
     "support", "finance_ops", "project_mgmt", "exec_ops", "events",
     "legal_ops", "writing", "summarize", "learning", "excel", "notion",
+    "game_design", "creative_art", "academic", "investing", "research",
 }
 
 

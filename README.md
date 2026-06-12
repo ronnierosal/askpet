@@ -41,6 +41,24 @@ still fully local.
 
 ## What's new
 
+**0.17.0** (2026-06-11)
+- Creative, academic, and analyst round: game design (core loops,
+  design docs, playtest plans), art direction (briefs, AI image
+  prompting one variable at a time), tutoring (step-by-step with
+  verification, "the goal is you can do the next one without me" —
+  covers math, science, history, essays), equity research (10-K-first
+  company research, bull AND bear case, valuations with visible
+  assumptions — always information, never financial advice), and deep
+  research (triangulate claims, cite per claim, name disagreements).
+- Four new templates: creative/game brief, tutoring session, investment
+  research (with the not-advice disclaimer baked in), deep research
+  brief.
+- Routing fixes: "evaluate <company>" no longer lands on the vendor
+  support template; script security reviews get the security review
+  template instead of Conditional Access.
+- 56 templates / 93 modules / 132 skills. Mega battery now 2,640
+  variants, 0 flagged.
+
 **0.16.0** (2026-06-11)
 - PromptMate isn't just for IT anymore: a non-technical roles round adds
   agents and skills for chiefs of staff (decision memos, OKRs, exec
