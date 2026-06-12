@@ -27,7 +27,7 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 APP_NAME = "PromptMate"
-APP_VERSION = "0.13.0"
+APP_VERSION = "0.13.1"
 CONTENT_VERSION = "2026.06.12"
 
 # ---------------------------------------------------------------------------
@@ -3880,7 +3880,7 @@ class PetOverlay:
     TICK_MS = 200  # base tick; movement anims advance every tick
     WALK_SPEED = 3
     RUN_SPEED = 7
-    NAP_AFTER_TICKS = 1200  # ~4 minutes without interaction -> nap
+    NAP_AFTER_TICKS = 18000  # ~1 hour without interaction -> nap (200ms ticks)
     # Frames advance every Nth tick per animation. The sleepy row is a set
     # of distinct poses, not a loop — cycle it VERY slowly or it looks
     # frantic instead of asleep.
