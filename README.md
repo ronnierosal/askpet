@@ -24,6 +24,17 @@ ask for one.
 
 ## What's new
 
+**0.4.0** (2026-06-11)
+- The pet now asks follow-up questions when your message is short or
+  ambiguous ("Who's affected — one user or everyone?"), then folds your
+  answers into the generated prompt. Say "skip" to just build it.
+- General fix-it support: "outlook keeps crashing", "printer not working",
+  "teams calls keep dropping" now route to a systematic troubleshooting
+  template (scope → ranked causes → cheapest checks first → fix → verify)
+  with a Troubleshooter agent module and diagnose-before-fixing skill.
+- Recommended modules/skills are now ranked by relevance.
+- Chat header avatar renders with clean transparency.
+
 **0.3.0** (2026-06-11)
 - Pet resizing: right-click → Pet size → Large / Medium / Small.
 - Chat window is fully resizable — bubbles re-flow to the new width.

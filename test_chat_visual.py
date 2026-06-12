@@ -1,4 +1,4 @@
-"""Visual check of the iMessage-style chat: render, send, screenshot. Dev only (uses Pillow)."""
+"""Visual check of the chat: drive a follow-up Q&A conversation, screenshot. Dev only (uses Pillow)."""
 import tkinter as tk
 import promptmate as pm
 from PIL import ImageGrab
@@ -7,17 +7,19 @@ root = tk.Tk()
 pet = pm.PetOverlay(root)
 pet.toggle_chat()
 chat = pet.chat
-chat.entry.insert("1.0", "need a powershel scirpt to deply an intune app to pilot grp")
-chat.send()
+
+
+def step(text, delay, then):
+    def go():
+        chat.entry.insert("1.0", text)
+        chat.send()
+        root.after(delay, then)
+    return go
+
 
 def grab():
-    # widen the window to exercise re-flow, wait past the debounce, capture
-    chat.win.geometry("560x600")
-    root.after(300, grab2)
-
-def grab2():
     root.update()
-    chat.canvas.yview_moveto(0.0)  # show the top of the conversation
+    chat.canvas.yview_moveto(0.0)  # show the conversation from the top
     root.update()
     w = chat.win
     x, y = w.winfo_rootx(), w.winfo_rooty()
@@ -26,5 +28,10 @@ def grab2():
     print("screenshot saved")
     root.destroy()
 
-root.after(1600, grab)  # let the typing indicator resolve into the reply
+
+# short fix-it message -> question -> answer -> question -> answer -> prompt
+s3 = step("no error message, but we got a windows update last night", 1500, grab)
+s2 = step("just one user, started this morning", 1200, s3)
+s1 = step("outlok keeps crashing", 1200, s2)
+root.after(400, s1)
 root.mainloop()

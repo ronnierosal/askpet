@@ -93,7 +93,9 @@
       "exchange",
       "sharepoint",
       "onedrive",
-      "mailbox"
+      "mailbox",
+      "teams",
+      "outlook"
     ],
     "entra": [
       "entra",
@@ -241,6 +243,32 @@
       "evaluate",
       "evaluation",
       "compare tools"
+    ],
+    "fixit": [
+      "not working",
+      "doesnt work",
+      "doesn't work",
+      "stopped working",
+      "broken",
+      "crash",
+      "crashes",
+      "crashing",
+      "keeps dropping",
+      "wont open",
+      "won't open",
+      "cant open",
+      "can't open",
+      "wont start",
+      "won't start",
+      "error when",
+      "fails",
+      "failing",
+      "freezes",
+      "frozen",
+      "keep dropping",
+      "keep disconnecting",
+      "keeps disconnecting",
+      "very slow"
     ]
   },
   "context_checklist_by_topic": {
@@ -353,6 +381,11 @@
       "Product name and version",
       "Case number (if existing)",
       "Logs/diagnostics already collected"
+    ],
+    "fixit": [
+      "Exact error message or screenshot text",
+      "Who is affected and since when",
+      "What changed recently (updates, policy, password)"
     ]
   },
   "generic_checklist": [

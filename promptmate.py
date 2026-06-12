@@ -27,8 +27,8 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 APP_NAME = "PromptMate"
-APP_VERSION = "0.3.0"
-CONTENT_VERSION = "2026.06.3"
+APP_VERSION = "0.4.0"
+CONTENT_VERSION = "2026.06.4"
 
 # ---------------------------------------------------------------------------
 # User data locations (never inside the install folder)
@@ -268,7 +268,8 @@ CHATGPT_SIGNALS = {
 KEYWORD_TOPICS = {
     "azure_function": ["azure function", "azure functions", "function app"],
     "intune": ["intune", "autopilot", "enrollment", "device compliance"],
-    "m365": ["microsoft 365", "office 365", "exchange", "sharepoint", "onedrive", "mailbox"],
+    "m365": ["microsoft 365", "office 365", "exchange", "sharepoint",
+             "onedrive", "mailbox", "teams", "outlook"],
     "entra": ["entra", "azure ad", "active directory", "conditional access", "mfa", "sso"],
     "okta": ["okta", "scim", "saml"],
     "powershell": ["powershell"],
@@ -297,6 +298,12 @@ KEYWORD_TOPICS = {
                "recovery point", "snapshot"],
     "vendor": ["vendor", "support case", "open a case", "escalate",
                "microsoft support", "evaluate", "evaluation", "compare tools"],
+    "fixit": ["not working", "doesnt work", "doesn't work", "stopped working",
+              "broken", "crash", "crashes", "crashing", "keeps dropping",
+              "wont open", "won't open", "cant open", "can't open",
+              "wont start", "won't start", "error when", "fails", "failing",
+              "freezes", "frozen", "keep dropping", "keep disconnecting",
+              "keeps disconnecting", "very slow"],
 }
 
 
@@ -810,6 +817,27 @@ PROMPT_TEMPLATES = {
             "Ticket context: {INPUTS}\nConstraints: {CONSTRAINTS}"
         ),
     },
+    "troubleshoot": {
+        "name": "Troubleshoot / fix it",
+        "destination": "Both",
+        "topics": ["fixit"],
+        "body": (
+            "Help me troubleshoot and fix this. {TASK}\n\n"
+            "Known context: {INPUTS}\n\n"
+            "Work it systematically:\n"
+            "1. Tell me what to confirm first: exact symptom, scope (one user "
+            "or many), and since when.\n"
+            "2. List the most likely causes for these symptoms, ranked, and "
+            "say why.\n"
+            "3. For each cause: the exact check or command to run, and what "
+            "result confirms or rules it out — cheapest checks first.\n"
+            "4. Check what changed recently (updates, policies, passwords, "
+            "certificates) before assuming hardware or reinstalls.\n"
+            "5. Give the fix for the confirmed cause, then how to verify with "
+            "the affected user, and what to document.\n\n"
+            "Change one variable at a time. Constraints: {CONSTRAINTS}"
+        ),
+    },
 }
 
 AGENT_MODULES = {
@@ -1069,6 +1097,17 @@ AGENT_MODULES = {
             "resources, and egress/storage surprises. When proposing a "
             "solution, state its recurring cost and the cheaper alternative "
             "you considered."
+        ),
+    },
+    "troubleshooter": {
+        "name": "Troubleshooter Agent",
+        "topics": ["fixit", "network"],
+        "body": (
+            "Troubleshoot systematically: reproduce or precisely describe the "
+            "symptom, establish scope (one user or many), check what changed "
+            "recently, test likely causes cheapest-first, change one variable "
+            "at a time, and verify the fix with the affected user before "
+            "closing. Never guess-and-reinstall."
         ),
     },
 }
@@ -1482,6 +1521,18 @@ SKILL_TEMPLATES = {
             "Restore TTL and document the change with timestamps.",
         ],
     },
+    "general_fixit": {
+        "name": "General troubleshooting skill",
+        "topics": ["fixit"],
+        "body": "Diagnose before fixing: symptom, scope, recent changes, cheapest checks first.",
+        "steps": [
+            "Capture the exact symptom and error text; screenshot if possible.",
+            "Establish scope: one user, a group, or everyone — and since when.",
+            "List what changed recently: updates, policies, passwords, certs.",
+            "Test likely causes cheapest-first, one variable at a time.",
+            "Apply the fix, verify with the affected user, document in the ticket.",
+        ],
+    },
 }
 
 CONTEXT_CHECKLIST_BY_TOPIC = {
@@ -1507,6 +1558,7 @@ CONTEXT_CHECKLIST_BY_TOPIC = {
     "reporting": ["Data source and time range", "Who consumes the report", "A known reference number to validate against"],
     "backup": ["Backup product and scope", "RTO/RPO targets", "Last successful restore test date"],
     "vendor": ["Product name and version", "Case number (if existing)", "Logs/diagnostics already collected"],
+    "fixit": ["Exact error message or screenshot text", "Who is affected and since when", "What changed recently (updates, policy, password)"],
 }
 
 GENERIC_CHECKLIST = [
@@ -1522,7 +1574,10 @@ def recommend(text: str) -> dict:
     topics = dest_info["topics"]
 
     def topic_score(item):
-        return len(set(item["topics"]) & set(topics))
+        overlap = set(item["topics"]) & set(topics)
+        # A break/fix signal outweighs the product area: "outlook crashing"
+        # should get the troubleshooting shape, not the admin-task shape.
+        return len(overlap) + (0.5 if "fixit" in overlap else 0)
 
     # Template: best topic overlap, fall back by destination.
     best_key, best_score = None, -1
@@ -1536,13 +1591,15 @@ def recommend(text: str) -> dict:
     if best_score <= 0:
         best_key = "codex_execution" if dest_info["destination"] == "Codex" else "chatgpt_planning"
 
-    modules = [k for k, m in AGENT_MODULES.items() if topic_score(m) > 0]
+    modules = sorted((k for k, m in AGENT_MODULES.items() if topic_score(m) > 0),
+                     key=lambda k: -topic_score(AGENT_MODULES[k]))
     if "harness" not in modules:
         modules.append("harness")
     if "validation" not in modules:
         modules.append("validation")
 
-    skills = [k for k, s in SKILL_TEMPLATES.items() if topic_score(s) > 0]
+    skills = sorted((k for k, s in SKILL_TEMPLATES.items() if topic_score(s) > 0),
+                    key=lambda k: -topic_score(SKILL_TEMPLATES[k]))
 
     checklist = []
     for t in topics:
@@ -1556,6 +1613,34 @@ def recommend(text: str) -> dict:
         "skills": skills[:3],
         "checklist": checklist,
     }
+
+
+def clarifying_questions(cleaned: str, rec: dict) -> list:
+    """Decide what to ask before generating, for short/ambiguous requests.
+
+    Returns at most 2 questions; an empty list means we know enough.
+    """
+    questions = []
+    words = len(cleaned.split())
+    signal = rec["codex_score"] + rec["chatgpt_score"]
+
+    if "fixit" in rec["topics"]:
+        questions.append("Who's affected — one user, a few, or everyone? "
+                         "And since when?")
+        questions.append("What's the exact error message (if there is one), "
+                         "and did anything change recently — updates, policy, "
+                         "password?")
+    if not rec["topics"]:
+        questions.append("Which system or tech is this about — e.g. Intune, "
+                         "Entra, Exchange, Okta, a script, a server?")
+    if signal < 2 and words < 12 and "fixit" not in rec["topics"]:
+        questions.append("Should the end result be something to run (script, "
+                         "code, config) or something written (plan, doc, "
+                         "ticket)?")
+    if not questions and words < 6:
+        questions.append("Give me one more detail — error text, system name, "
+                         "or what the finished result should look like?")
+    return questions[:2]
 
 
 def build_prompt(cleaned_task: str, rec: dict, selected_modules: list,
@@ -2592,10 +2677,14 @@ class PetBrowser:
 
 
 CHAT_GREETING = (
-    "Hi! Tell me what you're working on — typos and shorthand are fine. "
-    "I'll build you a copy-ready prompt and tell you whether it belongs in "
-    "Codex, Claude Code, ChatGPT, or Claude."
+    "Hi! Tell me what you're working on — even just a sentence, typos and "
+    "shorthand are fine. I might ask a question or two to fill in the gaps, "
+    "then I'll build you a copy-ready prompt for Codex, Claude Code, "
+    "ChatGPT, or Claude."
 )
+
+SKIP_WORDS = {"skip", "idk", "i dont know", "i don't know", "not sure",
+              "dunno", "just generate", "just build it", "go ahead", "na", "n/a"}
 
 
 class ChatWindow:
@@ -2615,6 +2704,7 @@ class ChatWindow:
         self.pet = pet
         self.spell = pet.spell
         self.last = None       # (raw, cleaned, rec, prompt)
+        self.pending = None    # active follow-up Q&A state
         self.messages = []     # (kind, text) history, re-flowed on resize
         self._frames = []      # embedded button frames, destroyed on re-flow
         self._typing = False
@@ -2701,7 +2791,18 @@ class ChatWindow:
         frames = self.pet.sprites.frames.get("idle") or next(iter(self.pet.sprites.frames.values()))
         frame = frames[0]
         factor = max(1, frame.height() // 40)
-        return frame.subsample(factor, factor)
+        avatar = frame.subsample(factor, factor)
+        # The sprite carries the magenta transparency key; punch those pixels
+        # out so the avatar sits cleanly on the header background.
+        key = tuple(int(self.pet.sprites.key[i:i + 2], 16) for i in (1, 3, 5))
+        try:
+            for y in range(avatar.height()):
+                for x in range(avatar.width()):
+                    if avatar.get(x, y) == key:
+                        avatar.transparency_set(x, y, True)
+        except tk.TclError:
+            pass
+        return avatar
 
     # ---- window plumbing ------------------------------------------------------
 
@@ -2865,12 +2966,55 @@ class ChatWindow:
             return
         self.entry.delete("1.0", "end")
         self._add("user", raw)
+        if self.pending:
+            self._handle_answer(raw)
+        else:
+            self._start_request(raw)
 
+    # ---- follow-up question flow ---------------------------------------------
+
+    def _start_request(self, raw):
         cleaned = clean_text(raw, self.spell)
         rec = recommend(cleaned)
-        prompt = build_prompt(cleaned, rec, rec["modules"], rec["skills"], [])
-        self.last = (raw, cleaned, rec, prompt)
+        questions = clarifying_questions(cleaned, rec)
+        if questions:
+            self.pending = {"raw": raw, "answers": [], "questions": questions, "qi": 0}
+            self._show_typing()
+            self.win.after(random.randint(400, 800), self._ask_next_question)
+        else:
+            self._generate(raw, [])
 
+    def _ask_next_question(self):
+        if not self.is_open() or not self.pending:
+            return
+        self._hide_typing()
+        opener = random.choice(("Quick question first —", "Happy to! One thing —",
+                                "On it. Before I build this —", "Almost there —"))
+        q = self.pending["questions"][self.pending["qi"]]
+        hint = "" if self.pending["qi"] else "\n\n(or say “skip” and I'll just build it)"
+        self._add("pet", f"{opener} {q}{hint}")
+
+    def _handle_answer(self, raw):
+        p = self.pending
+        skipped = raw.strip().lower().rstrip(".!") in SKIP_WORDS
+        if not skipped:
+            p["answers"].append(raw)
+        p["qi"] += 1
+        if skipped or p["qi"] >= len(p["questions"]):
+            self.pending = None
+            self._generate(p["raw"], p["answers"])
+        else:
+            self._show_typing()
+            self.win.after(random.randint(400, 800), self._ask_next_question)
+
+    def _generate(self, raw, answers):
+        # Answers feed both the task text (for routing) and the context list.
+        combined = raw + ". " + " ".join(answers) if answers else raw
+        cleaned = clean_text(combined, self.spell)
+        rec = recommend(cleaned)
+        context = [clean_text(a, self.spell) for a in answers]
+        prompt = build_prompt(cleaned, rec, rec["modules"], rec["skills"], context)
+        self.last = (raw, cleaned, rec, prompt)
         self._show_typing()
         self.win.after(random.randint(500, 900), lambda: self._deliver_reply(cleaned, rec, prompt))
 
@@ -2880,12 +3024,14 @@ class ChatWindow:
         self._hide_typing()
         template_name = PROMPT_TEMPLATES[rec["template"]]["name"]
         module_names = ", ".join(AGENT_MODULES[m]["name"] for m in rec["modules"])
-        self._add("pet", f"Got it! I read that as:\n“{cleaned}”")
+        opener = random.choice(("Got it!", "Okay, here's what I make of it:",
+                                "Perfect, that helps."))
+        self._add("pet", f"{opener} I read that as:\n“{cleaned}”")
         self._add("pet", f"➜ Send it to: {DEST_LABELS[rec['destination']]}\n{rec['reason']}")
         details = f"Template: {template_name}\nModules: {module_names}"
         if rec["checklist"]:
             hints = "\n".join(f"• {c}" for c in rec["checklist"][:5])
-            details += f"\n\nIt'll work better if you paste in:\n{hints}"
+            details += f"\n\nIt'll work even better if you paste in:\n{hints}"
         self._add("pet", details)
         self._add("prompt", prompt)
 

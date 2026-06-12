@@ -272,5 +272,13 @@
       "jira"
     ],
     "body": "Draft a reply to a support ticket. {TASK}\n\nRequirements:\n- Acknowledge the actual problem in the user's terms\n- What was found/done, in plain language\n- Next step and who owns it (them or us), with timing\n- Professional, warm, no blame, no jargon\n\nTicket context: {INPUTS}\nConstraints: {CONSTRAINTS}"
+  },
+  "troubleshoot": {
+    "name": "Troubleshoot / fix it",
+    "destination": "Both",
+    "topics": [
+      "fixit"
+    ],
+    "body": "Help me troubleshoot and fix this. {TASK}\n\nKnown context: {INPUTS}\n\nWork it systematically:\n1. Tell me what to confirm first: exact symptom, scope (one user or many), and since when.\n2. List the most likely causes for these symptoms, ranked, and say why.\n3. For each cause: the exact check or command to run, and what result confirms or rules it out — cheapest checks first.\n4. Check what changed recently (updates, policies, passwords, certificates) before assuming hardware or reinstalls.\n5. Give the fix for the confirmed cause, then how to verify with the affected user, and what to document.\n\nChange one variable at a time. Constraints: {CONSTRAINTS}"
   }
 }

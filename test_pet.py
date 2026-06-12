@@ -51,12 +51,36 @@ pet.set_scale(1)
 assert pet.sprites.w == 192
 print("pet resize OK")
 
-# Chat re-flow on width change
+# Follow-up question flow: short fix-it message triggers questions
 pet.toggle_chat()
 chat = pet.chat
-chat.entry.insert("1.0", "test message for reflow")
+chat.entry.insert("1.0", "outlok keeps crashing")
 chat.send()
-chat._deliver_reply(*[chat.last[1], chat.last[2], chat.last[3]])
+assert chat.pending is not None, "expected clarifying questions for short fix-it"
+assert chat.last is None
+chat.entry.insert("1.0", "just one user, since yesterday")
+chat.send()
+assert chat.pending is not None and chat.pending["qi"] == 1
+chat.entry.insert("1.0", "no error message, nothing changed recently")
+chat.send()
+assert chat.pending is None, "Q&A should be finished"
+assert chat.last is not None
+raw2, cleaned2, rec2, prompt2 = chat.last
+assert "fixit" in rec2["topics"], rec2["topics"]
+assert rec2["template"] == "troubleshoot", rec2["template"]
+assert "one user" in prompt2, "answer context missing from prompt"
+print("follow-up Q&A OK -> template:", rec2["template"])
+
+# "skip" bails out of questioning and still generates
+chat.entry.insert("1.0", "printer help")
+chat.send()
+assert chat.pending is not None
+chat.entry.insert("1.0", "skip")
+chat.send()
+assert chat.pending is None and chat.last is not None
+print("skip flow OK")
+
+# Chat re-flow on width change
 n_msgs = len(chat.messages)
 chat._cw = 600
 chat._render_all()

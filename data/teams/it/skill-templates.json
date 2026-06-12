@@ -490,5 +490,19 @@
       "Test the dependent service end to end, not just the lookup.",
       "Restore TTL and document the change with timestamps."
     ]
+  },
+  "general_fixit": {
+    "name": "General troubleshooting skill",
+    "topics": [
+      "fixit"
+    ],
+    "body": "Diagnose before fixing: symptom, scope, recent changes, cheapest checks first.",
+    "steps": [
+      "Capture the exact symptom and error text; screenshot if possible.",
+      "Establish scope: one user, a group, or everyone — and since when.",
+      "List what changed recently: updates, policies, passwords, certs.",
+      "Test likely causes cheapest-first, one variable at a time.",
+      "Apply the fix, verify with the affected user, document in the ticket."
+    ]
   }
 }
