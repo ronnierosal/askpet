@@ -60,17 +60,35 @@ def _legacy_data_dir() -> Path:
 
 def migrate_legacy_data():
     """One-time move of PromptMate-era user data (settings, history,
-    pets, knowledge packs, dictionaries) into the AskPet directory."""
+    pets, knowledge packs, dictionaries) into the AskPet directory.
+
+    If the AskPet dir already exists (e.g. something created it before
+    the first real launch), merge item-by-item without overwriting
+    anything the new dir already has."""
     old, new = _legacy_data_dir(), user_data_dir()
-    if new.exists() or not old.exists():
+    if not old.exists():
         return
-    try:
-        old.rename(new)
-    except OSError:
-        try:  # cross-volume or files still held open: copy instead
-            shutil.copytree(old, new)
+    if not new.exists():
+        try:
+            old.rename(new)
+            return
         except OSError:
-            pass  # a fresh start beats failing to launch
+            pass  # fall through to the per-item merge
+    try:
+        new.mkdir(parents=True, exist_ok=True)
+        for item in old.iterdir():
+            target = new / item.name
+            if target.exists():
+                continue  # never clobber data the new dir already has
+            try:
+                item.rename(target)
+            except OSError:
+                if item.is_dir():
+                    shutil.copytree(item, target)
+                else:
+                    shutil.copy2(item, target)
+    except OSError:
+        pass  # partial migration beats failing to launch
 
 
 DATA_DIR = user_data_dir()
