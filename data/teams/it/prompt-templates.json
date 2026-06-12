@@ -274,6 +274,30 @@
     ],
     "body": "Draft a reply to a support ticket. {TASK}\n\nRequirements:\n- Acknowledge the actual problem in the user's terms\n- What was found/done, in plain language\n- Next step and who owns it (them or us), with timing\n- Professional, warm, no blame, no jargon\n\nTicket context: {INPUTS}\nConstraints: {CONSTRAINTS}"
   },
+  "azure_task": {
+    "name": "Azure admin task",
+    "destination": "Both",
+    "topics": [
+      "azure"
+    ],
+    "body": "Azure administration task. {TASK}\n\nContext: {INPUTS}\n\nProvide:\n- Portal steps AND the az CLI / PowerShell equivalent\n- Resource group, tagging, and naming that fits convention\n- Least-privilege RBAC at the narrowest scope that works\n- Projected monthly cost of anything created, and the cheaper alternative considered\n- Rollback/teardown steps\n\nConstraints: {CONSTRAINTS}\nVerification: {VERIFICATION}"
+  },
+  "python_script": {
+    "name": "Python script",
+    "destination": "Codex",
+    "topics": [
+      "python"
+    ],
+    "body": "Write a Python script. {TASK}\n\nRequirements:\n- Parameters via argparse, not code edits\n- Stdlib first; any dependency pinned in requirements.txt for a venv\n- Explicit error handling for missing files, bad data, no network\n- --dry-run flag on anything destructive\n- Type hints on public functions; a 5-line usage note at the top\n- Inputs: {INPUTS}\n- Constraints: {CONSTRAINTS}\n\nTest with real-shaped sample data and show me the output before widening scope.\n\nVerification: {VERIFICATION}"
+  },
+  "app_build": {
+    "name": "Build an app (MVP-first)",
+    "destination": "Both",
+    "topics": [
+      "appdev"
+    ],
+    "body": "Help me build an app. {TASK}\n\nWho it's for and where it runs: {INPUTS}\n\nWork MVP-first:\n1. Restate the one problem this app solves and for whom\n2. Propose the smallest version that's actually usable (one core flow) and what we're explicitly deferring\n3. Recommend boring, maintainable tech for our context — with one sentence on why over the alternatives\n4. Scaffold it and get the core flow working with real-shaped data before any polish or auth\n5. Give me a test checklist and what feedback to collect from the first real user\n\nConstraints: {CONSTRAINTS}\nVerification: {VERIFICATION}"
+  },
   "api_integration": {
     "name": "API integration build",
     "destination": "Codex",

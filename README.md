@@ -24,6 +24,18 @@ ask for one.
 
 ## What's new
 
+**0.8.0** (2026-06-11)
+- Full Microsoft cloud coverage: Azure admin (RBAC, tagging, cost,
+  teardown), Exchange Online (mailboxes, DLs, transport rules), and
+  Defender/Purview (DLP, sensitivity labels, simulate-first rollouts).
+- Scripting: dedicated Python template/agent/skill alongside PowerShell.
+- Platform troubleshooting: Windows (Event Viewer-first), macOS
+  (Console/keychain/MDM-aware), iOS/Android under MDM, and printers.
+- App building: MVP-first template, agent, and skill for small internal
+  apps.
+- Smarter ranking: focused specialists now beat broad matches in ties.
+- 42 templates / 54 modules / 65 skills.
+
 **0.7.0** (2026-06-11)
 - API & MCP integration support: templates, agents, and skills for building
   API integrations (auth, paging, rate limits, idempotency) and connecting

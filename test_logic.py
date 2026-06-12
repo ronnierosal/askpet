@@ -33,6 +33,15 @@ cases = [
     "sumo logic query for failed vpn logins last 24 hours",
     "sentinelone flagged a powershell script on the cfo laptop",
     "force install an extension in chrome and edge for everyone",
+    "spin up an azure vm in a new resource group for testing",
+    "give marketing access to the events shared mailbox",
+    "create a dlp policy in purview to block ssn in emails",
+    "python script to parse iis logs and export errors to csv",
+    "laptop bsod twice today after the latest windows update",
+    "users macbook keychain keeps asking for password",
+    "iphone wont get the new mdm wifi profile",
+    "print queue stuck for everyone on the 2nd floor printer",
+    "build a small web app for tracking loaner laptops",
 ]
 for raw in cases:
     cleaned = pm.clean_text(raw, spell)

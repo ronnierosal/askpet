@@ -27,8 +27,8 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 APP_NAME = "PromptMate"
-APP_VERSION = "0.7.0"
-CONTENT_VERSION = "2026.06.7"
+APP_VERSION = "0.8.0"
+CONTENT_VERSION = "2026.06.8"
 
 # ---------------------------------------------------------------------------
 # User data locations (never inside the install folder)
@@ -303,7 +303,9 @@ KEYWORD_TOPICS = {
               "wont open", "won't open", "cant open", "can't open",
               "wont start", "won't start", "error when", "fails", "failing",
               "freezes", "frozen", "keep dropping", "keep disconnecting",
-              "keeps disconnecting", "very slow"],
+              "keeps disconnecting", "very slow", "wont boot", "won't boot",
+              "wont print", "won't print", "stuck on", "no sound",
+              "blank screen"],
     "notion": ["notion"],
     "zoom": ["zoom", "webinar", "meeting recording", "transcript"],
     "google": ["google workspace", "gmail", "google drive", "google admin",
@@ -352,6 +354,32 @@ KEYWORD_TOPICS = {
                 "island browser", "browser extension", "browser policy",
                 "bookmarks", "homepage", "popup blocker", "cache and cookies",
                 "browser profile"],
+    "azure": ["azure", "resource group", "virtual machine", "azure vm",
+              "key vault", "app service", "azure storage", "blob storage",
+              "azure network", "subscription", "azure cost", "log analytics workspace"],
+    "exchange_admin": ["mailbox permission", "shared mailbox", "distribution list",
+                       "dl ", "transport rule", "mail flow rule", "retention policy",
+                       "litigation hold", "calendar permission", "out of office",
+                       "mailbox full", "exchange online"],
+    "m365_security": ["defender", "purview", "dlp", "data loss prevention",
+                      "sensitivity label", "safe links", "safe attachments",
+                      "quarantine release", "secure score", "ediscovery"],
+    "python": ["python", "pip ", "venv", "pandas", "py script", "jupyter",
+               "pyinstaller", "requests library"],
+    "windows": ["windows 11", "windows 10", "bsod", "blue screen",
+                "event viewer", "registry", "safe mode", "windows update",
+                "group policy", "start menu", "taskbar", "windows hello"],
+    "mac": ["macos", "mac os", "macbook", "imac", "keychain", "time machine",
+            "jamf", "spotlight", "finder", "kernel panic"],
+    "mobile": ["iphone", "ipad", "ios device", "ios update", "android",
+               "samsung", "pixel phone", "mobile device", "phone wont",
+               "activation lock", "mdm profile"],
+    "printer": ["printer", "printing", "print queue", "spooler",
+                "print driver", "toner", "print server", "label printer",
+                "scan to email"],
+    "appdev": ["build an app", "build a app", "web app", "website",
+               "frontend", "backend", "react", "flask", "django", "node",
+               "mobile app", "prototype", "mvp", "user interface", "gui app"],
 }
 
 
@@ -884,6 +912,57 @@ PROMPT_TEMPLATES = {
             "- Next step and who owns it (them or us), with timing\n"
             "- Professional, warm, no blame, no jargon\n\n"
             "Ticket context: {INPUTS}\nConstraints: {CONSTRAINTS}"
+        ),
+    },
+    "azure_task": {
+        "name": "Azure admin task",
+        "destination": "Both",
+        "topics": ["azure"],
+        "body": (
+            "Azure administration task. {TASK}\n\n"
+            "Context: {INPUTS}\n\n"
+            "Provide:\n- Portal steps AND the az CLI / PowerShell equivalent\n"
+            "- Resource group, tagging, and naming that fits convention\n"
+            "- Least-privilege RBAC at the narrowest scope that works\n"
+            "- Projected monthly cost of anything created, and the cheaper "
+            "alternative considered\n- Rollback/teardown steps\n\n"
+            "Constraints: {CONSTRAINTS}\nVerification: {VERIFICATION}"
+        ),
+    },
+    "python_script": {
+        "name": "Python script",
+        "destination": "Codex",
+        "topics": ["python"],
+        "body": (
+            "Write a Python script. {TASK}\n\n"
+            "Requirements:\n- Parameters via argparse, not code edits\n"
+            "- Stdlib first; any dependency pinned in requirements.txt for a venv\n"
+            "- Explicit error handling for missing files, bad data, no network\n"
+            "- --dry-run flag on anything destructive\n"
+            "- Type hints on public functions; a 5-line usage note at the top\n"
+            "- Inputs: {INPUTS}\n- Constraints: {CONSTRAINTS}\n\n"
+            "Test with real-shaped sample data and show me the output before "
+            "widening scope.\n\nVerification: {VERIFICATION}"
+        ),
+    },
+    "app_build": {
+        "name": "Build an app (MVP-first)",
+        "destination": "Both",
+        "topics": ["appdev"],
+        "body": (
+            "Help me build an app. {TASK}\n\n"
+            "Who it's for and where it runs: {INPUTS}\n\n"
+            "Work MVP-first:\n"
+            "1. Restate the one problem this app solves and for whom\n"
+            "2. Propose the smallest version that's actually usable (one "
+            "core flow) and what we're explicitly deferring\n"
+            "3. Recommend boring, maintainable tech for our context — with "
+            "one sentence on why over the alternatives\n"
+            "4. Scaffold it and get the core flow working with real-shaped "
+            "data before any polish or auth\n"
+            "5. Give me a test checklist and what feedback to collect from "
+            "the first real user\n\n"
+            "Constraints: {CONSTRAINTS}\nVerification: {VERIFICATION}"
         ),
     },
     "api_integration": {
@@ -1488,6 +1567,110 @@ AGENT_MODULES = {
             "bad installs, know the profile/sync implications of policy "
             "changes, and for troubleshooting isolate variables: new "
             "profile, extensions off, then cache."
+        ),
+    },
+    "azure": {
+        "name": "Azure Agent",
+        "topics": ["azure", "azure_function", "iac"],
+        "body": (
+            "Act as an Azure administrator: everything in a resource group "
+            "with tags (owner, purpose, environment), portal steps AND the "
+            "az CLI/PowerShell equivalent, least-privilege RBAC at the "
+            "narrowest scope, secrets in Key Vault, and state the monthly "
+            "cost of anything you propose creating."
+        ),
+    },
+    "exchange": {
+        "name": "Exchange Online Agent",
+        "topics": ["exchange_admin", "m365"],
+        "body": (
+            "Act as an Exchange Online specialist: mailbox and calendar "
+            "permissions via the right cmdlets (and what each level grants), "
+            "shared mailboxes vs DLs vs M365 groups trade-offs, transport "
+            "rule order matters, retention/litigation hold implications "
+            "before touching data, and message traces to prove mail flow "
+            "claims."
+        ),
+    },
+    "m365_security": {
+        "name": "Microsoft Security Agent",
+        "topics": ["m365_security", "security"],
+        "body": (
+            "Act as a Microsoft Defender/Purview specialist: check the "
+            "license tier before recommending features (E3 vs E5 changes "
+            "the answer), start DLP and sensitivity policies in simulation "
+            "mode, tune Safe Links/Attachments with business impact in "
+            "mind, and treat Secure Score as a guide — not every "
+            "recommendation fits every org."
+        ),
+    },
+    "python": {
+        "name": "Python Agent",
+        "topics": ["python"],
+        "body": (
+            "Act as a Python developer for IT automation: stdlib first, "
+            "minimal dependencies in a venv with pinned requirements, "
+            "pathlib over string paths, explicit error handling with "
+            "actionable messages, type hints on public functions, and a "
+            "dry-run flag on anything destructive. Scripts should run the "
+            "same on Windows and macOS unless stated."
+        ),
+    },
+    "windows": {
+        "name": "Windows Agent",
+        "topics": ["windows"],
+        "body": (
+            "Act as a Windows desktop specialist: Event Viewer and "
+            "Reliability Monitor before guessing, check recent updates and "
+            "driver changes first, know the managed-device boundaries "
+            "(GPO/Intune may revert manual fixes), prefer per-user fixes "
+            "before machine-wide ones, and capture the exact error text "
+            "for the record."
+        ),
+    },
+    "mac": {
+        "name": "Mac Agent",
+        "topics": ["mac"],
+        "body": (
+            "Act as a macOS specialist: Console logs and diagnostics before "
+            "guessing, mind MDM management (Jamf/Intune) and what it locks, "
+            "keychain issues behind many sign-in problems, safe mode and a "
+            "test user account to isolate system vs profile issues, and "
+            "respect SIP — never advise disabling protections casually."
+        ),
+    },
+    "mobile": {
+        "name": "Mobile Device Agent",
+        "topics": ["mobile", "intune"],
+        "body": (
+            "Act as a mobile device specialist (iOS/Android under MDM): "
+            "check enrollment and compliance state first, corporate vs BYOD "
+            "changes what you may touch, app/profile pushes need network "
+            "and check-in to land, and activation lock/factory reset are "
+            "last resorts with data-loss warnings stated upfront."
+        ),
+    },
+    "printing": {
+        "name": "Print Agent",
+        "topics": ["printer"],
+        "body": (
+            "Act as a print specialist: scope first (one user, one printer, "
+            "or everyone — they have different causes), check queue/spooler "
+            "before drivers, driver type matters (universal vs "
+            "model-specific), test from the server/host directly to split "
+            "network vs client issues, and document the working "
+            "driver/port combo when fixed."
+        ),
+    },
+    "app_builder": {
+        "name": "App Builder Agent",
+        "topics": ["appdev"],
+        "body": (
+            "Act as a pragmatic app builder: start from who uses it and the "
+            "one problem it solves, ship the smallest working version first "
+            "(one screen, real data), pick boring proven tech the team can "
+            "maintain, plan for where it runs and who fixes it at 2am "
+            "before adding features, and iterate from real user feedback."
         ),
     },
 }
@@ -2165,6 +2348,114 @@ SKILL_TEMPLATES = {
             "Clear cache/cookies only after the above — it's the last variable, not the first.",
         ],
     },
+    "azure_deploy": {
+        "name": "Azure resource deployment skill",
+        "topics": ["azure", "iac"],
+        "body": "Stand up Azure resources properly: RG + tags, IaC or CLI, RBAC, cost, teardown path.",
+        "steps": [
+            "Create/choose the resource group; tag owner, purpose, environment.",
+            "Deploy via IaC or az CLI (saved script) — portal clicks aren't repeatable.",
+            "Scope RBAC to the narrowest level; secrets go to Key Vault.",
+            "Verify the resource works AND check its projected monthly cost.",
+            "Record the teardown command — every resource needs an exit plan.",
+        ],
+    },
+    "exchange_task": {
+        "name": "Exchange Online admin skill",
+        "topics": ["exchange_admin"],
+        "body": "Mailbox/DL/transport changes done right: current state, least access, verify, trace.",
+        "steps": [
+            "Capture the current state (permissions/members/rules) as your rollback.",
+            "Apply the change with the narrowest grant that solves the ask.",
+            "Mind propagation — Exchange permission changes can take up to an hour.",
+            "Verify as the affected user (or with a message trace for mail flow).",
+            "Record what was granted/changed and any expiry in the ticket.",
+        ],
+    },
+    "defender_review": {
+        "name": "Defender/Purview policy skill",
+        "topics": ["m365_security"],
+        "body": "Roll out a security/compliance policy without breaking work: simulate, review, enforce.",
+        "steps": [
+            "Confirm the license tier actually includes the feature.",
+            "Build the policy scoped to a pilot group, in simulation/audit mode.",
+            "Review what it WOULD have flagged/blocked for false positives.",
+            "Enforce for the pilot, then expand in rings; watch user reports.",
+            "Document policy intent and exceptions; set a review date.",
+        ],
+    },
+    "python_script": {
+        "name": "Python script skill",
+        "topics": ["python"],
+        "body": "Write a Python automation that survives reuse: venv, args, errors, dry-run, README.",
+        "steps": [
+            "Define inputs/outputs; take parameters via argparse, not edits to the code.",
+            "Create a venv and pin requirements (or stay stdlib-only).",
+            "Handle the failure paths: missing file, bad data, no network.",
+            "Add --dry-run for anything destructive; print what WOULD happen.",
+            "Test with real-shaped data and leave a 5-line usage note at the top.",
+        ],
+    },
+    "windows_fix": {
+        "name": "Windows troubleshooting skill",
+        "topics": ["windows", "fixit"],
+        "body": "Fix Windows issues with evidence: Event Viewer, recent changes, isolate, then act.",
+        "steps": [
+            "Get the exact error and when it started; check Event Viewer at that timestamp.",
+            "Check what changed: Windows updates, driver updates, new software, policy.",
+            "Isolate: another user account on the same machine splits profile vs system.",
+            "Apply the targeted fix; avoid reinstall-everything until causes are exhausted.",
+            "Confirm with the user after a reboot and a real work task; note the fix.",
+        ],
+    },
+    "mac_fix": {
+        "name": "Mac troubleshooting skill",
+        "topics": ["mac", "fixit"],
+        "body": "Fix macOS issues without folklore: logs, test account, safe mode, managed-device awareness.",
+        "steps": [
+            "Capture the symptom and check Console/diagnostic logs around it.",
+            "Check MDM (Jamf/Intune) state — a profile may be causing or blocking the fix.",
+            "Test in a fresh user account: works there = profile issue, not system.",
+            "Try safe mode for cache/extension issues; keychain reset only for sign-in loops.",
+            "Verify with the user, then note macOS version and fix in the ticket.",
+        ],
+    },
+    "mobile_support": {
+        "name": "Mobile device support skill",
+        "topics": ["mobile"],
+        "body": "Support iOS/Android under MDM: enrollment state, sync, targeted fixes, reset last.",
+        "steps": [
+            "Check enrollment/compliance state in MDM before touching the device.",
+            "Confirm the basics: OS version supported, storage not full, network OK.",
+            "Force an MDM check-in/sync; many 'missing app/profile' issues end here.",
+            "Re-push the specific app/profile; verify it lands on the device.",
+            "Wipe/retire only with data-loss warnings given and backup confirmed.",
+        ],
+    },
+    "printer_fix": {
+        "name": "Printer troubleshooting skill",
+        "topics": ["printer", "fixit"],
+        "body": "Fix printing by scope: one user vs everyone points to different layers.",
+        "steps": [
+            "Scope it: one user, one printer, or everyone — note which.",
+            "Check the queue/spooler first; clear stuck jobs before deeper work.",
+            "Print a test page from the server/host directly — splits network vs client.",
+            "Reinstall/swap the driver only after queue and connectivity are clean.",
+            "Document the working driver, port, and any quirks for the next person.",
+        ],
+    },
+    "app_mvp": {
+        "name": "App MVP build skill",
+        "topics": ["appdev"],
+        "body": "Ship a first working version: one user, one problem, one screen, real data, iterate.",
+        "steps": [
+            "Write one sentence: who uses this and what problem it solves.",
+            "Cut scope to the smallest version that's actually usable (one core flow).",
+            "Pick boring tech the team can maintain; scaffold and get it running day one.",
+            "Build the core flow with real-shaped data; skip auth/polish until it works.",
+            "Put it in front of a real user; let their friction set the next iteration.",
+        ],
+    },
 }
 
 CONTEXT_CHECKLIST_BY_TOPIC = {
@@ -2211,6 +2502,15 @@ CONTEXT_CHECKLIST_BY_TOPIC = {
     "siem": ["Source category / log source names", "Time range of interest", "A known event to validate against"],
     "edr": ["Alert ID and detection details", "Affected endpoint(s)", "Whether containment already happened"],
     "browser": ["Browser and version", "Managed via Intune/GPO or unmanaged", "Extensions involved"],
+    "azure": ["Subscription and resource group", "Region and naming convention", "Cost constraints / budget"],
+    "exchange_admin": ["Mailbox/DL names and owners", "Affected senders/recipients", "Message trace examples"],
+    "m365_security": ["Policy names in scope", "Affected users or alerts", "License tier (E3/E5/Business)"],
+    "python": ["Python version", "Allowed packages (or stdlib only)", "Input/output formats and sample data"],
+    "windows": ["Windows version and build", "Event Viewer errors (paste them)", "Domain-joined / Intune-managed?"],
+    "mac": ["macOS version", "Managed (Jamf/Intune) or personal", "Console/log errors if any"],
+    "mobile": ["Device model and OS version", "MDM enrollment status", "Corporate or BYOD"],
+    "printer": ["Printer model and connection (USB/network)", "One user or everyone", "Driver type (universal/specific)"],
+    "appdev": ["Who will use it and for what", "Platform (web/desktop/mobile)", "Where it will run/be hosted"],
 }
 
 GENERIC_CHECKLIST = [
@@ -2247,15 +2547,22 @@ def recommend(text: str) -> dict:
     if best_overlap <= 0:
         best_key = "codex_execution" if dest_info["destination"] == "Codex" else "chatgpt_planning"
 
+    def rank_key(item):
+        # Primary: topic overlap. Tie-break: how focused the item is on the
+        # detected topics — a dedicated Exchange skill beats a broad M365 one.
+        score = topic_score(item)
+        focus = score / max(1, len(item["topics"]))
+        return (-score, -focus)
+
     modules = sorted((k for k, m in AGENT_MODULES.items() if topic_score(m) > 0),
-                     key=lambda k: -topic_score(AGENT_MODULES[k]))
+                     key=lambda k: rank_key(AGENT_MODULES[k]))
     # Always-on backbone: plan before doing, work to a contract, verify.
     for default in ("plan_first", "harness", "validation"):
         if default not in modules:
             modules.append(default)
 
     skills = sorted((k for k, s in SKILL_TEMPLATES.items() if topic_score(s) > 0),
-                    key=lambda k: -topic_score(SKILL_TEMPLATES[k]))
+                    key=lambda k: rank_key(SKILL_TEMPLATES[k]))
 
     checklist = []
     for t in topics:

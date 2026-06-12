@@ -268,7 +268,14 @@
       "keep dropping",
       "keep disconnecting",
       "keeps disconnecting",
-      "very slow"
+      "very slow",
+      "wont boot",
+      "won't boot",
+      "wont print",
+      "won't print",
+      "stuck on",
+      "no sound",
+      "blank screen"
     ],
     "notion": [
       "notion"
@@ -468,6 +475,123 @@
       "popup blocker",
       "cache and cookies",
       "browser profile"
+    ],
+    "azure": [
+      "azure",
+      "resource group",
+      "virtual machine",
+      "azure vm",
+      "key vault",
+      "app service",
+      "azure storage",
+      "blob storage",
+      "azure network",
+      "subscription",
+      "azure cost",
+      "log analytics workspace"
+    ],
+    "exchange_admin": [
+      "mailbox permission",
+      "shared mailbox",
+      "distribution list",
+      "dl ",
+      "transport rule",
+      "mail flow rule",
+      "retention policy",
+      "litigation hold",
+      "calendar permission",
+      "out of office",
+      "mailbox full",
+      "exchange online"
+    ],
+    "m365_security": [
+      "defender",
+      "purview",
+      "dlp",
+      "data loss prevention",
+      "sensitivity label",
+      "safe links",
+      "safe attachments",
+      "quarantine release",
+      "secure score",
+      "ediscovery"
+    ],
+    "python": [
+      "python",
+      "pip ",
+      "venv",
+      "pandas",
+      "py script",
+      "jupyter",
+      "pyinstaller",
+      "requests library"
+    ],
+    "windows": [
+      "windows 11",
+      "windows 10",
+      "bsod",
+      "blue screen",
+      "event viewer",
+      "registry",
+      "safe mode",
+      "windows update",
+      "group policy",
+      "start menu",
+      "taskbar",
+      "windows hello"
+    ],
+    "mac": [
+      "macos",
+      "mac os",
+      "macbook",
+      "imac",
+      "keychain",
+      "time machine",
+      "jamf",
+      "spotlight",
+      "finder",
+      "kernel panic"
+    ],
+    "mobile": [
+      "iphone",
+      "ipad",
+      "ios device",
+      "ios update",
+      "android",
+      "samsung",
+      "pixel phone",
+      "mobile device",
+      "phone wont",
+      "activation lock",
+      "mdm profile"
+    ],
+    "printer": [
+      "printer",
+      "printing",
+      "print queue",
+      "spooler",
+      "print driver",
+      "toner",
+      "print server",
+      "label printer",
+      "scan to email"
+    ],
+    "appdev": [
+      "build an app",
+      "build a app",
+      "web app",
+      "website",
+      "frontend",
+      "backend",
+      "react",
+      "flask",
+      "django",
+      "node",
+      "mobile app",
+      "prototype",
+      "mvp",
+      "user interface",
+      "gui app"
     ]
   },
   "context_checklist_by_topic": {
@@ -685,6 +809,51 @@
       "Browser and version",
       "Managed via Intune/GPO or unmanaged",
       "Extensions involved"
+    ],
+    "azure": [
+      "Subscription and resource group",
+      "Region and naming convention",
+      "Cost constraints / budget"
+    ],
+    "exchange_admin": [
+      "Mailbox/DL names and owners",
+      "Affected senders/recipients",
+      "Message trace examples"
+    ],
+    "m365_security": [
+      "Policy names in scope",
+      "Affected users or alerts",
+      "License tier (E3/E5/Business)"
+    ],
+    "python": [
+      "Python version",
+      "Allowed packages (or stdlib only)",
+      "Input/output formats and sample data"
+    ],
+    "windows": [
+      "Windows version and build",
+      "Event Viewer errors (paste them)",
+      "Domain-joined / Intune-managed?"
+    ],
+    "mac": [
+      "macOS version",
+      "Managed (Jamf/Intune) or personal",
+      "Console/log errors if any"
+    ],
+    "mobile": [
+      "Device model and OS version",
+      "MDM enrollment status",
+      "Corporate or BYOD"
+    ],
+    "printer": [
+      "Printer model and connection (USB/network)",
+      "One user or everyone",
+      "Driver type (universal/specific)"
+    ],
+    "appdev": [
+      "Who will use it and for what",
+      "Platform (web/desktop/mobile)",
+      "Where it will run/be hosted"
     ]
   },
   "generic_checklist": [

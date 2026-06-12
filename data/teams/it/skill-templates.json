@@ -801,5 +801,135 @@
       "Disable extensions, retest; re-enable one at a time to find the culprit.",
       "Clear cache/cookies only after the above — it's the last variable, not the first."
     ]
+  },
+  "azure_deploy": {
+    "name": "Azure resource deployment skill",
+    "topics": [
+      "azure",
+      "iac"
+    ],
+    "body": "Stand up Azure resources properly: RG + tags, IaC or CLI, RBAC, cost, teardown path.",
+    "steps": [
+      "Create/choose the resource group; tag owner, purpose, environment.",
+      "Deploy via IaC or az CLI (saved script) — portal clicks aren't repeatable.",
+      "Scope RBAC to the narrowest level; secrets go to Key Vault.",
+      "Verify the resource works AND check its projected monthly cost.",
+      "Record the teardown command — every resource needs an exit plan."
+    ]
+  },
+  "exchange_task": {
+    "name": "Exchange Online admin skill",
+    "topics": [
+      "exchange_admin"
+    ],
+    "body": "Mailbox/DL/transport changes done right: current state, least access, verify, trace.",
+    "steps": [
+      "Capture the current state (permissions/members/rules) as your rollback.",
+      "Apply the change with the narrowest grant that solves the ask.",
+      "Mind propagation — Exchange permission changes can take up to an hour.",
+      "Verify as the affected user (or with a message trace for mail flow).",
+      "Record what was granted/changed and any expiry in the ticket."
+    ]
+  },
+  "defender_review": {
+    "name": "Defender/Purview policy skill",
+    "topics": [
+      "m365_security"
+    ],
+    "body": "Roll out a security/compliance policy without breaking work: simulate, review, enforce.",
+    "steps": [
+      "Confirm the license tier actually includes the feature.",
+      "Build the policy scoped to a pilot group, in simulation/audit mode.",
+      "Review what it WOULD have flagged/blocked for false positives.",
+      "Enforce for the pilot, then expand in rings; watch user reports.",
+      "Document policy intent and exceptions; set a review date."
+    ]
+  },
+  "python_script": {
+    "name": "Python script skill",
+    "topics": [
+      "python"
+    ],
+    "body": "Write a Python automation that survives reuse: venv, args, errors, dry-run, README.",
+    "steps": [
+      "Define inputs/outputs; take parameters via argparse, not edits to the code.",
+      "Create a venv and pin requirements (or stay stdlib-only).",
+      "Handle the failure paths: missing file, bad data, no network.",
+      "Add --dry-run for anything destructive; print what WOULD happen.",
+      "Test with real-shaped data and leave a 5-line usage note at the top."
+    ]
+  },
+  "windows_fix": {
+    "name": "Windows troubleshooting skill",
+    "topics": [
+      "windows",
+      "fixit"
+    ],
+    "body": "Fix Windows issues with evidence: Event Viewer, recent changes, isolate, then act.",
+    "steps": [
+      "Get the exact error and when it started; check Event Viewer at that timestamp.",
+      "Check what changed: Windows updates, driver updates, new software, policy.",
+      "Isolate: another user account on the same machine splits profile vs system.",
+      "Apply the targeted fix; avoid reinstall-everything until causes are exhausted.",
+      "Confirm with the user after a reboot and a real work task; note the fix."
+    ]
+  },
+  "mac_fix": {
+    "name": "Mac troubleshooting skill",
+    "topics": [
+      "mac",
+      "fixit"
+    ],
+    "body": "Fix macOS issues without folklore: logs, test account, safe mode, managed-device awareness.",
+    "steps": [
+      "Capture the symptom and check Console/diagnostic logs around it.",
+      "Check MDM (Jamf/Intune) state — a profile may be causing or blocking the fix.",
+      "Test in a fresh user account: works there = profile issue, not system.",
+      "Try safe mode for cache/extension issues; keychain reset only for sign-in loops.",
+      "Verify with the user, then note macOS version and fix in the ticket."
+    ]
+  },
+  "mobile_support": {
+    "name": "Mobile device support skill",
+    "topics": [
+      "mobile"
+    ],
+    "body": "Support iOS/Android under MDM: enrollment state, sync, targeted fixes, reset last.",
+    "steps": [
+      "Check enrollment/compliance state in MDM before touching the device.",
+      "Confirm the basics: OS version supported, storage not full, network OK.",
+      "Force an MDM check-in/sync; many 'missing app/profile' issues end here.",
+      "Re-push the specific app/profile; verify it lands on the device.",
+      "Wipe/retire only with data-loss warnings given and backup confirmed."
+    ]
+  },
+  "printer_fix": {
+    "name": "Printer troubleshooting skill",
+    "topics": [
+      "printer",
+      "fixit"
+    ],
+    "body": "Fix printing by scope: one user vs everyone points to different layers.",
+    "steps": [
+      "Scope it: one user, one printer, or everyone — note which.",
+      "Check the queue/spooler first; clear stuck jobs before deeper work.",
+      "Print a test page from the server/host directly — splits network vs client.",
+      "Reinstall/swap the driver only after queue and connectivity are clean.",
+      "Document the working driver, port, and any quirks for the next person."
+    ]
+  },
+  "app_mvp": {
+    "name": "App MVP build skill",
+    "topics": [
+      "appdev"
+    ],
+    "body": "Ship a first working version: one user, one problem, one screen, real data, iterate.",
+    "steps": [
+      "Write one sentence: who uses this and what problem it solves.",
+      "Cut scope to the smallest version that's actually usable (one core flow).",
+      "Pick boring tech the team can maintain; scaffold and get it running day one.",
+      "Build the core flow with real-shaped data; skip auth/polish until it works.",
+      "Put it in front of a real user; let their friction set the next iteration."
+    ]
   }
 }
