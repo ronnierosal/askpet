@@ -27,7 +27,7 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 APP_NAME = "PromptMate"
-APP_VERSION = "0.13.1"
+APP_VERSION = "0.13.2"
 CONTENT_VERSION = "2026.06.12"
 
 # ---------------------------------------------------------------------------
