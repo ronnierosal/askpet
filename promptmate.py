@@ -9,6 +9,7 @@ into JSON files under data/.
 Run:  python promptmate.py
 """
 
+import base64
 import difflib
 import io
 import json
@@ -17,8 +18,10 @@ import random
 import re
 import shutil
 import sys
+import threading
 import tkinter as tk
 import urllib.error
+import urllib.parse
 import urllib.request
 import webbrowser
 import zipfile
@@ -27,7 +30,7 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 APP_NAME = "PromptMate"
-APP_VERSION = "0.17.0"
+APP_VERSION = "0.17.1"
 CONTENT_VERSION = "2026.06.16"
 
 # ---------------------------------------------------------------------------
@@ -5083,6 +5086,14 @@ def fetch_pet_info(pet_id: str) -> dict:
     return data.get("pet", data)
 
 
+def search_pets(query: str) -> list:
+    """Server-side catalog search (matches name/creator/tags site-wide)."""
+    q = urllib.parse.quote(query)
+    data = json.loads(_http_get(f"{CODEX_PETS_BASE}/api/pets?q={q}"))
+    pets = data.get("pets", data if isinstance(data, list) else [])
+    return [p for p in pets if not p.get("ownerShadowbanned")]
+
+
 def pet_credit(meta: dict) -> str:
     owner = meta.get("ownerName") or meta.get("ownerHandle") or "unknown creator"
     handle = meta.get("ownerHandle")
@@ -5637,15 +5648,22 @@ class PetBrowser:
     user asks. Creators are credited next to every pet.
     """
 
+    COLUMNS = (("name", "Pet", 170), ("creator", "Creator", 150),
+               ("kind", "Kind", 90), ("likes", "♥", 50))
+
     def __init__(self, pet: PetOverlay):
         self.pet = pet
         self.page = 0
         self.catalog = []  # raw pet dicts from the API
+        self.sort_col = None
+        self.sort_desc = False
+        self._preview_cache = {}   # pet_id -> base64 PNG (or None on failure)
+        self._preview_results = []  # worker threads append (pet_id, b64) here
 
         win = tk.Toplevel(pet.root)
         self.win = win
         win.title("Change pet — codex-pets.net")
-        win.geometry("560x480")
+        win.geometry("620x540")
         win.wm_attributes("-topmost", True)
 
         top = ttk.Frame(win, padding=6)
@@ -5653,23 +5671,37 @@ class PetBrowser:
         ttk.Label(top, text="Search:").pack(side="left")
         self.search_var = tk.StringVar()
         self.search_var.trace_add("write", lambda *_: self._refresh_list())
-        ttk.Entry(top, textvariable=self.search_var).pack(side="left", fill="x",
-                                                          expand=True, padx=6)
+        entry = ttk.Entry(top, textvariable=self.search_var)
+        entry.pack(side="left", fill="x", expand=True, padx=6)
+        entry.bind("<Return>", lambda *_: self.search_online())
+        ttk.Button(top, text="Search all of codex-pets",
+                   command=self.search_online).pack(side="left", padx=(0, 6))
         ttk.Button(top, text="Load more pets", command=self.load_more).pack(side="left")
 
-        cols = ("name", "creator", "kind")
-        self.tree = ttk.Treeview(win, columns=cols, show="headings", height=12)
-        for col, label, width in (("name", "Pet", 180), ("creator", "Creator", 180),
-                                  ("kind", "Kind", 120)):
-            self.tree.heading(col, text=label)
-            self.tree.column(col, width=width)
+        self.tree = ttk.Treeview(win, columns=[c[0] for c in self.COLUMNS],
+                                 show="headings", height=12)
+        for col, label, width in self.COLUMNS:
+            self.tree.heading(col, text=label,
+                              command=lambda c=col: self._sort_by(c))
+            self.tree.column(col, width=width,
+                             anchor="e" if col == "likes" else "w")
         self.tree.pack(fill="both", expand=True, padx=6)
         self.tree.bind("<<TreeviewSelect>>", self._on_select)
 
-        self.detail = ttk.Label(win, text="Pets are downloaded from codex-pets.net "
-                                          "only when you pick one, and cached locally.",
-                                wraplength=520, justify="left", padding=6)
-        self.detail.pack(fill="x")
+        # Detail row: preview image on the left, text on the right.
+        detail_frame = ttk.Frame(win, padding=6)
+        detail_frame.pack(fill="x")
+        self.preview_label = ttk.Label(detail_frame, text="", width=20,
+                                       anchor="center")
+        self.preview_label.pack(side="left", padx=(0, 8))
+        self.detail = ttk.Label(detail_frame,
+                                text="Pets are downloaded from codex-pets.net "
+                                     "only when you pick one, and cached locally.\n"
+                                     "Tip: click a column header to sort; press "
+                                     "Enter in the search box to search the whole "
+                                     "site, typos welcome.",
+                                wraplength=430, justify="left")
+        self.detail.pack(side="left", fill="x", expand=True)
 
         btns = ttk.Frame(win, padding=6)
         btns.pack(fill="x")
@@ -5682,6 +5714,7 @@ class PetBrowser:
         self.status = ttk.Label(btns, text="")
         self.status.pack(side="left", padx=8)
 
+        self.win.after(120, self._poll_preview)
         self.load_more()
 
     # ---- catalog -----------------------------------------------------------
@@ -5700,20 +5733,96 @@ class PetBrowser:
                                  f"Couldn't load the pet catalog:\n{e}", parent=self.win)
         self._refresh_list()
 
+    def search_online(self):
+        """Search the whole site via the API instead of only loaded pages."""
+        query = self.search_var.get().strip()
+        if not query:
+            return
+        self.status.config(text="Searching codex-pets.net…")
+        self.win.update_idletasks()
+        try:
+            hits = search_pets(query)
+            # Strict server search found nothing? Try each word and let the
+            # fuzzy local filter narrow the merged results ('blue godzila'
+            # -> word 'blue' finds 'Godzilla Blue').
+            words = query.split()
+            if not hits and len(words) > 1:
+                seen_ids = set()
+                for w in words:
+                    if len(w) < 3:
+                        continue
+                    for h in search_pets(w):
+                        if h["id"] not in seen_ids:
+                            seen_ids.add(h["id"])
+                            hits.append(h)
+            known = {p["id"] for p in self.catalog}
+            self.catalog.extend(h for h in hits if h["id"] not in known)
+            self.status.config(text=f"{len(hits)} match(es) on codex-pets.net")
+        except (urllib.error.URLError, OSError, ValueError) as e:
+            self.status.config(text="Couldn't reach codex-pets.net")
+            messagebox.showerror("Network error",
+                                 f"Search failed:\n{e}", parent=self.win)
+        self._refresh_list()
+
+    @staticmethod
+    def _matches(p: dict, query: str) -> bool:
+        """Word-order-independent, typo-tolerant local filter.
+
+        Every query word must appear in the pet's text, either as a
+        substring or as a fuzzy word match — so 'blue godzila' finds
+        'Godzilla Blue'.
+        """
+        hay = " ".join([
+            p.get("displayName", ""), p.get("id", ""),
+            p.get("ownerName") or "", p.get("ownerHandle") or "",
+            p.get("kind", ""), " ".join(p.get("tags") or []),
+        ]).lower()
+        words = hay.split()
+        for tok in query.split():
+            if tok in hay:
+                continue
+            if difflib.get_close_matches(tok, words, n=1, cutoff=0.75):
+                continue
+            return False
+        return True
+
+    def _sort_by(self, col):
+        if self.sort_col == col:
+            self.sort_desc = not self.sort_desc
+        else:
+            # Likes start descending (most-liked first); text starts A-Z.
+            self.sort_col, self.sort_desc = col, col == "likes"
+        self._refresh_list()
+
     def _refresh_list(self):
         query = self.search_var.get().strip().lower()
         self.tree.delete(*self.tree.get_children())
-        seen = set()
+        seen, shown = set(), []
         for p in self.catalog:
             if p["id"] in seen:
                 continue
             seen.add(p["id"])
-            label = f"{p.get('displayName', p['id'])} {p.get('ownerName', '')} {p.get('ownerHandle', '')}"
-            if query and query not in label.lower():
+            if query and not self._matches(p, query):
                 continue
+            shown.append(p)
+        if self.sort_col:
+            keys = {
+                "name": lambda p: p.get("displayName", p["id"]).lower(),
+                "creator": lambda p: pet_credit(p).lower(),
+                "kind": lambda p: p.get("kind", "").lower(),
+                "likes": lambda p: int(p.get("likeCount") or 0),
+            }
+            shown.sort(key=keys[self.sort_col], reverse=self.sort_desc)
+        for col, label, _ in self.COLUMNS:
+            arrow = ""
+            if col == self.sort_col:
+                arrow = " ▼" if self.sort_desc else " ▲"
+            self.tree.heading(col, text=label + arrow)
+        for p in shown:
             self.tree.insert("", "end", iid=p["id"],
                              values=(p.get("displayName", p["id"]),
-                                     pet_credit(p), p.get("kind", "")))
+                                     pet_credit(p), p.get("kind", ""),
+                                     p.get("likeCount") or 0))
 
     def _selected(self):
         sel = self.tree.selection()
@@ -5729,6 +5838,63 @@ class PetBrowser:
         self.page_btn.config(state="normal")
         desc = p.get("description", "")
         self.detail.config(text=f"{p.get('displayName', p['id'])} — by {pet_credit(p)}\n{desc}")
+        self._show_preview(p)
+
+    # ---- preview image -----------------------------------------------------
+
+    def _show_preview(self, p):
+        pid = p["id"]
+        if pid in self._preview_cache:
+            self._apply_preview(pid)
+            return
+        # posterUrl is a single portrait; previewUrl is a film strip of all
+        # animation frames (cropped to frame one in the worker if used).
+        url = p.get("posterUrl") or p.get("previewUrl")
+        if not url:
+            self.preview_label.config(text="(no preview)", image="")
+            return
+        self.preview_label.config(text="loading…", image="")
+        threading.Thread(target=self._fetch_preview, args=(pid, url),
+                         daemon=True).start()
+
+    def _fetch_preview(self, pet_id, url):
+        """Worker thread: fetch + convert to PNG base64. No Tk calls here."""
+        b64 = None
+        try:
+            from PIL import Image
+            raw = _http_get(url, timeout=20)
+            img = Image.open(io.BytesIO(raw))
+            if img.width > img.height * 3:  # film strip: keep frame one
+                img = img.crop((0, 0, img.height, img.height))
+            img.thumbnail((140, 120))
+            buf = io.BytesIO()
+            img.convert("RGBA").save(buf, "PNG")
+            b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+        except Exception:
+            pass  # no preview is fine — never crash the browser over it
+        self._preview_results.append((pet_id, b64))
+
+    def _poll_preview(self):
+        if not self.win.winfo_exists():
+            return
+        while self._preview_results:
+            pet_id, b64 = self._preview_results.pop(0)
+            self._preview_cache[pet_id] = b64
+            sel = self._selected()
+            if sel and sel["id"] == pet_id:
+                self._apply_preview(pet_id)
+        self.win.after(120, self._poll_preview)
+
+    def _apply_preview(self, pet_id):
+        b64 = self._preview_cache.get(pet_id)
+        if not b64:
+            self.preview_label.config(text="(no preview)", image="")
+            return
+        try:
+            self._preview_img = tk.PhotoImage(data=b64)
+            self.preview_label.config(image=self._preview_img, text="")
+        except tk.TclError:
+            self.preview_label.config(text="(no preview)", image="")
 
     # ---- actions -----------------------------------------------------------
 

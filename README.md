@@ -41,6 +41,16 @@ still fully local.
 
 ## What's new
 
+**0.17.1** (2026-06-11)
+- Pet browser overhaul: click column headers to sort (name, creator,
+  kind, ♥ likes — likes start most-loved-first), a preview image appears
+  when you select a pet, and search is now typo-tolerant and
+  word-order-independent ("blue godzila" finds "Godzilla Blue").
+- Press Enter (or the new button) to search ALL of codex-pets.net via
+  the site API instead of only the pages you've loaded.
+- Previews load in the background and are cached; no preview ever
+  blocks the browser.
+
 **0.17.0** (2026-06-11)
 - Creative, academic, and analyst round: game design (core loops,
   design docs, playtest plans), art direction (briefs, AI image
