@@ -29,7 +29,12 @@
     "refactor": 3,
     "migration": 2,
     "local": 1,
-    "run": 1
+    "run": 1,
+    "query": 2,
+    "kql": 2,
+    "sql": 2,
+    "automate": 3,
+    "scaffold": 2
   },
   "chatgpt_signals": {
     "plan": 3,
@@ -60,7 +65,15 @@
     "evidence": 2,
     "process": 1,
     "workflow": 1,
-    "agent": 2
+    "agent": 2,
+    "postmortem": 3,
+    "rca": 3,
+    "communicate": 2,
+    "announce": 2,
+    "investigate": 2,
+    "triage": 2,
+    "risk": 2,
+    "recommend": 2
   },
   "keyword_topics": {
     "azure_function": [
@@ -131,6 +144,88 @@
     "skill": [
       "skill",
       "reusable workflow"
+    ],
+    "incident": [
+      "incident",
+      "outage",
+      "is down",
+      "sev1",
+      "sev 1",
+      "p1",
+      "root cause",
+      "postmortem",
+      "post-mortem",
+      "rca"
+    ],
+    "onboarding": [
+      "onboarding",
+      "offboarding",
+      "new hire",
+      "new starter",
+      "leaver",
+      "termination",
+      "terminated"
+    ],
+    "security": [
+      "security",
+      "phishing",
+      "phish",
+      "vulnerability",
+      "cve",
+      "patch",
+      "patching",
+      "defender",
+      "compromise",
+      "breach"
+    ],
+    "change": [
+      "change request",
+      "change window",
+      "cab",
+      "maintenance window",
+      "communication",
+      "announce",
+      "notify users"
+    ],
+    "network": [
+      "network",
+      "vpn",
+      "dns",
+      "firewall",
+      "dhcp",
+      "wifi",
+      "wi-fi",
+      "switch port",
+      "certificate expired",
+      "latency"
+    ],
+    "monitoring": [
+      "monitoring",
+      "alert",
+      "alerts",
+      "log analytics",
+      "kql",
+      "sentinel",
+      "splunk",
+      "dashboard"
+    ],
+    "reporting": [
+      "report",
+      "reporting",
+      "metrics",
+      "kpi",
+      "export",
+      "spreadsheet",
+      "license count",
+      "licenses"
+    ],
+    "backup": [
+      "backup",
+      "backups",
+      "restore",
+      "disaster recovery",
+      "recovery point",
+      "snapshot"
     ]
   },
   "context_checklist_by_topic": {
@@ -198,6 +293,46 @@
       "The workflow being repeated",
       "Inputs that vary per run",
       "Success criteria"
+    ],
+    "incident": [
+      "Impact scope (who/what/since when)",
+      "Timeline of events so far",
+      "Recent changes to affected systems"
+    ],
+    "onboarding": [
+      "HR ticket / start or end date",
+      "Role and department (for group access)",
+      "Device and license requirements"
+    ],
+    "security": [
+      "Affected users/devices",
+      "The suspicious message/file/alert details",
+      "Sign-in or audit log extracts"
+    ],
+    "change": [
+      "Change window and freeze dates",
+      "Systems and user groups affected",
+      "Approver and stakeholders"
+    ],
+    "network": [
+      "Source/destination/port of failing path",
+      "Error messages or timeouts seen",
+      "A working comparison (user/site that works)"
+    ],
+    "monitoring": [
+      "Data source / workspace name",
+      "The condition worth alerting on",
+      "Who should receive alerts"
+    ],
+    "reporting": [
+      "Data source and time range",
+      "Who consumes the report",
+      "A known reference number to validate against"
+    ],
+    "backup": [
+      "Backup product and scope",
+      "RTO/RPO targets",
+      "Last successful restore test date"
     ]
   },
   "generic_checklist": [

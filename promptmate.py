@@ -28,7 +28,7 @@ from tkinter import messagebox, ttk
 
 APP_NAME = "PromptMate"
 APP_VERSION = "0.2.0"
-CONTENT_VERSION = "2026.06.1"
+CONTENT_VERSION = "2026.06.2"
 
 # ---------------------------------------------------------------------------
 # User data locations (never inside the install folder)
@@ -251,6 +251,7 @@ CODEX_SIGNALS = {
     "debug": 3, "fix": 2, "deploy": 2, "deployment": 2, "powershell": 3,
     "pipeline": 2, "automation": 2, "yaml": 2, "json": 1, "api": 2,
     "install": 2, "refactor": 3, "migration": 2, "local": 1, "run": 1,
+    "query": 2, "kql": 2, "sql": 2, "automate": 3, "scaffold": 2,
 }
 
 CHATGPT_SIGNALS = {
@@ -260,6 +261,8 @@ CHATGPT_SIGNALS = {
     "refine": 3, "advice": 3, "advise": 3, "explain": 2, "compare": 2,
     "ticket": 2, "jira": 2, "confluence": 3, "runbook": 2, "policy": 2,
     "audit": 2, "evidence": 2, "process": 1, "workflow": 1, "agent": 2,
+    "postmortem": 3, "rca": 3, "communicate": 2, "announce": 2,
+    "investigate": 2, "triage": 2, "risk": 2, "recommend": 2,
 }
 
 KEYWORD_TOPICS = {
@@ -276,6 +279,22 @@ KEYWORD_TOPICS = {
     "workspace_agent": ["workspace agent", "chatgpt agent", "custom gpt"],
     "harness": ["harness", "task contract", "agents.md"],
     "skill": ["skill", "reusable workflow"],
+    "incident": ["incident", "outage", "is down", "sev1", "sev 1", "p1",
+                 "root cause", "postmortem", "post-mortem", "rca"],
+    "onboarding": ["onboarding", "offboarding", "new hire", "new starter",
+                   "leaver", "termination", "terminated"],
+    "security": ["security", "phishing", "phish", "vulnerability", "cve",
+                 "patch", "patching", "defender", "compromise", "breach"],
+    "change": ["change request", "change window", "cab", "maintenance window",
+               "communication", "announce", "notify users"],
+    "network": ["network", "vpn", "dns", "firewall", "dhcp", "wifi", "wi-fi",
+                "switch port", "certificate expired", "latency"],
+    "monitoring": ["monitoring", "alert", "alerts", "log analytics", "kql",
+                   "sentinel", "splunk", "dashboard"],
+    "reporting": ["report", "reporting", "metrics", "kpi", "export",
+                  "spreadsheet", "license count", "licenses"],
+    "backup": ["backup", "backups", "restore", "disaster recovery",
+               "recovery point", "snapshot"],
 }
 
 
@@ -473,6 +492,197 @@ PROMPT_TEMPLATES = {
             "Constraints: {CONSTRAINTS}"
         ),
     },
+    "powershell_script": {
+        "name": "PowerShell script",
+        "destination": "Codex",
+        "topics": ["powershell"],
+        "body": (
+            "Write a PowerShell script. {TASK}\n\n"
+            "Requirements:\n- Parameters with validation, no hardcoded values\n"
+            "- Idempotent: safe to run twice\n"
+            "- -WhatIf support on anything destructive\n"
+            "- try/catch with actionable errors; transcript or log output\n"
+            "- Inputs: {INPUTS}\n- Constraints: {CONSTRAINTS}\n\n"
+            "Test against ONE object first and show me the output before "
+            "widening scope.\n\nVerification: {VERIFICATION}"
+        ),
+    },
+    "incident_response": {
+        "name": "Incident response (live)",
+        "destination": "Both",
+        "topics": ["incident"],
+        "body": (
+            "I have a live incident. {TASK}\n\n"
+            "Help me in this order:\n"
+            "1. Triage questions to size the impact fast\n"
+            "2. Most likely causes ranked by probability\n"
+            "3. Mitigation options (rollback/failover/restart) before root cause\n"
+            "4. A status-update draft for affected users\n"
+            "5. What evidence to capture for the postmortem while we work\n\n"
+            "Known so far: {INPUTS}\nConstraints: {CONSTRAINTS}"
+        ),
+    },
+    "incident_rca": {
+        "name": "Root-cause analysis / postmortem",
+        "destination": "ChatGPT web",
+        "topics": ["incident"],
+        "body": (
+            "Write a blameless postmortem. {TASK}\n\n"
+            "Timeline and facts: {INPUTS}\n\n"
+            "Produce:\n- Executive summary (3 sentences)\n"
+            "- Timeline (detection → mitigation → resolution)\n"
+            "- Root cause via 5-whys; separate trigger from underlying cause\n"
+            "- What went well / what failed\n"
+            "- Action items with owners and due dates\n\n"
+            "Keep it factual and blameless. Constraints: {CONSTRAINTS}"
+        ),
+    },
+    "onboarding_runbook": {
+        "name": "On/offboarding runbook",
+        "destination": "Both",
+        "topics": ["onboarding"],
+        "body": (
+            "Build an on/offboarding runbook or automate part of it. {TASK}\n\n"
+            "Cover: identity lifecycle, licenses, group-based access, device "
+            "enrollment/wipe, mailbox/data handling, and per-step verification "
+            "with evidence capture.\n\n"
+            "Systems in scope: {INPUTS}\nConstraints: {CONSTRAINTS}\n"
+            "Verification: {VERIFICATION}"
+        ),
+    },
+    "entra_access_change": {
+        "name": "Entra/Okta access change",
+        "destination": "Both",
+        "topics": ["entra", "okta"],
+        "body": (
+            "Help me make an identity/access change safely. {TASK}\n\n"
+            "Requirements:\n- Prefer group-based assignment over direct grants\n"
+            "- Least privilege; note any standing-access alternatives (PIM/JIT)\n"
+            "- Before/after evidence capture\n- Rollback steps\n\n"
+            "Scope: {INPUTS}\nConstraints: {CONSTRAINTS}\n"
+            "Verification: {VERIFICATION}"
+        ),
+    },
+    "m365_admin": {
+        "name": "Microsoft 365 admin task",
+        "destination": "Both",
+        "topics": ["m365"],
+        "body": (
+            "Microsoft 365 administration task. {TASK}\n\n"
+            "Provide:\n- Admin-center steps AND the PowerShell equivalent\n"
+            "- Tenant-wide vs scoped options, and what each affects\n"
+            "- Propagation/latency expectations\n- Rollback steps\n\n"
+            "Tenant context: {INPUTS}\nConstraints: {CONSTRAINTS}\n"
+            "Verification: {VERIFICATION}"
+        ),
+    },
+    "mailflow": {
+        "name": "Mail-flow troubleshooting",
+        "destination": "Both",
+        "topics": ["m365"],
+        "body": (
+            "Troubleshoot a mail-flow problem. {TASK}\n\n"
+            "Walk me through:\n- Message-trace strategy for concrete failing examples\n"
+            "- The hop-by-hop checks (transport rules, connectors, spam verdicts, "
+            "SPF/DKIM/DMARC, DNS)\n- Most likely causes for these symptoms, ranked\n"
+            "- The fix and how to re-verify with the same trace\n\n"
+            "Symptoms and scope: {INPUTS}\nConstraints: {CONSTRAINTS}"
+        ),
+    },
+    "network_troubleshoot": {
+        "name": "Network troubleshooting",
+        "destination": "Both",
+        "topics": ["network"],
+        "body": (
+            "Troubleshoot a network issue layer by layer. {TASK}\n\n"
+            "Give me:\n- An isolation plan: DNS → reachability → port → application\n"
+            "- Exact commands to run at each layer and what good/bad output looks like\n"
+            "- Likely causes ranked for these symptoms\n"
+            "- What recent-change types to check (firewall, DNS, certs)\n\n"
+            "Failing path and symptoms: {INPUTS}\nConstraints: {CONSTRAINTS}"
+        ),
+    },
+    "change_request": {
+        "name": "Change request (CAB)",
+        "destination": "ChatGPT web",
+        "topics": ["change"],
+        "body": (
+            "Draft a CAB-ready change request. {TASK}\n\n"
+            "Sections:\n- Summary and business justification\n"
+            "- Implementation plan with timings and owners\n"
+            "- Risk assessment and blast radius\n"
+            "- Rollback plan and point of no return\n"
+            "- Validation plan (how we know it worked)\n"
+            "- Communication plan (who is told, when)\n\n"
+            "Change details: {INPUTS}\nConstraints: {CONSTRAINTS}"
+        ),
+    },
+    "log_query": {
+        "name": "Log/data query (KQL or SQL)",
+        "destination": "Codex",
+        "topics": ["monitoring", "reporting"],
+        "body": (
+            "Write a query for me. {TASK}\n\n"
+            "- Source/tables: {INPUTS}\n- Constraints: {CONSTRAINTS}\n\n"
+            "Build it incrementally (filter → aggregate → format), explain each "
+            "clause, and include a sanity check I can run to validate the "
+            "numbers against a known reference.\n\nVerification: {VERIFICATION}"
+        ),
+    },
+    "monitoring_alert": {
+        "name": "Monitoring / alert design",
+        "destination": "Both",
+        "topics": ["monitoring"],
+        "body": (
+            "Design monitoring/alerting. {TASK}\n\n"
+            "For each alert:\n- The exact condition and threshold, with rationale\n"
+            "- Severity mapped to real impact\n- Who gets it and via what channel\n"
+            "- The responder action (link a runbook)\n- How to test-fire it\n\n"
+            "Avoid alert fatigue: justify why each alert deserves a human's "
+            "attention.\n\nSystems: {INPUTS}\nConstraints: {CONSTRAINTS}"
+        ),
+    },
+    "security_review": {
+        "name": "Security review / analysis",
+        "destination": "ChatGPT web",
+        "topics": ["security"],
+        "body": (
+            "Security analysis task. {TASK}\n\n"
+            "Provide:\n- Assessment of the risk and who/what is exposed\n"
+            "- Immediate containment steps, ordered\n"
+            "- Follow-up hardening recommendations with effort estimates\n"
+            "- What to capture as evidence for the record\n\n"
+            "Details: {INPUTS}\nConstraints: {CONSTRAINTS}"
+        ),
+    },
+    "script_review": {
+        "name": "Script/code review",
+        "destination": "Codex",
+        "topics": ["powershell"],
+        "body": (
+            "Review this script/code before I run it in production. {TASK}\n\n"
+            "Check for:\n- Destructive operations without guards or -WhatIf\n"
+            "- Missing error handling and silent failures\n"
+            "- Hardcoded credentials/values that should be parameters\n"
+            "- Idempotency: what happens if it runs twice\n"
+            "- Scope: could it touch more objects than intended\n\n"
+            "Give findings ranked by risk, with the fix for each.\n"
+            "Constraints: {CONSTRAINTS}"
+        ),
+    },
+    "comms_draft": {
+        "name": "User communication draft",
+        "destination": "ChatGPT web",
+        "topics": ["change", "incident"],
+        "body": (
+            "Draft a communication to users/stakeholders. {TASK}\n\n"
+            "Requirements:\n- Plain language, no jargon\n"
+            "- What happened/is happening, who is affected, what they should do\n"
+            "- Timing expectations and where updates will be posted\n"
+            "- Two versions: short (chat/banner) and full (email)\n\n"
+            "Facts to include: {INPUTS}\nConstraints: {CONSTRAINTS}"
+        ),
+    },
 }
 
 AGENT_MODULES = {
@@ -575,6 +785,105 @@ AGENT_MODULES = {
             "what was removed and why."
         ),
     },
+    "security": {
+        "name": "Security Agent",
+        "topics": ["security", "entra", "okta"],
+        "body": (
+            "Apply a security lens to everything: least privilege, no secrets "
+            "in code or output, prefer time-bound access over standing access, "
+            "and flag anything that widens attack surface. When handling a "
+            "possible compromise, contain first, investigate second."
+        ),
+    },
+    "incident_commander": {
+        "name": "Incident Commander Agent",
+        "topics": ["incident"],
+        "body": (
+            "Act as an incident commander: establish impact and severity "
+            "first, communicate early and on a cadence, mitigate before "
+            "root-causing, and keep a timestamped log of every action and "
+            "decision for the postmortem."
+        ),
+    },
+    "comms": {
+        "name": "Communications Agent",
+        "topics": ["change", "incident"],
+        "body": (
+            "Write user-facing communications in plain language: what "
+            "happened, who is affected, what to do, and when to expect "
+            "updates. No jargon, no blame, no speculation. Short version "
+            "first, details after."
+        ),
+    },
+    "powershell_standards": {
+        "name": "PowerShell Standards Agent",
+        "topics": ["powershell"],
+        "body": (
+            "Enforce PowerShell standards: parameters with validation, "
+            "idempotent actions, -WhatIf on destructive operations, "
+            "try/catch with actionable errors, logging, and a "
+            "test-on-one-object-first approach. Approved verbs only."
+        ),
+    },
+    "data_reporting": {
+        "name": "Data & Reporting Agent",
+        "topics": ["monitoring", "reporting"],
+        "body": (
+            "Act as a data/reporting specialist for KQL, SQL, and exports. "
+            "Build queries incrementally, validate counts against a known "
+            "reference before trusting them, and state caveats (time zones, "
+            "retention limits, sampling) alongside every number."
+        ),
+    },
+    "change_management": {
+        "name": "Change Management Agent",
+        "topics": ["change"],
+        "body": (
+            "Frame work as managed change: blast radius, implementation plan "
+            "with timings, rollback plan with a point of no return, "
+            "validation criteria, and a communication plan. No production "
+            "change without a tested rollback."
+        ),
+    },
+    "network": {
+        "name": "Network Agent",
+        "topics": ["network"],
+        "body": (
+            "Act as a network specialist. Isolate layer by layer (DNS, "
+            "reachability, port, application), compare against a working "
+            "baseline, and always check recent changes — firewall rules, DNS "
+            "records, certificates — before assuming hardware."
+        ),
+    },
+    "compliance": {
+        "name": "Compliance Agent",
+        "topics": ["audit"],
+        "body": (
+            "Keep work audit-ready: every change tied to a ticket, every "
+            "approval recorded, before/after evidence captured with "
+            "timestamps, and artifacts named and stored so an auditor can "
+            "find them without you in the room."
+        ),
+    },
+    "explainer": {
+        "name": "Explainer Agent",
+        "topics": [],
+        "body": (
+            "After the technical answer, add a short plain-English "
+            "explanation a junior admin could follow: what we did, why, and "
+            "how to tell it worked. Define any acronym on first use."
+        ),
+    },
+    "scoper": {
+        "name": "Scoping Agent",
+        "topics": ["harness"],
+        "body": (
+            "Before executing, break the request into the smallest shippable "
+            "slices, estimate effort per slice, flag dependencies and "
+            "unknowns, and confirm the order. Push back on scope creep by "
+            "listing it as explicit follow-up work."
+        ),
+    },
 }
 
 SKILL_TEMPLATES = {
@@ -582,51 +891,313 @@ SKILL_TEMPLATES = {
         "name": "Jira ticket triage skill",
         "topics": ["jira"],
         "body": "Triage incoming Jira tickets: classify, set priority, draft first response, identify owner.",
+        "steps": [
+            "Read the ticket and classify it: incident, request, change, or question.",
+            "Set priority from impact x urgency; note affected users/systems.",
+            "Check for duplicates and related tickets; link them.",
+            "Draft a first response: what was understood, what happens next, ETA.",
+            "Assign an owner and add labels/components for reporting.",
+        ],
     },
     "intune_deploy": {
         "name": "Intune deployment skill",
         "topics": ["intune"],
-        "body": "Package, detect, assign (pilot → production), validate, and document an Intune deployment.",
+        "body": "Package, detect, assign, validate, and document an Intune deployment.",
+        "steps": [
+            "Package the app (Win32/LOB/script) with silent install and uninstall commands.",
+            "Define detection rules and test them on a reference device.",
+            "Assign to a pilot ring; verify install status reports clean.",
+            "Expand to production rings; monitor failure rates.",
+            "Document the package, detection logic, and rollback in the KB.",
+        ],
     },
     "azure_function_build": {
         "name": "Azure Function build skill",
         "topics": ["azure_function"],
         "body": "Scaffold, implement, test locally, and document an Azure Function end to end.",
+        "steps": [
+            "Pick trigger/bindings and runtime; scaffold the project.",
+            "Implement with structured logging and error handling; no secrets in code.",
+            "Test locally with sample payloads, including failure cases.",
+            "Deploy to a non-prod slot; verify with real-shaped data.",
+            "Document configuration, app settings, and the rollback path.",
+        ],
     },
     "docs_publish": {
         "name": "Documentation publishing skill",
         "topics": ["confluence"],
         "body": "Draft, review, and publish internal documentation with owner and review-date metadata.",
+        "steps": [
+            "Identify audience and the single task the doc must enable.",
+            "Draft with numbered steps and expected results after each step.",
+            "Add troubleshooting and rollback/undo sections.",
+            "Peer-review with someone who has NOT done the task before.",
+            "Publish with owner and next-review date; link from the team index page.",
+        ],
     },
     "audit_evidence": {
         "name": "Audit evidence skill",
         "topics": ["audit"],
         "body": "Collect, name, store, and summarize audit/access evidence mapped to controls.",
+        "steps": [
+            "List the controls in scope and what artifact proves each one.",
+            "Collect exports/screenshots with timestamps and system context visible.",
+            "Name artifacts consistently: <control>-<system>-<date>.",
+            "Store in the agreed evidence location with restricted access.",
+            "Build a summary table mapping control -> evidence -> collection date.",
+        ],
     },
     "harness_setup": {
         "name": "Harness setup skill",
         "topics": ["harness"],
         "body": "Create AGENTS.md, task-contract template, and evidence/handoff conventions for a project.",
+        "steps": [
+            "Write AGENTS.md: orientation, conventions, constraints, definition of done.",
+            "Create a task-contract template: scope, inputs, tools, constraints, outputs, verification.",
+            "Define where evidence and handoff notes live.",
+            "Run one small task through the loop to validate it.",
+            "Trim anything the trial run showed was unnecessary.",
+        ],
     },
     "workspace_agent_design": {
         "name": "ChatGPT workspace-agent design skill",
         "topics": ["workspace_agent"],
         "body": "Design a workspace agent: purpose, scope, tools, memory model, verification, handoff.",
+        "steps": [
+            "Write a one-sentence purpose and explicit out-of-scope list.",
+            "Choose allowed tools and forbidden actions.",
+            "Define the memory model: durable files are truth, memory is supplemental.",
+            "Add verification requirements before the agent claims completion.",
+            "Test with 3 representative tasks; slim the instructions afterward.",
+        ],
     },
     "iac_workflow": {
         "name": "Infrastructure-as-code workflow skill",
         "topics": ["iac"],
         "body": "Author IaC, preview/plan, apply with approval, verify, and record rollback steps.",
+        "steps": [
+            "Author or modify the IaC with parameters over hardcoded values.",
+            "Run plan/preview (what-if) and review every change it lists.",
+            "Apply in non-prod first; verify resources match intent.",
+            "Apply to production inside the change window with approval.",
+            "Record state location and the exact rollback procedure.",
+        ],
     },
     "powershell_automation": {
         "name": "PowerShell automation skill",
         "topics": ["powershell"],
         "body": "Write idempotent PowerShell with error handling, logging, -WhatIf support, and tests.",
+        "steps": [
+            "Define inputs as parameters with validation attributes.",
+            "Make every action idempotent and support -WhatIf for destructive steps.",
+            "Add try/catch with actionable error messages and a transcript/log.",
+            "Test against a small scope first (one user/device), then widen.",
+            "Comment the why, not the what; store in the team script repo.",
+        ],
     },
     "okta_entra_access": {
         "name": "Okta/Entra access workflow skill",
         "topics": ["okta", "entra"],
         "body": "Handle access requests: validate approval, apply group/app assignment, capture evidence.",
+        "steps": [
+            "Verify the request has a ticket and the right approver signed off.",
+            "Apply access via group membership, never direct assignment, when possible.",
+            "Confirm the user can actually access the resource.",
+            "Capture before/after evidence (group membership export or screenshot).",
+            "Close the ticket noting what was granted and any expiry/review date.",
+        ],
+    },
+    "incident_triage": {
+        "name": "Incident triage skill",
+        "topics": ["incident"],
+        "body": "Stabilize first: assess impact, communicate, mitigate, then fix root cause.",
+        "steps": [
+            "Establish impact: who/what is affected, since when, how badly.",
+            "Declare severity and open an incident ticket/channel.",
+            "Post an initial status update before deep-diving.",
+            "Mitigate (rollback, failover, restart) before root-causing.",
+            "Record a timeline of actions as you go for the postmortem.",
+        ],
+    },
+    "rca_postmortem": {
+        "name": "Root-cause analysis / postmortem skill",
+        "topics": ["incident"],
+        "body": "Turn an incident timeline into a blameless postmortem with tracked actions.",
+        "steps": [
+            "Reconstruct the timeline: detection, escalation, mitigation, resolution.",
+            "Identify root cause with 5-whys; separate trigger from underlying cause.",
+            "List what went well and what failed (detection, comms, tooling).",
+            "Write action items with owners and due dates; file tickets for each.",
+            "Share the postmortem; keep it blameless and factual.",
+        ],
+    },
+    "user_onboarding": {
+        "name": "User onboarding skill",
+        "topics": ["onboarding", "entra", "m365"],
+        "body": "Provision a new hire consistently: identity, licenses, groups, devices, verification.",
+        "steps": [
+            "Confirm the hire details and start date from the HR ticket.",
+            "Create/verify identity, assign licenses and group-based access.",
+            "Enroll or assign the device and required apps.",
+            "Verify mail, sign-in, MFA registration, and key app access.",
+            "Record completion in the ticket with evidence of each item.",
+        ],
+    },
+    "user_offboarding": {
+        "name": "User offboarding skill",
+        "topics": ["onboarding", "entra", "okta"],
+        "body": "Remove access safely and completely, with evidence, on the leaver's end date.",
+        "steps": [
+            "Confirm the termination ticket, date, and any litigation-hold needs.",
+            "Disable sign-in, revoke sessions/tokens, reset credentials.",
+            "Remove group memberships, app assignments, shared mailbox access.",
+            "Handle data: mailbox delegation, OneDrive transfer, device wipe per policy.",
+            "Capture before/after evidence and close out with a checklist.",
+        ],
+    },
+    "access_review": {
+        "name": "Access review skill",
+        "topics": ["audit", "entra", "okta"],
+        "body": "Run a periodic access review: scope, export, decide, remediate, evidence.",
+        "steps": [
+            "Scope the review: which apps/groups/roles and which reviewers.",
+            "Export current membership and last-sign-in data.",
+            "Have owners confirm or revoke each entry; chase non-responses.",
+            "Remediate revocations and verify removal took effect.",
+            "Archive decisions and evidence mapped to the control.",
+        ],
+    },
+    "phishing_response": {
+        "name": "Phishing response skill",
+        "topics": ["security", "m365"],
+        "body": "Contain a reported phish: assess, purge, reset, block, and notify.",
+        "steps": [
+            "Analyze the message: sender, URLs, attachments, who else received it.",
+            "Purge the message from all mailboxes and block the sender/domain/URL.",
+            "Identify users who clicked or entered credentials; reset and revoke sessions.",
+            "Check sign-in logs for compromise indicators on affected accounts.",
+            "Notify affected users and record the incident with evidence.",
+        ],
+    },
+    "patch_cycle": {
+        "name": "Patch cycle skill",
+        "topics": ["security", "intune"],
+        "body": "Run a monthly patch cycle: ring rollout, exception tracking, compliance reporting.",
+        "steps": [
+            "Review this cycle's updates and known issues before approving.",
+            "Release to the pilot ring; soak for the agreed period.",
+            "Promote to broad rings; track failure and pending-reboot rates.",
+            "Chase stragglers and document exceptions with owners.",
+            "Produce the compliance report for the cycle.",
+        ],
+    },
+    "change_request": {
+        "name": "Change request skill",
+        "topics": ["change"],
+        "body": "Write a CAB-ready change: plan, risk, rollback, validation, and comms.",
+        "steps": [
+            "Describe the change, why now, and the blast radius if it goes wrong.",
+            "Write the implementation plan with timings and owners.",
+            "Write the rollback plan and the point of no return.",
+            "Define validation: how you'll know it worked.",
+            "List who must be informed before/during/after.",
+        ],
+    },
+    "mailflow_debug": {
+        "name": "Mail-flow troubleshooting skill",
+        "topics": ["m365"],
+        "body": "Trace a mail problem end to end: scope, trace, inspect, fix, confirm.",
+        "steps": [
+            "Scope: one user or many, inbound or outbound, since when.",
+            "Run a message trace for concrete examples.",
+            "Inspect the failing hop: transport rules, connectors, spam verdicts, DNS/SPF/DKIM.",
+            "Apply the fix and re-trace the same scenario.",
+            "Document the cause and fix in the ticket.",
+        ],
+    },
+    "network_diag": {
+        "name": "Network diagnostics skill",
+        "topics": ["network"],
+        "body": "Isolate network issues layer by layer with evidence at each step.",
+        "steps": [
+            "Define the failing path: source, destination, port/protocol.",
+            "Test connectivity layer by layer: DNS, ping/route, port, application.",
+            "Compare against a working baseline (another user/site/VLAN).",
+            "Check recent changes: firewall rules, DNS records, certificates.",
+            "Fix, verify from the original failing client, and record the cause.",
+        ],
+    },
+    "kql_reporting": {
+        "name": "Log query / reporting skill",
+        "topics": ["monitoring", "reporting"],
+        "body": "Build a KQL/SQL query iteratively and validate the numbers before sharing.",
+        "steps": [
+            "State the question the query must answer and the time range.",
+            "Identify tables/sources and join keys.",
+            "Build incrementally: filter, then aggregate, then format.",
+            "Sanity-check counts against a known reference.",
+            "Save the query with a comment block: purpose, owner, caveats.",
+        ],
+    },
+    "license_cleanup": {
+        "name": "License cleanup skill",
+        "topics": ["m365", "reporting"],
+        "body": "Reclaim unused licenses safely: inventory, identify, confirm, reclaim, report.",
+        "steps": [
+            "Export license assignments with last-activity data.",
+            "Flag candidates: disabled users, long-inactive, duplicate plans.",
+            "Confirm with managers/owners before touching anything.",
+            "Reclaim in batches; watch for service removal side effects.",
+            "Report seats reclaimed and projected savings.",
+        ],
+    },
+    "backup_restore_test": {
+        "name": "Backup restore test skill",
+        "topics": ["backup"],
+        "body": "Prove backups work by restoring: a backup untested is a backup unproven.",
+        "steps": [
+            "Pick a representative restore scenario (file, mailbox, VM, DB).",
+            "Restore to an isolated target, never over production.",
+            "Verify integrity and completeness of restored data.",
+            "Time the restore against the RTO; note gaps.",
+            "Record results and fix any failures found.",
+        ],
+    },
+    "monitoring_setup": {
+        "name": "Monitoring/alert setup skill",
+        "topics": ["monitoring"],
+        "body": "Create alerts people trust: clear condition, right audience, tested, documented.",
+        "steps": [
+            "Define the condition that needs action and the threshold.",
+            "Route to the right audience with severity that matches impact.",
+            "Write the alert description so the responder knows what to do.",
+            "Test-fire the alert and confirm delivery.",
+            "Link a runbook and set a review date to kill noisy alerts.",
+        ],
+    },
+    "kb_audit": {
+        "name": "KB/documentation audit skill",
+        "topics": ["confluence"],
+        "body": "Sweep stale documentation: inventory, verify, fix or archive, re-index.",
+        "steps": [
+            "Inventory pages by last-modified date and owner.",
+            "Spot-check the most-used pages for accuracy first.",
+            "Fix quick errors inline; flag big rewrites as tickets.",
+            "Archive abandoned/duplicate pages, leaving a redirect note.",
+            "Update the index/landing page to match reality.",
+        ],
+    },
+    "meeting_actions": {
+        "name": "Meeting notes to actions skill",
+        "topics": ["reporting"],
+        "body": "Turn raw meeting notes into decisions, owned actions, and follow-ups.",
+        "steps": [
+            "Separate decisions, actions, and open questions from raw notes.",
+            "Give every action an owner and a date; flag unowned ones.",
+            "Convert actions into tickets where work is non-trivial.",
+            "Write a 5-line summary for people who skipped the meeting.",
+            "Park open questions with who will answer them by when.",
+        ],
     },
 }
 
@@ -644,6 +1215,14 @@ CONTEXT_CHECKLIST_BY_TOPIC = {
     "workspace_agent": ["Agent purpose statement", "Tools it may use", "Example tasks"],
     "harness": ["Project root path", "Existing AGENTS.md (if any)", "Definition of done"],
     "skill": ["The workflow being repeated", "Inputs that vary per run", "Success criteria"],
+    "incident": ["Impact scope (who/what/since when)", "Timeline of events so far", "Recent changes to affected systems"],
+    "onboarding": ["HR ticket / start or end date", "Role and department (for group access)", "Device and license requirements"],
+    "security": ["Affected users/devices", "The suspicious message/file/alert details", "Sign-in or audit log extracts"],
+    "change": ["Change window and freeze dates", "Systems and user groups affected", "Approver and stakeholders"],
+    "network": ["Source/destination/port of failing path", "Error messages or timeouts seen", "A working comparison (user/site that works)"],
+    "monitoring": ["Data source / workspace name", "The condition worth alerting on", "Who should receive alerts"],
+    "reporting": ["Data source and time range", "Who consumes the report", "A known reference number to validate against"],
+    "backup": ["Backup product and scope", "RTO/RPO targets", "Last successful restore test date"],
 }
 
 GENERIC_CHECKLIST = [
@@ -724,7 +1303,9 @@ def build_prompt(cleaned_task: str, rec: dict, selected_modules: list,
         parts.append("\n## Reusable workflow(s) to follow")
         for sk in selected_skills:
             s = SKILL_TEMPLATES[sk]
-            parts.append(f"- **{s['name']}**: {s['body']}")
+            parts.append(f"\n### {s['name']}\n{s['body']}")
+            for i, step in enumerate(s.get("steps", []), 1):
+                parts.append(f"{i}. {step}")
 
     if checked_context:
         parts.append("\n## Context I will provide")

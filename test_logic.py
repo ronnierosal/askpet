@@ -9,6 +9,13 @@ cases = [
     "plan the architecture for a new azur fucntion then implement and test it",
     "write a jirra ticket for the o365 license cleanup",
     "help me design a chatgpt workspace agent with insturctions for audit evidence",
+    "email is down for the whole company since this morning, sev1",
+    "write a postmortem for yesterdays vpn outage",
+    "new hire starting monday needs o365 license and laptop setup",
+    "user reported a phishing email that 50 people got",
+    "kql query to find devices that havent checked in for 30 days",
+    "draft a change request for the firewall maintenance window",
+    "offboard a terminated user and capture evidence",
 ]
 for raw in cases:
     cleaned = pm.clean_text(raw, spell)

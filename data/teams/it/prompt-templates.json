@@ -81,5 +81,120 @@
       "harness"
     ],
     "body": "Set up a working harness for this project. {TASK}\n\nCreate:\n- AGENTS.md with orientation, conventions, and constraints\n- A task-contract template (scope, inputs, tools, constraints, outputs, verification)\n- An evidence/handoff convention\n\nWorking loop to encode:\n1. Orient from nearest AGENTS.md\n2. Load smallest relevant files\n3. Define bounded task contract\n4. Execute one coherent slice\n5. Capture evidence\n6. Update durable files\n7. Verify before claiming completion\n8. Leave a handoff\n\nLocal files are the source of truth; external systems (Jira, Confluence, SharePoint, etc.) are downstream copies.\n\nConstraints: {CONSTRAINTS}"
+  },
+  "powershell_script": {
+    "name": "PowerShell script",
+    "destination": "Codex",
+    "topics": [
+      "powershell"
+    ],
+    "body": "Write a PowerShell script. {TASK}\n\nRequirements:\n- Parameters with validation, no hardcoded values\n- Idempotent: safe to run twice\n- -WhatIf support on anything destructive\n- try/catch with actionable errors; transcript or log output\n- Inputs: {INPUTS}\n- Constraints: {CONSTRAINTS}\n\nTest against ONE object first and show me the output before widening scope.\n\nVerification: {VERIFICATION}"
+  },
+  "incident_response": {
+    "name": "Incident response (live)",
+    "destination": "Both",
+    "topics": [
+      "incident"
+    ],
+    "body": "I have a live incident. {TASK}\n\nHelp me in this order:\n1. Triage questions to size the impact fast\n2. Most likely causes ranked by probability\n3. Mitigation options (rollback/failover/restart) before root cause\n4. A status-update draft for affected users\n5. What evidence to capture for the postmortem while we work\n\nKnown so far: {INPUTS}\nConstraints: {CONSTRAINTS}"
+  },
+  "incident_rca": {
+    "name": "Root-cause analysis / postmortem",
+    "destination": "ChatGPT web",
+    "topics": [
+      "incident"
+    ],
+    "body": "Write a blameless postmortem. {TASK}\n\nTimeline and facts: {INPUTS}\n\nProduce:\n- Executive summary (3 sentences)\n- Timeline (detection → mitigation → resolution)\n- Root cause via 5-whys; separate trigger from underlying cause\n- What went well / what failed\n- Action items with owners and due dates\n\nKeep it factual and blameless. Constraints: {CONSTRAINTS}"
+  },
+  "onboarding_runbook": {
+    "name": "On/offboarding runbook",
+    "destination": "Both",
+    "topics": [
+      "onboarding"
+    ],
+    "body": "Build an on/offboarding runbook or automate part of it. {TASK}\n\nCover: identity lifecycle, licenses, group-based access, device enrollment/wipe, mailbox/data handling, and per-step verification with evidence capture.\n\nSystems in scope: {INPUTS}\nConstraints: {CONSTRAINTS}\nVerification: {VERIFICATION}"
+  },
+  "entra_access_change": {
+    "name": "Entra/Okta access change",
+    "destination": "Both",
+    "topics": [
+      "entra",
+      "okta"
+    ],
+    "body": "Help me make an identity/access change safely. {TASK}\n\nRequirements:\n- Prefer group-based assignment over direct grants\n- Least privilege; note any standing-access alternatives (PIM/JIT)\n- Before/after evidence capture\n- Rollback steps\n\nScope: {INPUTS}\nConstraints: {CONSTRAINTS}\nVerification: {VERIFICATION}"
+  },
+  "m365_admin": {
+    "name": "Microsoft 365 admin task",
+    "destination": "Both",
+    "topics": [
+      "m365"
+    ],
+    "body": "Microsoft 365 administration task. {TASK}\n\nProvide:\n- Admin-center steps AND the PowerShell equivalent\n- Tenant-wide vs scoped options, and what each affects\n- Propagation/latency expectations\n- Rollback steps\n\nTenant context: {INPUTS}\nConstraints: {CONSTRAINTS}\nVerification: {VERIFICATION}"
+  },
+  "mailflow": {
+    "name": "Mail-flow troubleshooting",
+    "destination": "Both",
+    "topics": [
+      "m365"
+    ],
+    "body": "Troubleshoot a mail-flow problem. {TASK}\n\nWalk me through:\n- Message-trace strategy for concrete failing examples\n- The hop-by-hop checks (transport rules, connectors, spam verdicts, SPF/DKIM/DMARC, DNS)\n- Most likely causes for these symptoms, ranked\n- The fix and how to re-verify with the same trace\n\nSymptoms and scope: {INPUTS}\nConstraints: {CONSTRAINTS}"
+  },
+  "network_troubleshoot": {
+    "name": "Network troubleshooting",
+    "destination": "Both",
+    "topics": [
+      "network"
+    ],
+    "body": "Troubleshoot a network issue layer by layer. {TASK}\n\nGive me:\n- An isolation plan: DNS → reachability → port → application\n- Exact commands to run at each layer and what good/bad output looks like\n- Likely causes ranked for these symptoms\n- What recent-change types to check (firewall, DNS, certs)\n\nFailing path and symptoms: {INPUTS}\nConstraints: {CONSTRAINTS}"
+  },
+  "change_request": {
+    "name": "Change request (CAB)",
+    "destination": "ChatGPT web",
+    "topics": [
+      "change"
+    ],
+    "body": "Draft a CAB-ready change request. {TASK}\n\nSections:\n- Summary and business justification\n- Implementation plan with timings and owners\n- Risk assessment and blast radius\n- Rollback plan and point of no return\n- Validation plan (how we know it worked)\n- Communication plan (who is told, when)\n\nChange details: {INPUTS}\nConstraints: {CONSTRAINTS}"
+  },
+  "log_query": {
+    "name": "Log/data query (KQL or SQL)",
+    "destination": "Codex",
+    "topics": [
+      "monitoring",
+      "reporting"
+    ],
+    "body": "Write a query for me. {TASK}\n\n- Source/tables: {INPUTS}\n- Constraints: {CONSTRAINTS}\n\nBuild it incrementally (filter → aggregate → format), explain each clause, and include a sanity check I can run to validate the numbers against a known reference.\n\nVerification: {VERIFICATION}"
+  },
+  "monitoring_alert": {
+    "name": "Monitoring / alert design",
+    "destination": "Both",
+    "topics": [
+      "monitoring"
+    ],
+    "body": "Design monitoring/alerting. {TASK}\n\nFor each alert:\n- The exact condition and threshold, with rationale\n- Severity mapped to real impact\n- Who gets it and via what channel\n- The responder action (link a runbook)\n- How to test-fire it\n\nAvoid alert fatigue: justify why each alert deserves a human's attention.\n\nSystems: {INPUTS}\nConstraints: {CONSTRAINTS}"
+  },
+  "security_review": {
+    "name": "Security review / analysis",
+    "destination": "ChatGPT web",
+    "topics": [
+      "security"
+    ],
+    "body": "Security analysis task. {TASK}\n\nProvide:\n- Assessment of the risk and who/what is exposed\n- Immediate containment steps, ordered\n- Follow-up hardening recommendations with effort estimates\n- What to capture as evidence for the record\n\nDetails: {INPUTS}\nConstraints: {CONSTRAINTS}"
+  },
+  "script_review": {
+    "name": "Script/code review",
+    "destination": "Codex",
+    "topics": [
+      "powershell"
+    ],
+    "body": "Review this script/code before I run it in production. {TASK}\n\nCheck for:\n- Destructive operations without guards or -WhatIf\n- Missing error handling and silent failures\n- Hardcoded credentials/values that should be parameters\n- Idempotency: what happens if it runs twice\n- Scope: could it touch more objects than intended\n\nGive findings ranked by risk, with the fix for each.\nConstraints: {CONSTRAINTS}"
+  },
+  "comms_draft": {
+    "name": "User communication draft",
+    "destination": "ChatGPT web",
+    "topics": [
+      "change",
+      "incident"
+    ],
+    "body": "Draft a communication to users/stakeholders. {TASK}\n\nRequirements:\n- Plain language, no jargon\n- What happened/is happening, who is affected, what they should do\n- Timing expectations and where updates will be posted\n- Two versions: short (chat/banner) and full (email)\n\nFacts to include: {INPUTS}\nConstraints: {CONSTRAINTS}"
   }
 }
