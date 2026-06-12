@@ -24,6 +24,16 @@ ask for one.
 
 ## What's new
 
+**0.11.0** (2026-06-11)
+- DeckSide support: a DeckSide development template plus Architect and
+  Assistant Designer agents that bake in the app's AGENTS.md rules
+  (renderer never touches the DB, typed IPC, coach/parent isolation,
+  import back-compat) and the capability pattern (Interpret → Preview →
+  Approval → Validate → Apply). Skills for feature builds, assistant
+  capabilities, PDF parser changes with golden fixtures, and local-model
+  prompt tuning with eval sets.
+- 44 templates / 64 modules / 81 skills.
+
 **0.10.0** (2026-06-11)
 - Calmer pet: slower animation tick, gentler movement speeds, and more
   time idling/sitting between activities.

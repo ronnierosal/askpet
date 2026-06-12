@@ -322,6 +322,14 @@
     ],
     "body": "Help me build a local, private AI chatbot using Ollama. {TASK}\n\nEnvironment: {INPUTS}\n\nCover, in order:\n1. Model choice for my hardware — e.g. Gemma at the size/quantization my RAM/VRAM supports — with honest expectations vs cloud models\n2. Install and pull commands, and a first smoke test\n3. A system prompt for my use case: role, tone, what to refuse, knowledge limits (small local models need explicit guidance)\n4. Front end options: terminal, Open WebUI, or a small script against the localhost API — recommend one for my needs\n5. If my own documents/data should inform answers: the simplest approach that works (paste-in context first, RAG only if needed)\n6. A test script of 5-10 representative questions and what good answers look like\n\nEverything must run fully local — no cloud calls, no data leaving the machine.\n\nConstraints: {CONSTRAINTS}"
   },
+  "deckside_dev": {
+    "name": "DeckSide development task",
+    "destination": "Codex",
+    "topics": [
+      "deckside"
+    ],
+    "body": "DeckSide development task (Electron swim meet-day app, vanilla JS renderer, better-sqlite3, pdf-parse, msedge-tts/Piper). {TASK}\n\nContext: {INPUTS}\n\nHard rules (from AGENTS.md — violating these fails review):\n- Orient from AGENTS.md and the relevant BACKLOG.md entry first\n- Local-first; SQLite is the source of truth; imported meet files are the source of truth for meet data\n- Renderer never accesses the DB — typed IPC/services only\n- Extend existing modules; keep feature-based structure\n- Coach and parent dashboards stay isolated\n- Imports stay backward compatible — test old fixture PDFs before claiming done\n\nPlan the slice first (schema → service/IPC → renderer), confirm the plan, then implement one coherent slice with evidence.\nUpdate CHANGELOG.md. Constraints: {CONSTRAINTS}\nVerification: {VERIFICATION}"
+  },
   "diagram_request": {
     "name": "Technical diagram (Mermaid)",
     "destination": "ChatGPT web",

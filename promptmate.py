@@ -27,8 +27,8 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 APP_NAME = "PromptMate"
-APP_VERSION = "0.10.0"
-CONTENT_VERSION = "2026.06.9"
+APP_VERSION = "0.11.0"
+CONTENT_VERSION = "2026.06.10"
 
 # ---------------------------------------------------------------------------
 # User data locations (never inside the install folder)
@@ -287,7 +287,7 @@ KEYWORD_TOPICS = {
     "security": ["security", "phishing", "phish", "vulnerability", "cve",
                  "patch", "patching", "defender", "compromise", "breach"],
     "change": ["change request", "change window", "cab", "maintenance window",
-               "communication", "announce", "notify users"],
+               "communication", "announce to", "announcement to", "notify users"],
     "network": ["network", "vpn", "dns", "firewall", "dhcp", "wifi", "wi-fi",
                 "switch port", "certificate expired", "latency"],
     "monitoring": ["monitoring", "alert", "alerts", "log analytics", "kql",
@@ -401,6 +401,10 @@ KEYWORD_TOPICS = {
                 "org chart"],
     "asset": ["asset", "inventory", "serial number", "warranty",
               "lifecycle", "loaner"],
+    "deckside": ["deckside", "deck side", "swim meet", "announcer", "heat",
+                 "lineup", "hy-tek", "hytek", "meet manager", "swimtopia",
+                 "ebsl", "champs", "swimmer", "swim team", "relay",
+                 "meet results", "check-in tab"],
 }
 
 
@@ -1053,6 +1057,30 @@ PROMPT_TEMPLATES = {
             "good answers look like\n\n"
             "Everything must run fully local — no cloud calls, no data "
             "leaving the machine.\n\nConstraints: {CONSTRAINTS}"
+        ),
+    },
+    "deckside_dev": {
+        "name": "DeckSide development task",
+        "destination": "Codex",
+        "topics": ["deckside"],
+        "body": (
+            "DeckSide development task (Electron swim meet-day app, vanilla "
+            "JS renderer, better-sqlite3, pdf-parse, msedge-tts/Piper). "
+            "{TASK}\n\n"
+            "Context: {INPUTS}\n\n"
+            "Hard rules (from AGENTS.md — violating these fails review):\n"
+            "- Orient from AGENTS.md and the relevant BACKLOG.md entry first\n"
+            "- Local-first; SQLite is the source of truth; imported meet "
+            "files are the source of truth for meet data\n"
+            "- Renderer never accesses the DB — typed IPC/services only\n"
+            "- Extend existing modules; keep feature-based structure\n"
+            "- Coach and parent dashboards stay isolated\n"
+            "- Imports stay backward compatible — test old fixture PDFs "
+            "before claiming done\n\n"
+            "Plan the slice first (schema → service/IPC → renderer), confirm "
+            "the plan, then implement one coherent slice with evidence.\n"
+            "Update CHANGELOG.md. Constraints: {CONSTRAINTS}\n"
+            "Verification: {VERIFICATION}"
         ),
     },
     "diagram_request": {
@@ -1802,6 +1830,37 @@ AGENT_MODULES = {
             "owner and a lifecycle stage, capture serial/warranty/purchase "
             "data at intake not retirement, and tie asset records to "
             "on/offboarding so nothing walks away."
+        ),
+    },
+    "deckside_architect": {
+        "name": "DeckSide Architect Agent",
+        "topics": ["deckside"],
+        "body": (
+            "You are working on DeckSide, a Windows x64 Electron swim "
+            "meet-day app (vanilla JS renderer, better-sqlite3, pdf-parse, "
+            "msedge-tts/Piper). Hard rules: orient from AGENTS.md first; "
+            "local-first with no required cloud; SQLite is the source of "
+            "truth and imported meet files are the source of truth for meet "
+            "data; the renderer NEVER touches the DB — typed IPC/services "
+            "only; feature-based structure, extend existing modules over "
+            "creating duplicates; coach and parent dashboards stay isolated; "
+            "imports must remain backward compatible."
+        ),
+    },
+    "deckside_assistant": {
+        "name": "DeckSide Assistant Designer Agent",
+        "topics": ["deckside", "local_llm"],
+        "body": (
+            "Design DeckSide's AI assistant as an Operating Companion, not "
+            "a chatbot: better context engineering beats a smarter model. "
+            "Deterministic handlers before LLM reasoning; LLMs generate "
+            "intents, capabilities execute through DeckSide APIs "
+            "(scratchSwimmer, replaceSwimmer, lineupSuggestion, …). Every "
+            "mutation flows Interpret → Preview → Human Approval → API "
+            "Validation → Apply. Conversation history and LLM output are "
+            "never sources of truth; ask for clarification rather than "
+            "guess meet context; stay model-agnostic (Gemma first, app "
+            "fully functional with no model installed)."
         ),
     },
 }
@@ -2719,6 +2778,54 @@ SKILL_TEMPLATES = {
             "Fix the leak: tie asset updates into on/offboarding steps.",
         ],
     },
+    "deckside_feature": {
+        "name": "DeckSide feature build skill",
+        "topics": ["deckside", "appdev"],
+        "body": "Ship a DeckSide feature inside its architecture: AGENTS.md, IPC boundary, fixtures, back-compat.",
+        "steps": [
+            "Orient: read AGENTS.md and the relevant BACKLOG.md entry; check which existing module this extends.",
+            "Plan the data flow: schema change (SQLite), service/IPC surface, then renderer — never renderer-to-DB.",
+            "Keep coach vs parent dashboard isolation; state which side this touches.",
+            "Test against real fixture files (HY-TEK/SwimTopia PDFs); confirm old imports still parse.",
+            "Update CHANGELOG.md and verify the installer/upgrade path preserves user data.",
+        ],
+    },
+    "deckside_capability": {
+        "name": "DeckSide assistant capability skill",
+        "topics": ["deckside"],
+        "body": "Add an assistant capability: intent schema, deterministic-first, preview, approval gate, validation.",
+        "steps": [
+            "Define the intent: name, parameters, and 5+ example utterances (including messy ones).",
+            "Write the deterministic handler first; the LLM only maps utterance to intent.",
+            "Write the preview text a coach sees before anything happens — exact, no ambiguity.",
+            "Gate on human approval, then API validation; the capability calls DeckSide APIs, never the DB.",
+            "Test the refusal paths: low confidence, missing meet context, out-of-scope asks.",
+        ],
+    },
+    "deckside_parser": {
+        "name": "DeckSide PDF parser change skill",
+        "topics": ["deckside"],
+        "body": "Change meet-file parsing without breaking history: fixtures first, golden tests, validate counts.",
+        "steps": [
+            "Collect fixture PDFs for the new format AND every format that works today.",
+            "Capture current parse output for existing fixtures as golden baselines before touching code.",
+            "Make the parser change; new formats must not alter old fixtures' output.",
+            "Validate against a known meet: event/heat/swimmer counts match the paper program.",
+            "Add the new fixtures to the test set so the next change can't regress this one.",
+        ],
+    },
+    "assistant_prompt_tune": {
+        "name": "In-app assistant prompt tuning skill",
+        "topics": ["deckside", "local_llm"],
+        "body": "Tune a small local model's prompts: capability docs, few-shot examples, refusals, eval set.",
+        "steps": [
+            "List every capability with a one-line description — this is the model's entire toolbox.",
+            "Write 3-5 few-shot examples per capability: utterance → intent JSON (small models follow examples over rules).",
+            "Define refusal behavior: low confidence, ambiguous swimmer/meet, out-of-scope — refuse to a clarifying question, never guess.",
+            "Build an eval set of 20+ real utterances (including typos) with expected intents.",
+            "Run the eval after every prompt change; track exact-match rate, not vibes.",
+        ],
+    },
     "status_report": {
         "name": "Status report skill",
         "topics": ["reporting"],
@@ -2795,6 +2902,7 @@ CONTEXT_CHECKLIST_BY_TOPIC = {
     "regex": ["Sample strings that SHOULD match", "Samples that should NOT match", "Where it runs (PowerShell/Python/grep)"],
     "diagram": ["What the diagram must show (audience)", "Components and connections list", "Format needed (Mermaid/Visio/draw.io)"],
     "asset": ["Asset types in scope", "Source of truth today (sheet/RMM/Intune)", "What decision the data feeds"],
+    "deckside": ["Which tab/feature (Announcer, Check-in, Dashboard, Lineup, Parent)", "Coach side or Parent side", "Sample PDF or data file involved", "Relevant AGENTS.md / BACKLOG.md entries"],
 }
 
 GENERIC_CHECKLIST = [

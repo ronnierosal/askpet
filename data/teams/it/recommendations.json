@@ -189,7 +189,8 @@
       "cab",
       "maintenance window",
       "communication",
-      "announce",
+      "announce to",
+      "announcement to",
       "notify users"
     ],
     "network": [
@@ -684,6 +685,25 @@
       "warranty",
       "lifecycle",
       "loaner"
+    ],
+    "deckside": [
+      "deckside",
+      "deck side",
+      "swim meet",
+      "announcer",
+      "heat",
+      "lineup",
+      "hy-tek",
+      "hytek",
+      "meet manager",
+      "swimtopia",
+      "ebsl",
+      "champs",
+      "swimmer",
+      "swim team",
+      "relay",
+      "meet results",
+      "check-in tab"
     ]
   },
   "context_checklist_by_topic": {
@@ -991,6 +1011,12 @@
       "Asset types in scope",
       "Source of truth today (sheet/RMM/Intune)",
       "What decision the data feeds"
+    ],
+    "deckside": [
+      "Which tab/feature (Announcer, Check-in, Dashboard, Lineup, Parent)",
+      "Coach side or Parent side",
+      "Sample PDF or data file involved",
+      "Relevant AGENTS.md / BACKLOG.md entries"
     ]
   },
   "generic_checklist": [
