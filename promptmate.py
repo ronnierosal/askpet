@@ -27,8 +27,8 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 APP_NAME = "PromptMate"
-APP_VERSION = "0.15.0"
-CONTENT_VERSION = "2026.06.14"
+APP_VERSION = "0.16.0"
+CONTENT_VERSION = "2026.06.15"
 
 # ---------------------------------------------------------------------------
 # User data locations (never inside the install folder)
@@ -266,6 +266,8 @@ CHATGPT_SIGNALS = {
     "audit": 2, "evidence": 2, "process": 1, "workflow": 1, "agent": 2,
     "postmortem": 3, "rca": 3, "communicate": 2, "announce": 2,
     "investigate": 2, "triage": 2, "risk": 2, "recommend": 2,
+    "memo": 2, "briefing": 3, "agenda": 2, "slides": 2, "deck": 2,
+    "email": 1, "newsletter": 2, "presentation": 2,
 }
 
 KEYWORD_TOPICS = {
@@ -466,6 +468,80 @@ KEYWORD_TOPICS = {
     "facilities": ["ups battery", "server room", "badge access", "door access",
                    "access card", "hvac", "generator", "rack space",
                    "power outage", "cabling", "patch panel", "comms room"],
+    # --- non-technical / office roles ---
+    "calendar": ["schedule a meeting", "scheduling", "reschedule",
+                 "double booked", "double-booked", "find a time",
+                 "availability", "time zone", "recurring meeting",
+                 "block focus time", "my calendar", "his calendar",
+                 "her calendar", "their calendar", "the calendar",
+                 "calendar for", "manage the calendar", "calendar invite for",
+                 "back to back meetings", "back-to-back meetings"],
+    "email_drafting": ["draft an email", "write an email", "email to",
+                       "reply to this", "respond to this email",
+                       "follow up email", "follow-up email", "cold email",
+                       "decline politely", "email reply", "out of office message",
+                       "email asking", "email my", "email the", "inbox",
+                       "unread email", "email backlog", "triage my email"],
+    "meeting_prep": ["meeting prep", "briefing", "brief me", "agenda",
+                     "talking points", "one on one", "1:1", "1 on 1",
+                     "prep for a meeting", "prep for my meeting",
+                     "board meeting", "leadership meeting", "pre-read",
+                     "prep me for"],
+    "notes": ["take notes", "note taking", "note-taking", "my notes",
+              "meeting notes", "meeting minutes", "take minutes",
+              "the minutes", "action items", "transcribe", "voice memo",
+              "scratchpad", "tidy my notes", "organize my notes"],
+    "presentation": ["presentation", "slide deck", "slides", "powerpoint",
+                     "pitch deck", "keynote", "google slides", "talk track",
+                     "speaker notes", "one-pager", "one pager"],
+    "word_docs": ["word document", "word doc", "google doc", "mail merge",
+                  "table of contents", "letterhead", "page numbers",
+                  "track changes", "format the document", "doc template",
+                  "standard operating procedure", "sop for"],
+    "notebooklm": ["notebooklm", "notebook lm", "audio overview",
+                   "source-grounded", "upload sources", "grounded in my",
+                   "my sources", "these sources", "the sources",
+                   "uploaded documents", "from my documents"],
+    "travel": ["itinerary", "book a flight", "book travel", "trip to",
+               "hotel block", "travel arrangements", "travel plans",
+               "layover", "frequent flyer"],
+    "hr": ["job description", "job posting", "interview questions",
+           "interview kit", "performance review", "self review",
+           "self-assessment", "candidate", "recruiting", "recruiter",
+           "offer letter", "employee handbook", "engagement survey",
+           "exit interview", "new hire orientation", "people ops"],
+    "sales": ["sales email", "sales proposal", "sales call", "sales pipeline",
+              "sales deck", "proposal for a client", "crm", "prospect",
+              "discovery call", "objection", "upsell", "win-back",
+              "quote for a customer", "renewal email"],
+    "marketing": ["marketing", "social media", "social post", "linkedin post",
+                  "newsletter", "blog post", "campaign", "seo",
+                  "press release", "landing page", "brand voice",
+                  "content calendar"],
+    "support": ["customer support", "support reply", "angry customer",
+                "refund", "escalation", "csat", "help center",
+                "canned response", "ticket backlog", "customer complaint",
+                "churn risk", "apology email"],
+    "finance_ops": ["budget", "variance", "forecast", "invoice",
+                    "purchase request", "reconciliation", "accrual",
+                    "expense report", "expenses", "spend report",
+                    "cost center", "po number"],
+    "project_mgmt": ["project plan", "kickoff", "milestones", "raid log",
+                     "gantt", "stakeholder", "retrospective", "sprint",
+                     "workback", "work-back", "timeline for",
+                     "dependencies", "critical path", "status update"],
+    "exec_ops": ["chief of staff", "okr", "decision memo", "board deck",
+                 "strategy offsite", "operating cadence", "leadership update",
+                 "all hands", "all-hands", "exec summary",
+                 "executive summary", "weekly priorities"],
+    "events": ["offsite", "run of show", "run-of-show", "company event",
+               "team event", "event planning", "venue", "catering",
+               "webinar invite", "registration page", "save the date",
+               "team building"],
+    "legal_ops": ["contract review", "review a contract", "review the contract",
+                  "review this contract", "nda", "redline", "msa",
+                  "legal review", "terms of service", "sow review",
+                  "signature authority", "renewal terms"],
 }
 
 
@@ -1037,6 +1113,75 @@ PROMPT_TEMPLATES = {
             "- Projected monthly cost of anything created, and the cheaper "
             "alternative considered\n- Rollback/teardown steps\n\n"
             "Constraints: {CONSTRAINTS}\nVerification: {VERIFICATION}"
+        ),
+    },
+    "exec_brief": {
+        "name": "Executive brief / decision memo",
+        "destination": "ChatGPT web",
+        "topics": ["exec_ops", "meeting_prep"],
+        "body": (
+            "Produce a decision-ready brief. {TASK}\n\n"
+            "Source material: {INPUTS}\n\n"
+            "Format (one page maximum):\n"
+            "1. The decision needed or meeting purpose, and the deadline\n"
+            "2. Recommendation up front, with the three strongest reasons\n"
+            "3. Options considered with honest trade-offs\n"
+            "4. What the audience will push back on, with responses\n"
+            "5. Next steps with owners and dates\n\n"
+            "Write for a reader with 90 seconds. Detail goes in an "
+            "appendix. Constraints: {CONSTRAINTS}"
+        ),
+    },
+    "email_compose": {
+        "name": "Email draft",
+        "destination": "ChatGPT web",
+        "topics": ["email_drafting"],
+        "body": (
+            "Draft this email. {TASK}\n\n"
+            "Context (relationship, history, anything to reference): "
+            "{INPUTS}\n\n"
+            "Requirements:\n"
+            "- Subject line that states the ask or decision\n"
+            "- The point in the first sentence; background after, only if needed\n"
+            "- ONE ask, with an explicit deadline or next step\n"
+            "- Under 150 words unless the content truly requires more\n"
+            "- Tone matched to the relationship: {CONSTRAINTS}\n\n"
+            "Give me two versions: one direct, one warmer. Flag anything "
+            "that could land wrong."
+        ),
+    },
+    "office_document": {
+        "name": "Document / deck creation",
+        "destination": "ChatGPT web",
+        "topics": ["word_docs", "presentation"],
+        "body": (
+            "Help me create this document or deck. {TASK}\n\n"
+            "Audience and occasion: {INPUTS}\n\n"
+            "Work in this order:\n"
+            "1. Confirm the one sentence the audience should take away\n"
+            "2. Propose the outline (headings / slide headlines that tell "
+            "the story alone) and wait for my OK\n"
+            "3. Draft section by section, takeaway-first\n"
+            "4. Finish with a formatting checklist (styles, table of "
+            "contents, page numbers / speaker notes)\n\n"
+            "Constraints: {CONSTRAINTS}"
+        ),
+    },
+    "spreadsheet_help": {
+        "name": "Spreadsheet help",
+        "destination": "ChatGPT web",
+        "topics": ["excel"],
+        "body": (
+            "Help me with a spreadsheet task. {TASK}\n\n"
+            "My data layout (columns, sample rows, sheet names): {INPUTS}\n\n"
+            "Requirements:\n"
+            "- Give the exact formula or steps for MY layout, not a generic example\n"
+            "- Explain what each part of the formula does in one line\n"
+            "- Mention the common error I'll hit and how to fix it\n"
+            "- If there's a simpler built-in feature (pivot, filter, "
+            "conditional format), say so first\n\n"
+            "Constraints: {CONSTRAINTS}\n"
+            "I'll verify on a copy of the data before using it for real."
         ),
     },
     "email_deliverability": {
@@ -2119,6 +2264,187 @@ AGENT_MODULES = {
             "updated rack/cable/access record. For UPS and battery work, "
             "verify actual load and runtime, not nameplate. Badge/door "
             "changes follow joiner-mover-leaver like any other access."
+        ),
+    },
+    "chief_of_staff": {
+        "name": "Chief of Staff Agent",
+        "topics": ["exec_ops", "meeting_prep"],
+        "body": (
+            "Act as a chief of staff: protect the principal's time and "
+            "attention. Everything produced is decision-ready — lead with "
+            "the recommendation, give three bullets of why, put the detail "
+            "in an appendix. Track every commitment made in meetings to an "
+            "owner and a date, and surface what's stuck BEFORE the next "
+            "meeting, not at it."
+        ),
+    },
+    "exec_assistant": {
+        "name": "Executive Assistant Agent",
+        "topics": ["calendar", "travel", "meeting_prep"],
+        "body": (
+            "Act as a senior executive assistant: guard the calendar like a "
+            "budget. Protect focus blocks and recovery time between "
+            "back-to-backs, state time zones explicitly in every proposal, "
+            "decline gracefully with an alternative, and attach the prep "
+            "the meeting needs (agenda, pre-read, dial-in) when booking — "
+            "a meeting without an agenda gets questioned, not scheduled."
+        ),
+    },
+    "email_writer": {
+        "name": "Email Writing Agent",
+        "topics": ["email_drafting"],
+        "body": (
+            "Write emails people answer: subject line states the ask, "
+            "first sentence is the point, one ask per email, and the "
+            "deadline/next step in bold at the end. Match formality to the "
+            "relationship, never bury a decision in paragraph three, and "
+            "keep it under 150 words unless the content truly requires "
+            "more."
+        ),
+    },
+    "note_taker": {
+        "name": "Note-Taking Agent",
+        "topics": ["notes"],
+        "body": (
+            "Turn raw notes into a usable record: decisions made, actions "
+            "with owner and date, open questions, and context worth "
+            "keeping — in that order. Separate verbatim quotes from "
+            "interpretation, flag anything ambiguous to confirm rather "
+            "than guessing, and keep the original text untouched below "
+            "the summary."
+        ),
+    },
+    "presentation_designer": {
+        "name": "Presentation Agent",
+        "topics": ["presentation"],
+        "body": (
+            "Build slide content like a presentation designer: one idea "
+            "per slide, headline states the takeaway (not the topic), "
+            "supporting detail goes in speaker notes instead of on the "
+            "slide. Open with the conclusion for executives, build to it "
+            "for teaching. Always state the deck's single sentence: what "
+            "the audience should think or do after."
+        ),
+    },
+    "doc_designer": {
+        "name": "Document Design Agent",
+        "topics": ["word_docs"],
+        "body": (
+            "Build documents with structure, not manual formatting: real "
+            "heading styles (so the table of contents works), consistent "
+            "spacing via styles, page numbers and version/date in the "
+            "footer. Front-load a summary for anything over two pages. "
+            "For templates and mail merges, test with the messiest real "
+            "record first, not the cleanest."
+        ),
+    },
+    "notebooklm_guide": {
+        "name": "NotebookLM Research Agent",
+        "topics": ["notebooklm"],
+        "body": (
+            "Work source-grounded like NotebookLM: claims come only from "
+            "the uploaded sources, every assertion cites which source it "
+            "came from, and gaps in the sources get named as gaps instead "
+            "of filled from memory. Suggest which additional source would "
+            "close each gap. Distinguish what the sources SAY from what "
+            "they merely imply."
+        ),
+    },
+    "hr_partner": {
+        "name": "HR Partner Agent",
+        "topics": ["hr", "onboarding"],
+        "body": (
+            "Act as an HR partner: structured and bias-aware. Job "
+            "descriptions list outcomes, not adjective soup; interview "
+            "kits ask every candidate the same questions with scoring "
+            "anchors; review feedback cites observed behavior and impact, "
+            "never personality. Treat everything as confidential and "
+            "assume any document could be read by the person it's about."
+        ),
+    },
+    "sales_writer": {
+        "name": "Sales Communication Agent",
+        "topics": ["sales"],
+        "body": (
+            "Write sales communication that respects the buyer: lead with "
+            "their problem in their words, quantify value, one clear next "
+            "step. No invented urgency, no claims the product can't "
+            "support — overpromising creates churn, not revenue. "
+            "Proposals state price plainly and address the obvious "
+            "objection before the buyer raises it."
+        ),
+    },
+    "marketer": {
+        "name": "Marketing Agent",
+        "topics": ["marketing"],
+        "body": (
+            "Write marketing copy audience-first: name who it's for, what "
+            "they get, and the one action to take — one CTA per piece. "
+            "Match the channel's native format (LinkedIn isn't a press "
+            "release), keep the brand voice consistent, and state how "
+            "success will be measured so the copy can be judged against "
+            "it later."
+        ),
+    },
+    "support_agent": {
+        "name": "Customer Support Agent",
+        "topics": ["support"],
+        "body": (
+            "Write support replies in this order: acknowledge the "
+            "specific problem (not a generic apology), state what you "
+            "did or found, give the fix or the honest status with a real "
+            "date, and end with one clear next step. Never blame the "
+            "customer, never promise what isn't confirmed, and escalate "
+            "with a summary the next person can act on without re-asking."
+        ),
+    },
+    "finance_analyst": {
+        "name": "Finance Ops Agent",
+        "topics": ["finance_ops"],
+        "body": (
+            "Work like a finance analyst: numbers tie out to a named "
+            "source, assumptions are stated next to every forecast, and "
+            "variances come with the driver (price, volume, timing) not "
+            "just the delta. Show period-over-period, round consistently, "
+            "and flag anything estimated versus actual. A number without "
+            "a source is a rumor."
+        ),
+    },
+    "project_manager": {
+        "name": "Project Manager Agent",
+        "topics": ["project_mgmt"],
+        "body": (
+            "Run project work with explicit structure: every task has an "
+            "owner and a date, every date has a dependency check, risks "
+            "live in a RAID log with mitigation owners. Status reports "
+            "lead with on-track/at-risk/blocked and what changed since "
+            "last time. Scope changes get named as scope changes — "
+            "absorbed quietly, they become schedule slips."
+        ),
+    },
+    "event_planner": {
+        "name": "Event Planning Agent",
+        "topics": ["events"],
+        "body": (
+            "Plan events backwards from the date: a workback schedule "
+            "with vendor deadlines (catering, venue, AV all have "
+            "lead-times), a run-of-show with owners per segment and "
+            "buffer between them, and a day-of contact list. Always have "
+            "the contingency: weather, no-show speaker, broken AV. "
+            "Confirm everything in writing the week before."
+        ),
+    },
+    "legal_intake": {
+        "name": "Legal Intake Agent",
+        "topics": ["legal_ops"],
+        "body": (
+            "Prepare contract/legal work for counsel — never give legal "
+            "advice. Summarize the document in plain language, flag the "
+            "clauses that commonly bite (auto-renewal, liability caps, "
+            "indemnification, termination, data handling), note what "
+            "differs from the company's standard terms, and produce a "
+            "clean question list for the lawyer. Spot issues; don't "
+            "resolve them."
         ),
     },
 }
@@ -3240,6 +3566,342 @@ SKILL_TEMPLATES = {
             "Deliver securely, record what was provided and when, and note exemptions applied.",
         ],
     },
+    "calendar_triage": {
+        "name": "Calendar triage skill",
+        "topics": ["calendar"],
+        "body": "Get a calendar under control and keep it that way.",
+        "steps": [
+            "Audit the next two weeks: flag meetings with no agenda, no decision, or pure FYI status.",
+            "Decline or shorten the flagged ones with a polite template and an async alternative.",
+            "Block focus time and buffer between back-to-backs before the calendar refills.",
+            "Standardize: default 25/50-minute meetings, agendas required in the invite.",
+            "Weekly review: what got booked over the blocks, and who keeps doing it.",
+        ],
+    },
+    "meeting_prep_brief": {
+        "name": "Meeting prep brief skill",
+        "topics": ["meeting_prep", "exec_ops"],
+        "body": "Produce a one-page brief so the meeting starts informed.",
+        "steps": [
+            "State the meeting's purpose and the ONE decision or outcome wanted.",
+            "List attendees with what each cares about or will push back on.",
+            "Summarize history in 3-5 bullets: what was agreed before, what changed since.",
+            "Attach talking points and the questions likely to be asked, with answers.",
+            "End with the recommended position and the fallback.",
+        ],
+    },
+    "email_draft": {
+        "name": "Email drafting skill",
+        "topics": ["email_drafting"],
+        "body": "Draft an email that gets answered, not archived.",
+        "steps": [
+            "Subject line states the ask or decision, not the topic.",
+            "First sentence: the point. Background only after, only if needed.",
+            "One ask per email with an explicit deadline or next step.",
+            "Match tone to the relationship; read it as the recipient before sending.",
+            "If it needs more than 150 words, consider whether it should be a call or doc.",
+        ],
+    },
+    "inbox_triage": {
+        "name": "Inbox triage skill",
+        "topics": ["email_drafting", "calendar"],
+        "body": "Clear an overflowing inbox with the four Ds and keep it cleared.",
+        "steps": [
+            "Sort by sender/thread, not date — kill whole conversations at once.",
+            "Each message gets one decision: do (under 2 min), delegate, defer (scheduled), delete.",
+            "Deferred items become calendar blocks or tasks, never re-marked unread.",
+            "Unsubscribe/filter every recurring sender that didn't earn the inbox.",
+            "Daily 2x 20-minute triage blocks; inbox is a triage queue, not a todo list.",
+        ],
+    },
+    "meeting_minutes": {
+        "name": "Meeting minutes skill",
+        "topics": ["notes"],
+        "body": "Turn a messy transcript or raw notes into minutes people use.",
+        "steps": [
+            "Decisions first: what was agreed, verbatim where wording matters.",
+            "Actions with owner and due date; no owner means it didn't happen.",
+            "Open questions and disagreements, neutrally stated.",
+            "Context worth keeping in 5 bullets max; link the full transcript.",
+            "Send within 24 hours and ask owners to confirm their items.",
+        ],
+    },
+    "note_system": {
+        "name": "Note organization skill",
+        "topics": ["notes", "notion"],
+        "body": "Organize scattered notes into a system you'll actually maintain.",
+        "steps": [
+            "Inventory where notes live today (apps, paper, screenshots, chats).",
+            "Pick ONE home per type: meeting notes, ideas, reference, tasks.",
+            "Structure by actionability (PARA-style: projects, areas, resources, archive), not by topic taxonomy.",
+            "Set a capture habit: everything lands in one inbox note, sorted weekly.",
+            "Archive ruthlessly — a note system fails from clutter, not from missing features.",
+        ],
+    },
+    "slide_outline": {
+        "name": "Slide deck outline skill",
+        "topics": ["presentation"],
+        "body": "Outline a deck where every slide earns its place.",
+        "steps": [
+            "Write the one sentence the audience should believe or do afterwards.",
+            "Draft headlines first — each states a takeaway; read in order they tell the story alone.",
+            "Add only evidence per slide: one chart, one comparison, or three bullets max.",
+            "Move detail to speaker notes or appendix; expect the deck to be read without you.",
+            "Time-check: 1-2 minutes per slide; cut until it fits the slot.",
+        ],
+    },
+    "doc_polish": {
+        "name": "Document formatting skill",
+        "topics": ["word_docs"],
+        "body": "Make a document look professional using structure, not hand-formatting.",
+        "steps": [
+            "Apply real heading styles; fix the hierarchy before touching appearance.",
+            "Generate the table of contents from styles; never type one manually.",
+            "Normalize: one body font, consistent spacing via styles, page numbers + version in footer.",
+            "Add an executive summary up front if it's over two pages.",
+            "Final pass in print preview and on a phone screen.",
+        ],
+    },
+    "mail_merge": {
+        "name": "Mail merge skill",
+        "topics": ["word_docs", "bulk_data"],
+        "body": "Run a mail merge that doesn't embarrass anyone.",
+        "steps": [
+            "Clean the source list first: names cased properly, no blanks in merged fields, dedupe.",
+            "Build the template with merge fields and a fallback for missing data.",
+            "Preview the messiest records, not the first three.",
+            "Send/print a 3-record test batch; check greetings, dates, and currency formats.",
+            "Run the rest, and save the final list as evidence of who got what.",
+        ],
+    },
+    "notebooklm_research": {
+        "name": "NotebookLM research skill",
+        "topics": ["notebooklm"],
+        "body": "Get grounded answers from your own sources instead of model memory.",
+        "steps": [
+            "Gather the actual sources (PDFs, docs, transcripts) — quality in, quality out.",
+            "Upload and ask for a source-by-source summary first to verify it read them right.",
+            "Ask questions that require citations; reject answers that don't point to a source.",
+            "Note what the sources DON'T cover; add sources or mark as open questions.",
+            "Export the grounded summary with citations for the deliverable.",
+        ],
+    },
+    "job_description": {
+        "name": "Job description skill",
+        "topics": ["hr"],
+        "body": "Write a job description that attracts the right people and screens itself.",
+        "steps": [
+            "Define outcomes for the first 90 days and year one — not a duties laundry list.",
+            "Separate must-haves (3-5 max) from nice-to-haves; every extra must-have costs candidates.",
+            "Write the day-to-day honestly, including the unglamorous parts.",
+            "State salary range, location/remote policy, and process timeline.",
+            "Strip biased language (rockstar, ninja, aggressive); read it as each target candidate.",
+        ],
+    },
+    "interview_kit": {
+        "name": "Interview kit skill",
+        "topics": ["hr"],
+        "body": "Build a structured interview so every candidate gets the same fair shot.",
+        "steps": [
+            "Derive 4-6 competencies from the job's actual outcomes.",
+            "Write behavioral questions per competency (tell me about a time...) with follow-up probes.",
+            "Define scoring anchors: what a 1, 3, and 5 answer sounds like.",
+            "Assign competencies to interviewers so nothing is asked twice or missed.",
+            "Debrief with written scores before any group discussion to avoid anchoring.",
+        ],
+    },
+    "perf_review_draft": {
+        "name": "Performance review skill",
+        "topics": ["hr"],
+        "body": "Draft review feedback that is specific, fair, and useful.",
+        "steps": [
+            "Collect evidence first: outcomes, examples, dates — across the whole period, not last month.",
+            "Structure per theme: observed behavior, impact, expectation going forward.",
+            "Balance honestly; no surprise negatives that were never raised in 1:1s.",
+            "Strip personality adjectives; describe what they DID.",
+            "Read it aloud as the recipient; rewrite anything you'd be defensive about.",
+        ],
+    },
+    "sales_proposal": {
+        "name": "Sales proposal skill",
+        "topics": ["sales"],
+        "body": "Write a proposal that answers the buyer's real questions.",
+        "steps": [
+            "Open with their problem in their words (from the discovery call, not your pitch).",
+            "Present the solution as outcomes with numbers, not feature lists.",
+            "Price plainly with options; address the obvious objection preemptively.",
+            "Include timeline, what you need from them, and social proof that matches their situation.",
+            "One-page executive summary up front; the decision-maker may read nothing else.",
+        ],
+    },
+    "followup_email": {
+        "name": "Follow-up email skill",
+        "topics": ["sales", "email_drafting"],
+        "body": "Follow up without being ignored or annoying.",
+        "steps": [
+            "Reference the specific last interaction and any commitment made.",
+            "Add value in every touch: an answer, a resource, a relevant change — never just checking in.",
+            "One clear, small ask with an easy yes (15 minutes, a name, a date).",
+            "Space the cadence: 3 days, then a week, then two; change angle each time.",
+            "After 3-4 touches, send the polite breakup email — it gets the most replies.",
+        ],
+    },
+    "crm_hygiene": {
+        "name": "CRM hygiene skill",
+        "topics": ["sales", "bulk_data"],
+        "body": "Clean the CRM so the pipeline numbers mean something.",
+        "steps": [
+            "Define stage criteria in writing: what must be TRUE for a deal to sit in each stage.",
+            "Sweep stale deals: anything untouched 30+ days gets updated, downgraded, or closed-lost.",
+            "Dedupe accounts/contacts; merge with the newest-complete record winning.",
+            "Make next-step and close-date mandatory on every open deal.",
+            "Weekly 15-minute hygiene block; the forecast is only as good as the worst record.",
+        ],
+    },
+    "social_calendar": {
+        "name": "Social content calendar skill",
+        "topics": ["marketing"],
+        "body": "Plan a month of social content in one sitting.",
+        "steps": [
+            "Pick 3-4 recurring content pillars tied to what the audience actually needs.",
+            "Batch-draft per pillar; adapt per channel's native format rather than cross-posting.",
+            "Calendar with dates, owner, asset needed, and CTA per post.",
+            "Front-load approval for anything sensitive (pricing, claims, customers named).",
+            "Review engagement monthly; double down on the pillar that works, drop the one that doesn't.",
+        ],
+    },
+    "newsletter_issue": {
+        "name": "Newsletter issue skill",
+        "topics": ["marketing", "email_drafting"],
+        "body": "Ship a newsletter issue people actually open and read.",
+        "steps": [
+            "Subject line promises the specific value inside; preview text extends it, not repeats it.",
+            "Lead with the single best item; don't make readers scroll to the good part.",
+            "Keep one voice and one CTA; every extra link halves clicks on the main one.",
+            "Test render on mobile and dark mode before sending.",
+            "Send a small segment first if the list is large; check opens/clicks/unsubscribes before full send.",
+        ],
+    },
+    "support_reply": {
+        "name": "Support reply skill",
+        "topics": ["support"],
+        "body": "Answer an upset customer in a way that keeps them.",
+        "steps": [
+            "Acknowledge their specific problem in the first sentence — prove a human read it.",
+            "State plainly what happened and what you did, without blame or jargon.",
+            "Give the fix, or the honest status with a real date you can keep.",
+            "Offer the appropriate make-good if warranted; one clear next step either way.",
+            "Log the root cause so the same reply isn't needed next week.",
+        ],
+    },
+    "kb_article": {
+        "name": "Help-center article skill",
+        "topics": ["support", "confluence"],
+        "body": "Write a help article that deflects tickets instead of creating them.",
+        "steps": [
+            "Title = the question users actually type, in their words.",
+            "Steps numbered, one action each, with a screenshot where users get lost.",
+            "State upfront who/what it applies to (plan, version, role) so wrong readers exit early.",
+            "Include the 2-3 most common failure points as a troubleshooting section.",
+            "Test on someone who hasn't done it; date it and set a review reminder.",
+        ],
+    },
+    "budget_variance": {
+        "name": "Budget variance skill",
+        "topics": ["finance_ops"],
+        "body": "Explain budget vs actuals so the conversation is about decisions, not arithmetic.",
+        "steps": [
+            "Tie out totals to the source system first; reconcile before analyzing.",
+            "Compute variance per line: amount, percent, and favorable/unfavorable.",
+            "Attribute each material variance to a driver: price, volume, timing, or one-off.",
+            "Separate timing differences (will reverse) from real run-rate changes (won't).",
+            "Lead the summary with the 3 variances that matter and the decision each implies.",
+        ],
+    },
+    "project_kickoff": {
+        "name": "Project kickoff skill",
+        "topics": ["project_mgmt"],
+        "body": "Kick off a project so it doesn't unravel in week three.",
+        "steps": [
+            "Write the one-line goal and the explicit NON-goals; get sponsor sign-off in writing.",
+            "Name the team with roles and decision rights (who decides, who's consulted).",
+            "Build the milestone workback from the deadline with dependencies visible.",
+            "Open the RAID log with the risks everyone is already whispering about.",
+            "Set the operating rhythm: status cadence, escalation path, where work lives.",
+        ],
+    },
+    "raid_log": {
+        "name": "RAID log skill",
+        "topics": ["project_mgmt"],
+        "body": "Track risks, assumptions, issues, and dependencies before they bite.",
+        "steps": [
+            "Capture each item with owner, impact, and likelihood — one line each, no essays.",
+            "Risks get a mitigation AND a trigger condition for when it becomes an issue.",
+            "Review weekly: anything unchanged 3 reviews running is stale or sandbagged.",
+            "Escalate by impact, not by who shouts; the log is the agenda for that conversation.",
+            "Close items explicitly with outcome noted — silent closure hides lessons.",
+        ],
+    },
+    "decision_memo": {
+        "name": "Decision memo skill",
+        "topics": ["exec_ops"],
+        "body": "Write a one-page memo that gets a decision made in one read.",
+        "steps": [
+            "State the decision needed and the deadline in the first two lines.",
+            "Give 2-3 real options with honest trade-offs (no strawmen).",
+            "Make a recommendation and say why in three bullets.",
+            "List what was already considered/rejected so it doesn't get relitigated.",
+            "End with: approver, what happens on approval, and what happens if no decision by the date.",
+        ],
+    },
+    "okr_draft": {
+        "name": "OKR drafting skill",
+        "topics": ["exec_ops"],
+        "body": "Draft OKRs that focus a quarter instead of decorating it.",
+        "steps": [
+            "Objectives: 2-3 max, qualitative, worth being excited about.",
+            "Key results: measurable outcomes with numbers, not task lists in disguise.",
+            "Sanity-check each KR: could it hit 100% while the objective still failed? Rewrite if so.",
+            "Map dependencies on other teams now, not at the mid-quarter check-in.",
+            "Set the grading scheme upfront (0.7 is success) and a monthly scoring cadence.",
+        ],
+    },
+    "event_runofshow": {
+        "name": "Event run-of-show skill",
+        "topics": ["events"],
+        "body": "Plan an event timeline that survives contact with reality.",
+        "steps": [
+            "Work back from the date: vendor lead-times (venue, catering, AV) land first.",
+            "Build the run-of-show in 15-minute blocks with an owner per segment.",
+            "Add buffer after every transition; everything runs over.",
+            "Write the contingency row: rain plan, no-show speaker, dead microphone.",
+            "Confirm all vendors and owners in writing the week before; day-of contact list on one page.",
+        ],
+    },
+    "contract_intake": {
+        "name": "Contract intake skill",
+        "topics": ["legal_ops"],
+        "body": "Prep a contract for review so legal answers in one pass.",
+        "steps": [
+            "Summarize the business deal in plain language: parties, money, term, what's exchanged.",
+            "Flag the standard biters: auto-renewal, liability cap, indemnification, termination, data handling.",
+            "Diff against your standard terms or the last signed version; list what changed.",
+            "Write the specific questions for counsel — not just 'please review'.",
+            "Track signature authority and the renewal/notice dates in your contract calendar.",
+        ],
+    },
+    "travel_itinerary": {
+        "name": "Travel planning skill",
+        "topics": ["travel", "calendar"],
+        "body": "Book travel that survives delays and time zones.",
+        "steps": [
+            "Confirm the fixed points first: meetings that cannot move, in local time.",
+            "Book flights with buffer for the meeting that matters; avoid last-flight-out dependencies.",
+            "Put everything in the calendar in the traveler's CURRENT time zone with flight numbers and confirmation codes.",
+            "One itinerary doc: transport, lodging, meetings, contacts, and a plan-B per leg.",
+            "Check visa/ID requirements and expense policy before booking, not after.",
+        ],
+    },
 }
 
 CONTEXT_CHECKLIST_BY_TOPIC = {
@@ -3317,6 +3979,23 @@ CONTEXT_CHECKLIST_BY_TOPIC = {
     "licensing": ["Current entitlement counts and cost", "Actual usage numbers", "Renewal date and who negotiates"],
     "privacy_compliance": ["Applicable regulation (GDPR/CCPA)", "Request date and type", "Systems holding personal data"],
     "facilities": ["Site/room and access constraints", "Affected equipment and who depends on it", "Maintenance window options"],
+    "calendar": ["Whose calendar and what tool (Outlook/Google)", "Hard constraints (time zones, fixed meetings)", "Priorities: what wins when things conflict"],
+    "email_drafting": ["Who the recipient is and your relationship", "The thread/history being replied to", "The one outcome you want from the email"],
+    "meeting_prep": ["Who's attending and what they care about", "What was agreed last time", "The decision or outcome this meeting needs"],
+    "notes": ["The raw notes/transcript to process", "Who the notes are for", "What format the team already uses"],
+    "presentation": ["Audience and time slot", "The one takeaway", "Brand/template requirements"],
+    "word_docs": ["Document purpose and audience", "Existing template or style guide", "Sample of the current draft"],
+    "notebooklm": ["The source documents to ground on", "The questions to answer from them", "What output format you need"],
+    "travel": ["Fixed meetings/dates in local time", "Traveler preferences and loyalty programs", "Expense policy limits"],
+    "hr": ["Role/level and team context", "Company templates or leveling guide", "Anything confidential to handle carefully"],
+    "sales": ["The customer's stated problem (their words)", "Deal stage and history", "Pricing and what you can actually commit to"],
+    "marketing": ["Audience and channel", "Brand voice/examples of past content", "The one CTA and how success is measured"],
+    "support": ["The customer's message verbatim", "Account history and what they were promised", "What you can actually offer (refund, fix, timeline)"],
+    "finance_ops": ["The source data (budget vs actuals export)", "Period and cost centers in scope", "Materiality threshold — what's worth explaining"],
+    "project_mgmt": ["Goal, deadline, and non-goals", "Team and decision-makers", "Known risks and dependencies"],
+    "exec_ops": ["Who the audience/principal is", "The decision needed and by when", "What's already been considered or rejected"],
+    "events": ["Date, headcount, and budget", "Venue/vendor status so far", "What success looks like for the event"],
+    "legal_ops": ["The contract/document itself", "Your standard terms or last signed version", "Business context: money, term, what's exchanged"],
 }
 
 GENERIC_CHECKLIST = [
@@ -3611,19 +4290,40 @@ def clarifying_questions(cleaned: str, rec: dict) -> list:
     return questions[:2]
 
 
+OFFICE_TOPICS = {
+    "calendar", "email_drafting", "meeting_prep", "notes", "presentation",
+    "word_docs", "notebooklm", "travel", "hr", "sales", "marketing",
+    "support", "finance_ops", "project_mgmt", "exec_ops", "events",
+    "legal_ops", "writing", "summarize", "learning", "excel", "notion",
+}
+
+
 def build_prompt(cleaned_task: str, rec: dict, selected_modules: list,
                  selected_skills: list, checked_context: list) -> str:
     """Assemble the final copy-ready prompt."""
     template = PROMPT_TEMPLATES[rec["template"]]
     body = template["body"]
+    # Office/role work gets office-flavored defaults; "rollback steps" reads
+    # wrong in a board brief.
+    office = bool(set(rec["topics"]) & OFFICE_TOPICS) and rec["destination"] != "Codex"
+    constraints = (
+        "Professional tone, ready to use as-is; state any assumptions made "
+        "and flag anything that needs my confirmation before it goes out."
+        if office else
+        "Local-first, least privilege, no secrets in output, include rollback steps."
+    )
+    inputs_hint = (
+        "(paste the relevant material here: the thread, notes, data, or "
+        "current draft)" if office else
+        "(paste the relevant material here: transcripts, error "
+        "messages, file paths, sample data)"
+    )
     fills = {
         "{TASK}": cleaned_task,
         "{SCOPE}": "Only the work described above; ask before expanding scope.",
-        "{INPUTS}": ("; ".join(checked_context) if checked_context else
-                     "(paste the relevant material here: transcripts, error "
-                     "messages, file paths, sample data)"),
+        "{INPUTS}": ("; ".join(checked_context) if checked_context else inputs_hint),
         "{TOOLS}": "Standard tooling for this stack; no destructive operations without confirmation.",
-        "{CONSTRAINTS}": "Local-first, least privilege, no secrets in output, include rollback steps.",
+        "{CONSTRAINTS}": constraints,
         "{OUTPUTS}": "Working result plus a short summary of what changed and how it was verified.",
         "{VERIFICATION}": "List the exact checks performed and their results before claiming completion.",
     }

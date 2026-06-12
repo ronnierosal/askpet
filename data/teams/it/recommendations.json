@@ -75,7 +75,15 @@
     "investigate": 2,
     "triage": 2,
     "risk": 2,
-    "recommend": 2
+    "recommend": 2,
+    "memo": 2,
+    "briefing": 3,
+    "agenda": 2,
+    "slides": 2,
+    "deck": 2,
+    "email": 1,
+    "newsletter": 2,
+    "presentation": 2
   },
   "keyword_topics": {
     "azure_function": [
@@ -937,6 +945,265 @@
       "cabling",
       "patch panel",
       "comms room"
+    ],
+    "calendar": [
+      "schedule a meeting",
+      "scheduling",
+      "reschedule",
+      "double booked",
+      "double-booked",
+      "find a time",
+      "availability",
+      "time zone",
+      "recurring meeting",
+      "block focus time",
+      "my calendar",
+      "his calendar",
+      "her calendar",
+      "their calendar",
+      "the calendar",
+      "calendar for",
+      "manage the calendar",
+      "calendar invite for",
+      "back to back meetings",
+      "back-to-back meetings"
+    ],
+    "email_drafting": [
+      "draft an email",
+      "write an email",
+      "email to",
+      "reply to this",
+      "respond to this email",
+      "follow up email",
+      "follow-up email",
+      "cold email",
+      "decline politely",
+      "email reply",
+      "out of office message",
+      "email asking",
+      "email my",
+      "email the",
+      "inbox",
+      "unread email",
+      "email backlog",
+      "triage my email"
+    ],
+    "meeting_prep": [
+      "meeting prep",
+      "briefing",
+      "brief me",
+      "agenda",
+      "talking points",
+      "one on one",
+      "1:1",
+      "1 on 1",
+      "prep for a meeting",
+      "prep for my meeting",
+      "board meeting",
+      "leadership meeting",
+      "pre-read",
+      "prep me for"
+    ],
+    "notes": [
+      "take notes",
+      "note taking",
+      "note-taking",
+      "my notes",
+      "meeting notes",
+      "meeting minutes",
+      "take minutes",
+      "the minutes",
+      "action items",
+      "transcribe",
+      "voice memo",
+      "scratchpad",
+      "tidy my notes",
+      "organize my notes"
+    ],
+    "presentation": [
+      "presentation",
+      "slide deck",
+      "slides",
+      "powerpoint",
+      "pitch deck",
+      "keynote",
+      "google slides",
+      "talk track",
+      "speaker notes",
+      "one-pager",
+      "one pager"
+    ],
+    "word_docs": [
+      "word document",
+      "word doc",
+      "google doc",
+      "mail merge",
+      "table of contents",
+      "letterhead",
+      "page numbers",
+      "track changes",
+      "format the document",
+      "doc template",
+      "standard operating procedure",
+      "sop for"
+    ],
+    "notebooklm": [
+      "notebooklm",
+      "notebook lm",
+      "audio overview",
+      "source-grounded",
+      "upload sources",
+      "grounded in my",
+      "my sources",
+      "these sources",
+      "the sources",
+      "uploaded documents",
+      "from my documents"
+    ],
+    "travel": [
+      "itinerary",
+      "book a flight",
+      "book travel",
+      "trip to",
+      "hotel block",
+      "travel arrangements",
+      "travel plans",
+      "layover",
+      "frequent flyer"
+    ],
+    "hr": [
+      "job description",
+      "job posting",
+      "interview questions",
+      "interview kit",
+      "performance review",
+      "self review",
+      "self-assessment",
+      "candidate",
+      "recruiting",
+      "recruiter",
+      "offer letter",
+      "employee handbook",
+      "engagement survey",
+      "exit interview",
+      "new hire orientation",
+      "people ops"
+    ],
+    "sales": [
+      "sales email",
+      "sales proposal",
+      "sales call",
+      "sales pipeline",
+      "sales deck",
+      "proposal for a client",
+      "crm",
+      "prospect",
+      "discovery call",
+      "objection",
+      "upsell",
+      "win-back",
+      "quote for a customer",
+      "renewal email"
+    ],
+    "marketing": [
+      "marketing",
+      "social media",
+      "social post",
+      "linkedin post",
+      "newsletter",
+      "blog post",
+      "campaign",
+      "seo",
+      "press release",
+      "landing page",
+      "brand voice",
+      "content calendar"
+    ],
+    "support": [
+      "customer support",
+      "support reply",
+      "angry customer",
+      "refund",
+      "escalation",
+      "csat",
+      "help center",
+      "canned response",
+      "ticket backlog",
+      "customer complaint",
+      "churn risk",
+      "apology email"
+    ],
+    "finance_ops": [
+      "budget",
+      "variance",
+      "forecast",
+      "invoice",
+      "purchase request",
+      "reconciliation",
+      "accrual",
+      "expense report",
+      "expenses",
+      "spend report",
+      "cost center",
+      "po number"
+    ],
+    "project_mgmt": [
+      "project plan",
+      "kickoff",
+      "milestones",
+      "raid log",
+      "gantt",
+      "stakeholder",
+      "retrospective",
+      "sprint",
+      "workback",
+      "work-back",
+      "timeline for",
+      "dependencies",
+      "critical path",
+      "status update"
+    ],
+    "exec_ops": [
+      "chief of staff",
+      "okr",
+      "decision memo",
+      "board deck",
+      "strategy offsite",
+      "operating cadence",
+      "leadership update",
+      "all hands",
+      "all-hands",
+      "exec summary",
+      "executive summary",
+      "weekly priorities"
+    ],
+    "events": [
+      "offsite",
+      "run of show",
+      "run-of-show",
+      "company event",
+      "team event",
+      "event planning",
+      "venue",
+      "catering",
+      "webinar invite",
+      "registration page",
+      "save the date",
+      "team building"
+    ],
+    "legal_ops": [
+      "contract review",
+      "review a contract",
+      "review the contract",
+      "review this contract",
+      "nda",
+      "redline",
+      "msa",
+      "legal review",
+      "terms of service",
+      "sow review",
+      "signature authority",
+      "renewal terms"
     ]
   },
   "context_checklist_by_topic": {
@@ -1311,6 +1578,91 @@
       "Site/room and access constraints",
       "Affected equipment and who depends on it",
       "Maintenance window options"
+    ],
+    "calendar": [
+      "Whose calendar and what tool (Outlook/Google)",
+      "Hard constraints (time zones, fixed meetings)",
+      "Priorities: what wins when things conflict"
+    ],
+    "email_drafting": [
+      "Who the recipient is and your relationship",
+      "The thread/history being replied to",
+      "The one outcome you want from the email"
+    ],
+    "meeting_prep": [
+      "Who's attending and what they care about",
+      "What was agreed last time",
+      "The decision or outcome this meeting needs"
+    ],
+    "notes": [
+      "The raw notes/transcript to process",
+      "Who the notes are for",
+      "What format the team already uses"
+    ],
+    "presentation": [
+      "Audience and time slot",
+      "The one takeaway",
+      "Brand/template requirements"
+    ],
+    "word_docs": [
+      "Document purpose and audience",
+      "Existing template or style guide",
+      "Sample of the current draft"
+    ],
+    "notebooklm": [
+      "The source documents to ground on",
+      "The questions to answer from them",
+      "What output format you need"
+    ],
+    "travel": [
+      "Fixed meetings/dates in local time",
+      "Traveler preferences and loyalty programs",
+      "Expense policy limits"
+    ],
+    "hr": [
+      "Role/level and team context",
+      "Company templates or leveling guide",
+      "Anything confidential to handle carefully"
+    ],
+    "sales": [
+      "The customer's stated problem (their words)",
+      "Deal stage and history",
+      "Pricing and what you can actually commit to"
+    ],
+    "marketing": [
+      "Audience and channel",
+      "Brand voice/examples of past content",
+      "The one CTA and how success is measured"
+    ],
+    "support": [
+      "The customer's message verbatim",
+      "Account history and what they were promised",
+      "What you can actually offer (refund, fix, timeline)"
+    ],
+    "finance_ops": [
+      "The source data (budget vs actuals export)",
+      "Period and cost centers in scope",
+      "Materiality threshold — what's worth explaining"
+    ],
+    "project_mgmt": [
+      "Goal, deadline, and non-goals",
+      "Team and decision-makers",
+      "Known risks and dependencies"
+    ],
+    "exec_ops": [
+      "Who the audience/principal is",
+      "The decision needed and by when",
+      "What's already been considered or rejected"
+    ],
+    "events": [
+      "Date, headcount, and budget",
+      "Venue/vendor status so far",
+      "What success looks like for the event"
+    ],
+    "legal_ops": [
+      "The contract/document itself",
+      "Your standard terms or last signed version",
+      "Business context: money, term, what's exchanged"
     ]
   },
   "generic_checklist": [

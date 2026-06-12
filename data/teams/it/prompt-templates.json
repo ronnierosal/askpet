@@ -290,6 +290,40 @@
     ],
     "body": "Azure administration task. {TASK}\n\nContext: {INPUTS}\n\nProvide:\n- Portal steps AND the az CLI / PowerShell equivalent\n- Resource group, tagging, and naming that fits convention\n- Least-privilege RBAC at the narrowest scope that works\n- Projected monthly cost of anything created, and the cheaper alternative considered\n- Rollback/teardown steps\n\nConstraints: {CONSTRAINTS}\nVerification: {VERIFICATION}"
   },
+  "exec_brief": {
+    "name": "Executive brief / decision memo",
+    "destination": "ChatGPT web",
+    "topics": [
+      "exec_ops",
+      "meeting_prep"
+    ],
+    "body": "Produce a decision-ready brief. {TASK}\n\nSource material: {INPUTS}\n\nFormat (one page maximum):\n1. The decision needed or meeting purpose, and the deadline\n2. Recommendation up front, with the three strongest reasons\n3. Options considered with honest trade-offs\n4. What the audience will push back on, with responses\n5. Next steps with owners and dates\n\nWrite for a reader with 90 seconds. Detail goes in an appendix. Constraints: {CONSTRAINTS}"
+  },
+  "email_compose": {
+    "name": "Email draft",
+    "destination": "ChatGPT web",
+    "topics": [
+      "email_drafting"
+    ],
+    "body": "Draft this email. {TASK}\n\nContext (relationship, history, anything to reference): {INPUTS}\n\nRequirements:\n- Subject line that states the ask or decision\n- The point in the first sentence; background after, only if needed\n- ONE ask, with an explicit deadline or next step\n- Under 150 words unless the content truly requires more\n- Tone matched to the relationship: {CONSTRAINTS}\n\nGive me two versions: one direct, one warmer. Flag anything that could land wrong."
+  },
+  "office_document": {
+    "name": "Document / deck creation",
+    "destination": "ChatGPT web",
+    "topics": [
+      "word_docs",
+      "presentation"
+    ],
+    "body": "Help me create this document or deck. {TASK}\n\nAudience and occasion: {INPUTS}\n\nWork in this order:\n1. Confirm the one sentence the audience should take away\n2. Propose the outline (headings / slide headlines that tell the story alone) and wait for my OK\n3. Draft section by section, takeaway-first\n4. Finish with a formatting checklist (styles, table of contents, page numbers / speaker notes)\n\nConstraints: {CONSTRAINTS}"
+  },
+  "spreadsheet_help": {
+    "name": "Spreadsheet help",
+    "destination": "ChatGPT web",
+    "topics": [
+      "excel"
+    ],
+    "body": "Help me with a spreadsheet task. {TASK}\n\nMy data layout (columns, sample rows, sheet names): {INPUTS}\n\nRequirements:\n- Give the exact formula or steps for MY layout, not a generic example\n- Explain what each part of the formula does in one line\n- Mention the common error I'll hit and how to fix it\n- If there's a simpler built-in feature (pivot, filter, conditional format), say so first\n\nConstraints: {CONSTRAINTS}\nI'll verify on a copy of the data before using it for real."
+  },
   "email_deliverability": {
     "name": "Email deliverability fix",
     "destination": "Both",

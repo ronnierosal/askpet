@@ -41,6 +41,28 @@ still fully local.
 
 ## What's new
 
+**0.16.0** (2026-06-11)
+- PromptMate isn't just for IT anymore: a non-technical roles round adds
+  agents and skills for chiefs of staff (decision memos, OKRs, exec
+  briefs), executive assistants (calendar triage, travel itineraries,
+  inbox triage), email writing (one ask, deadline bold, two-tone drafts),
+  note-taking and Notion organization, presentations (takeaway-first
+  slide outlines), Word/Google Docs (styles-not-hand-formatting, mail
+  merge), NotebookLM (source-grounded research), HR (job descriptions,
+  structured interview kits, review drafts), sales (proposals,
+  follow-ups, CRM hygiene), marketing (content calendars, newsletters),
+  customer support (replies that keep customers, help-center articles),
+  finance ops (budget variance that explains drivers), project
+  management (kickoffs, RAID logs), events (run-of-show), and legal
+  intake (contract prep for counsel — never legal advice).
+- Four new templates: executive brief / decision memo, email draft,
+  document/deck creation, spreadsheet help.
+- Office-flavored prompts: non-technical asks no longer get "include
+  rollback steps" boilerplate in their constraints.
+- mega_battery.py: generates 2,100+ phrasing variants across every role
+  area and flags weak routing — 0 flagged at ship time.
+- 52 templates / 88 modules / 121 skills.
+
 **0.15.0** (2026-06-11)
 - Gap-probe content round: ran 36 chats about topics the library didn't
   cover and filled what came back weak. New areas: telephony/Teams Phone
