@@ -269,6 +269,64 @@
       "keep disconnecting",
       "keeps disconnecting",
       "very slow"
+    ],
+    "notion": [
+      "notion"
+    ],
+    "zoom": [
+      "zoom",
+      "webinar",
+      "meeting recording",
+      "transcript"
+    ],
+    "google": [
+      "google workspace",
+      "gmail",
+      "google drive",
+      "google admin",
+      "gsuite",
+      "g suite",
+      "google groups",
+      "google calendar",
+      "google docs",
+      "google sheets"
+    ],
+    "slack": [
+      "slack"
+    ],
+    "github": [
+      "github",
+      "pull request",
+      "branch protection",
+      "repo settings",
+      "github actions",
+      "gitlab"
+    ],
+    "servicenow": [
+      "servicenow",
+      "service now",
+      "cmdb",
+      "service catalog"
+    ],
+    "automation": [
+      "power automate",
+      "zapier",
+      "logic app",
+      "logic apps",
+      "make.com",
+      "workflow automation",
+      "automate this"
+    ],
+    "refine": [
+      "dial in",
+      "refine",
+      "brainstorm",
+      "requirements",
+      "not sure how to ask",
+      "help me ask",
+      "improve my prompt",
+      "scope this out",
+      "think through"
     ]
   },
   "context_checklist_by_topic": {
@@ -386,6 +444,46 @@
       "Exact error message or screenshot text",
       "Who is affected and since when",
       "What changed recently (updates, policy, password)"
+    ],
+    "notion": [
+      "Workspace/page where it should live",
+      "Database properties or page structure needed",
+      "Who needs access"
+    ],
+    "zoom": [
+      "Meeting/webinar details or recording link",
+      "Account/license type",
+      "Expected audience size"
+    ],
+    "google": [
+      "Domain or OU in scope",
+      "Affected users/groups",
+      "Admin role you hold"
+    ],
+    "slack": [
+      "Workspace and channel names",
+      "Apps/integrations involved",
+      "Retention or governance rules"
+    ],
+    "github": [
+      "Org/repo name",
+      "Branch and protection rules in play",
+      "Who needs what access level"
+    ],
+    "servicenow": [
+      "Instance and table (incident/request/change)",
+      "Assignment group",
+      "Related CI / CMDB record"
+    ],
+    "automation": [
+      "Trigger event and source system",
+      "Target systems and connectors",
+      "What should happen on failure"
+    ],
+    "refine": [
+      "The rough idea in your own words",
+      "What done looks like",
+      "Constraints (time, tools, approvals)"
     ]
   },
   "generic_checklist": [

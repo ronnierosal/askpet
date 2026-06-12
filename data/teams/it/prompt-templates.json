@@ -72,7 +72,7 @@
     "topics": [
       "workspace_agent"
     ],
-    "body": "Design a ChatGPT workspace agent. {TASK}\n\nThe agent definition must include:\n- Purpose and scope (what it does and does NOT do)\n- Allowed tools and forbidden actions\n- Memory/context strategy (memory is supplemental — durable source-of-truth files win)\n- Self-learning as local reflection notes, not uncontrolled autonomy\n- Instruction-bloat control: review and slim instructions regularly\n- Harness/task-contract workflow (scope, inputs, tools, constraints, outputs, verification)\n- Verification requirements before claiming completion\n- Handoff behavior when work remains\n\nConstraints: {CONSTRAINTS}"
+    "body": "Design a ChatGPT workspace agent and write its complete instructions, ready to paste. {TASK}\n\nMost people skip the parts that make agents actually useful, so the instructions you produce MUST contain all of these sections, fully written out (not just mentioned):\n\n1. PURPOSE & SCOPE — one sentence of purpose, an explicit out-of-scope list, allowed tools, forbidden actions.\n\n2. MEMORY SYSTEM — the agent keeps a small set of named memory notes (e.g. 'preferences', 'project-context', 'decisions'). Rules: record only stable reusable facts; convert relative dates to absolute; durable source-of-truth files always win over memory; prune stale entries when touched. Include the exact instruction text for when to read and when to update memory.\n\n3. SELF-REFLECTION LOOP — after each completed task the agent writes a 3-line reflection: what worked, what to reuse, what to change next time. Reflections feed memory and skills, not uncontrolled behavior changes.\n\n4. SKILL MAKER — when the agent notices the same kind of task for the third time, it proposes a named skill: trigger, inputs, numbered steps, verification. Skills get saved and reused instead of re-deriving the workflow.\n\n5. TASK CONTRACT — every piece of work starts with scope, inputs, constraints, outputs, and verification; the agent plans first and confirms before executing anything big.\n\n6. VERIFICATION & HANDOFF — never claim completion without stating what was checked; if work remains, leave a handoff note with exact next steps.\n\n7. INSTRUCTION HYGIENE — once a month (or when instructions feel bloated) the agent proposes deletions: redundant rules, stale references, conflicting guidance.\n\nAgent purpose and context: {INPUTS}\nConstraints: {CONSTRAINTS}\n\nOutput the final agent instructions as one copy-ready block, then a short note on how to test the agent with 3 sample tasks."
   },
   "harness_setup": {
     "name": "Harness / project setup",
@@ -272,6 +272,14 @@
       "jira"
     ],
     "body": "Draft a reply to a support ticket. {TASK}\n\nRequirements:\n- Acknowledge the actual problem in the user's terms\n- What was found/done, in plain language\n- Next step and who owns it (them or us), with timing\n- Professional, warm, no blame, no jargon\n\nTicket context: {INPUTS}\nConstraints: {CONSTRAINTS}"
+  },
+  "dial_in": {
+    "name": "Dial in the ask (plan first)",
+    "destination": "Both",
+    "topics": [
+      "refine"
+    ],
+    "body": "I have a rough idea and I want to dial it in before any work happens — like plan mode in Codex/Claude Code. {TASK}\n\nWork with me in this order, and do NOT start executing until I approve the plan:\n1. Restate what you think I'm asking for, in your own words.\n2. List your assumptions and the unknowns that would change the approach.\n3. Ask me up to 3 clarifying questions — the ones whose answers matter most.\n4. Propose 2-3 approaches with trade-offs and recommend one.\n5. Write a short numbered plan for the recommended approach, with what done looks like for each step.\n6. Wait for my approval, then execute one step at a time, checking in after each.\n\nWhat I know so far: {INPUTS}\nConstraints: {CONSTRAINTS}"
   },
   "troubleshoot": {
     "name": "Troubleshoot / fix it",

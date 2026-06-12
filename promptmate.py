@@ -27,8 +27,8 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 APP_NAME = "PromptMate"
-APP_VERSION = "0.4.0"
-CONTENT_VERSION = "2026.06.4"
+APP_VERSION = "0.5.0"
+CONTENT_VERSION = "2026.06.5"
 
 # ---------------------------------------------------------------------------
 # User data locations (never inside the install folder)
@@ -304,6 +304,20 @@ KEYWORD_TOPICS = {
               "wont start", "won't start", "error when", "fails", "failing",
               "freezes", "frozen", "keep dropping", "keep disconnecting",
               "keeps disconnecting", "very slow"],
+    "notion": ["notion"],
+    "zoom": ["zoom", "webinar", "meeting recording", "transcript"],
+    "google": ["google workspace", "gmail", "google drive", "google admin",
+               "gsuite", "g suite", "google groups", "google calendar",
+               "google docs", "google sheets"],
+    "slack": ["slack"],
+    "github": ["github", "pull request", "branch protection", "repo settings",
+               "github actions", "gitlab"],
+    "servicenow": ["servicenow", "service now", "cmdb", "service catalog"],
+    "automation": ["power automate", "zapier", "logic app", "logic apps",
+                   "make.com", "workflow automation", "automate this"],
+    "refine": ["dial in", "refine", "brainstorm", "requirements",
+               "not sure how to ask", "help me ask", "improve my prompt",
+               "scope this out", "think through"],
 }
 
 
@@ -466,19 +480,40 @@ PROMPT_TEMPLATES = {
         "destination": "ChatGPT web",
         "topics": ["workspace_agent"],
         "body": (
-            "Design a ChatGPT workspace agent. {TASK}\n\n"
-            "The agent definition must include:\n"
-            "- Purpose and scope (what it does and does NOT do)\n"
-            "- Allowed tools and forbidden actions\n"
-            "- Memory/context strategy (memory is supplemental — durable "
-            "source-of-truth files win)\n"
-            "- Self-learning as local reflection notes, not uncontrolled autonomy\n"
-            "- Instruction-bloat control: review and slim instructions regularly\n"
-            "- Harness/task-contract workflow (scope, inputs, tools, constraints, "
-            "outputs, verification)\n"
-            "- Verification requirements before claiming completion\n"
-            "- Handoff behavior when work remains\n\n"
-            "Constraints: {CONSTRAINTS}"
+            "Design a ChatGPT workspace agent and write its complete "
+            "instructions, ready to paste. {TASK}\n\n"
+            "Most people skip the parts that make agents actually useful, so "
+            "the instructions you produce MUST contain all of these sections, "
+            "fully written out (not just mentioned):\n\n"
+            "1. PURPOSE & SCOPE — one sentence of purpose, an explicit "
+            "out-of-scope list, allowed tools, forbidden actions.\n\n"
+            "2. MEMORY SYSTEM — the agent keeps a small set of named memory "
+            "notes (e.g. 'preferences', 'project-context', 'decisions'). "
+            "Rules: record only stable reusable facts; convert relative "
+            "dates to absolute; durable source-of-truth files always win "
+            "over memory; prune stale entries when touched. Include the "
+            "exact instruction text for when to read and when to update "
+            "memory.\n\n"
+            "3. SELF-REFLECTION LOOP — after each completed task the agent "
+            "writes a 3-line reflection: what worked, what to reuse, what "
+            "to change next time. Reflections feed memory and skills, not "
+            "uncontrolled behavior changes.\n\n"
+            "4. SKILL MAKER — when the agent notices the same kind of task "
+            "for the third time, it proposes a named skill: trigger, "
+            "inputs, numbered steps, verification. Skills get saved and "
+            "reused instead of re-deriving the workflow.\n\n"
+            "5. TASK CONTRACT — every piece of work starts with scope, "
+            "inputs, constraints, outputs, and verification; the agent "
+            "plans first and confirms before executing anything big.\n\n"
+            "6. VERIFICATION & HANDOFF — never claim completion without "
+            "stating what was checked; if work remains, leave a handoff "
+            "note with exact next steps.\n\n"
+            "7. INSTRUCTION HYGIENE — once a month (or when instructions "
+            "feel bloated) the agent proposes deletions: redundant rules, "
+            "stale references, conflicting guidance.\n\n"
+            "Agent purpose and context: {INPUTS}\nConstraints: {CONSTRAINTS}\n\n"
+            "Output the final agent instructions as one copy-ready block, "
+            "then a short note on how to test the agent with 3 sample tasks."
         ),
     },
     "harness_setup": {
@@ -817,6 +852,28 @@ PROMPT_TEMPLATES = {
             "Ticket context: {INPUTS}\nConstraints: {CONSTRAINTS}"
         ),
     },
+    "dial_in": {
+        "name": "Dial in the ask (plan first)",
+        "destination": "Both",
+        "topics": ["refine"],
+        "body": (
+            "I have a rough idea and I want to dial it in before any work "
+            "happens — like plan mode in Codex/Claude Code. {TASK}\n\n"
+            "Work with me in this order, and do NOT start executing until I "
+            "approve the plan:\n"
+            "1. Restate what you think I'm asking for, in your own words.\n"
+            "2. List your assumptions and the unknowns that would change the "
+            "approach.\n"
+            "3. Ask me up to 3 clarifying questions — the ones whose answers "
+            "matter most.\n"
+            "4. Propose 2-3 approaches with trade-offs and recommend one.\n"
+            "5. Write a short numbered plan for the recommended approach, "
+            "with what done looks like for each step.\n"
+            "6. Wait for my approval, then execute one step at a time, "
+            "checking in after each.\n\n"
+            "What I know so far: {INPUTS}\nConstraints: {CONSTRAINTS}"
+        ),
+    },
     "troubleshoot": {
         "name": "Troubleshoot / fix it",
         "destination": "Both",
@@ -1108,6 +1165,94 @@ AGENT_MODULES = {
             "recently, test likely causes cheapest-first, change one variable "
             "at a time, and verify the fix with the affected user before "
             "closing. Never guess-and-reinstall."
+        ),
+    },
+    "plan_first": {
+        "name": "Plan-First Agent",
+        "topics": ["refine"],
+        "body": (
+            "Before doing any work: restate the goal in your own words, list "
+            "assumptions and unknowns, ask up to 3 clarifying questions if "
+            "anything is ambiguous, then propose a short numbered plan and "
+            "wait for approval. After approval, execute one step at a time "
+            "and check in at each milestone rather than doing everything at "
+            "once."
+        ),
+    },
+    "notion": {
+        "name": "Notion Agent",
+        "topics": ["notion"],
+        "body": (
+            "Act as a Notion workspace specialist. Choose databases over "
+            "loose pages when items repeat; design properties, views, and "
+            "relations before adding content; use templates for recurring "
+            "entries; and keep a tidy sidebar — every new structure needs an "
+            "owner and a reason to exist."
+        ),
+    },
+    "zoom": {
+        "name": "Zoom Agent",
+        "topics": ["zoom"],
+        "body": (
+            "Act as a Zoom admin/meetings specialist: meeting vs webinar "
+            "trade-offs, registration and security settings (waiting rooms, "
+            "passcodes), recording storage and retention, and turning "
+            "recordings/transcripts into minutes, action items, and "
+            "follow-ups."
+        ),
+    },
+    "google_workspace": {
+        "name": "Google Workspace Agent",
+        "topics": ["google"],
+        "body": (
+            "Act as a Google Workspace administrator. Give both the Admin "
+            "console path and the API/GAM command equivalent, scope changes "
+            "to the right OU or group, mind propagation delays, and call out "
+            "Drive sharing implications (internal vs external, shared "
+            "drives vs my drive) for anything touching files."
+        ),
+    },
+    "slack": {
+        "name": "Slack Agent",
+        "topics": ["slack"],
+        "body": (
+            "Act as a Slack admin specialist: channel naming and lifecycle "
+            "conventions, public-by-default with documented exceptions, app "
+            "and integration permission review before install, retention "
+            "policy awareness, and workflow automations for recurring asks."
+        ),
+    },
+    "github": {
+        "name": "GitHub Agent",
+        "topics": ["github"],
+        "body": (
+            "Act as a GitHub administrator and reviewer: branch protection "
+            "with required reviews on anything production, least-privilege "
+            "tokens and fine-grained PATs over classic, secrets in Actions "
+            "secrets never in code, and PR descriptions that explain why, "
+            "not just what."
+        ),
+    },
+    "servicenow": {
+        "name": "ServiceNow Agent",
+        "topics": ["servicenow"],
+        "body": (
+            "Act as a ServiceNow specialist: pick the right record type "
+            "(incident vs request vs change), keep work notes vs customer "
+            "comments straight, link the affected CI, and keep state "
+            "transitions honest — a ticket's history should let anyone "
+            "reconstruct what happened."
+        ),
+    },
+    "automation_platforms": {
+        "name": "Automation Platform Agent",
+        "topics": ["automation"],
+        "body": (
+            "Act as a Power Automate/Zapier/Logic Apps builder: idempotent "
+            "flows, explicit error handling and retry policies, connection "
+            "references owned by a service account not a person, throttling "
+            "awareness, and a kill switch — every flow needs an owner and a "
+            "way to turn it off."
         ),
     },
 }
@@ -1533,6 +1678,102 @@ SKILL_TEMPLATES = {
             "Apply the fix, verify with the affected user, document in the ticket.",
         ],
     },
+    "notion_system": {
+        "name": "Notion system design skill",
+        "topics": ["notion"],
+        "body": "Build a Notion database/system that stays usable: model, views, templates, owner.",
+        "steps": [
+            "Define what each row represents and who updates it.",
+            "Design properties first (status, owner, dates, relations) — not content.",
+            "Create the views people actually need (by status, by owner, calendar).",
+            "Add a template for new entries so structure survives real use.",
+            "Assign an owner and a review date; archive what nobody updates.",
+        ],
+    },
+    "meeting_summary": {
+        "name": "Meeting recording to actions skill",
+        "topics": ["zoom", "reporting"],
+        "body": "Turn a Zoom/Teams recording or transcript into minutes, decisions, and owned actions.",
+        "steps": [
+            "Get the transcript; note attendees and the meeting's purpose.",
+            "Pull out decisions made, separating them from discussion.",
+            "List action items with owner and due date; flag unowned ones.",
+            "Write a 5-line summary for non-attendees.",
+            "Post to the agreed place (channel/page/ticket) and tag owners.",
+        ],
+    },
+    "google_admin_change": {
+        "name": "Google Workspace change skill",
+        "topics": ["google"],
+        "body": "Make a Workspace admin change safely: scope to OU/group, verify, document.",
+        "steps": [
+            "Confirm the change, the OU/group scope, and the approver.",
+            "Note the current setting (your rollback) before touching anything.",
+            "Apply via Admin console or GAM; prefer group/OU over per-user.",
+            "Wait out propagation; verify with an affected test account.",
+            "Record the change, scope, and rollback in the ticket.",
+        ],
+    },
+    "slack_setup": {
+        "name": "Slack channel/integration skill",
+        "topics": ["slack"],
+        "body": "Set up channels and integrations with governance: naming, purpose, permissions.",
+        "steps": [
+            "Confirm purpose and audience; check an existing channel doesn't cover it.",
+            "Name per convention; set topic/description and channel owner.",
+            "Review any app/integration permissions before installing.",
+            "Set posting permissions and retention appropriate to the content.",
+            "Announce where relevant and add to the channel directory/index.",
+        ],
+    },
+    "github_repo": {
+        "name": "GitHub repo setup skill",
+        "topics": ["github"],
+        "body": "Stand up a repo with protections: access, branch rules, CI, secrets hygiene.",
+        "steps": [
+            "Create the repo with a README stating purpose and owner.",
+            "Set team-based access (least privilege; no individual collaborators).",
+            "Protect the default branch: required reviews, status checks.",
+            "Wire up CI and put credentials in Actions secrets, never code.",
+            "Add CODEOWNERS and a PR template so reviews route correctly.",
+        ],
+    },
+    "servicenow_flow": {
+        "name": "ServiceNow ticket workflow skill",
+        "topics": ["servicenow"],
+        "body": "Work a SNOW record properly: right type, clean updates, honest states, linked CI.",
+        "steps": [
+            "Pick the right record type: incident, request, or change.",
+            "Link the affected CI and fill the real assignment group.",
+            "Keep work notes (internal) and customer comments (external) straight.",
+            "Update state only when the work actually moves; no state-parking.",
+            "Resolve with a cause and fix description a stranger could follow.",
+        ],
+    },
+    "flow_build": {
+        "name": "Automation flow build skill",
+        "topics": ["automation"],
+        "body": "Build a Power Automate/Zapier flow that survives production: errors, owners, kill switch.",
+        "steps": [
+            "Define trigger, inputs, and the exact end state in one sentence.",
+            "Build with a service-account connection, not a personal one.",
+            "Add error handling: retries, failure notifications, dead-letter step.",
+            "Test the unhappy paths (empty input, throttling, permission denied).",
+            "Document owner, purpose, and how to disable it; review quarterly.",
+        ],
+    },
+    "dial_in": {
+        "name": "Dial-in-the-ask skill",
+        "topics": ["refine"],
+        "body": "Turn a vague idea into a sharp request: goal, context, constraints, done criteria.",
+        "steps": [
+            "Write the goal in one sentence a stranger would understand.",
+            "List what the assistant needs to know (context, examples, current state).",
+            "State constraints: tools, time, format, what must NOT change.",
+            "Define what done looks like — measurable if possible.",
+            "Ask the assistant to plan first and confirm before executing.",
+        ],
+    },
 }
 
 CONTEXT_CHECKLIST_BY_TOPIC = {
@@ -1559,6 +1800,14 @@ CONTEXT_CHECKLIST_BY_TOPIC = {
     "backup": ["Backup product and scope", "RTO/RPO targets", "Last successful restore test date"],
     "vendor": ["Product name and version", "Case number (if existing)", "Logs/diagnostics already collected"],
     "fixit": ["Exact error message or screenshot text", "Who is affected and since when", "What changed recently (updates, policy, password)"],
+    "notion": ["Workspace/page where it should live", "Database properties or page structure needed", "Who needs access"],
+    "zoom": ["Meeting/webinar details or recording link", "Account/license type", "Expected audience size"],
+    "google": ["Domain or OU in scope", "Affected users/groups", "Admin role you hold"],
+    "slack": ["Workspace and channel names", "Apps/integrations involved", "Retention or governance rules"],
+    "github": ["Org/repo name", "Branch and protection rules in play", "Who needs what access level"],
+    "servicenow": ["Instance and table (incident/request/change)", "Assignment group", "Related CI / CMDB record"],
+    "automation": ["Trigger event and source system", "Target systems and connectors", "What should happen on failure"],
+    "refine": ["The rough idea in your own words", "What done looks like", "Constraints (time, tools, approvals)"],
 }
 
 GENERIC_CHECKLIST = [
@@ -1593,10 +1842,10 @@ def recommend(text: str) -> dict:
 
     modules = sorted((k for k, m in AGENT_MODULES.items() if topic_score(m) > 0),
                      key=lambda k: -topic_score(AGENT_MODULES[k]))
-    if "harness" not in modules:
-        modules.append("harness")
-    if "validation" not in modules:
-        modules.append("validation")
+    # Always-on backbone: plan before doing, work to a contract, verify.
+    for default in ("plan_first", "harness", "validation"):
+        if default not in modules:
+            modules.append(default)
 
     skills = sorted((k for k, s in SKILL_TEMPLATES.items() if topic_score(s) > 0),
                     key=lambda k: -topic_score(SKILL_TEMPLATES[k]))
@@ -1769,12 +2018,6 @@ class PromptMateApp:
 
         ttk.Label(top, text="🐾 PromptMate", font=("Segoe UI", 14, "bold")).pack(side="left")
 
-        ttk.Label(top, text="Team:").pack(side="left", padx=(20, 4))
-        self.team_var = tk.StringVar(value="IT")
-        team_box = ttk.Combobox(top, textvariable=self.team_var, state="readonly",
-                                values=["IT"], width=14)
-        team_box.pack(side="left")
-
         self.update_label = ttk.Label(top, text=f"App v{APP_VERSION} · Content {CONTENT_VERSION} · Up to date",
                                       foreground="#2a7a2a")
         self.update_label.pack(side="right")
@@ -1841,6 +2084,15 @@ class PromptMateApp:
         for s in SKILL_TEMPLATES.values():
             self.skill_list.insert("end", s["name"])
 
+        detail_frame = ttk.LabelFrame(rec_frame, text="Details (click a module or skill to read it)",
+                                      padding=4)
+        detail_frame.pack(fill="x", pady=(6, 0))
+        self.detail_text = tk.Text(detail_frame, height=6, wrap="word", state="disabled",
+                                   font=("Segoe UI", 9), background="#f7f7f7", relief="flat")
+        self.detail_text.pack(fill="x")
+        self.module_list.bind("<ButtonRelease-1>", lambda e: self._show_detail(e, "module"))
+        self.skill_list.bind("<ButtonRelease-1>", lambda e: self._show_detail(e, "skill"))
+
         ctx_frame = ttk.LabelFrame(rec_frame, text="Context checklist (tick what you can provide)", padding=4)
         ctx_frame.pack(fill="x", pady=(6, 0))
         self.ctx_inner = ttk.Frame(ctx_frame)
@@ -1868,6 +2120,24 @@ class PromptMateApp:
         ttk.Button(out_btns, text="💾 Save Prompt", command=self._save).pack(side="left", padx=6)
         self.status_label = ttk.Label(out_btns, text="")
         self.status_label.pack(side="left", padx=10)
+
+    def _show_detail(self, event, kind):
+        lb = event.widget
+        idx = lb.nearest(event.y)
+        if idx < 0:
+            return
+        if kind == "module":
+            item = list(AGENT_MODULES.values())[idx]
+            text = f"{item['name']}\n\n{item['body']}"
+        else:
+            item = list(SKILL_TEMPLATES.values())[idx]
+            text = f"{item['name']}\n\n{item['body']}"
+            if item.get("steps"):
+                text += "\n" + "\n".join(f"{i}. {s}" for i, s in enumerate(item["steps"], 1))
+        self.detail_text.config(state="normal")
+        self.detail_text.delete("1.0", "end")
+        self.detail_text.insert("1.0", text)
+        self.detail_text.config(state="disabled")
 
     # ---- Spell underline + right-click suggestions -----------------------
 
@@ -2012,13 +2282,12 @@ class PromptMateApp:
     # ---- Settings ----------------------------------------------------------
 
     def _load_settings(self):
-        settings = load_json(SETTINGS_FILE, {})
-        self.team_var.set(settings.get("team", "IT"))
+        pass  # nothing editor-specific to restore right now
 
     def _save_settings(self):
         # Merge, don't overwrite — the pet overlay stores its position here too.
         settings = load_json(SETTINGS_FILE, {})
-        settings.update({"team": self.team_var.get(), "app_version": APP_VERSION})
+        settings.update({"app_version": APP_VERSION})
         save_json(SETTINGS_FILE, settings)
 
     def on_close(self):
@@ -2794,13 +3063,20 @@ class ChatWindow:
         avatar = frame.subsample(factor, factor)
         # The sprite carries the magenta transparency key; punch those pixels
         # out so the avatar sits cleanly on the header background.
+        # PhotoImage.get() may return a tuple of ints or a "r g b" string
+        # depending on the Tcl layer, so normalize before comparing.
         key = tuple(int(self.pet.sprites.key[i:i + 2], 16) for i in (1, 3, 5))
         try:
             for y in range(avatar.height()):
                 for x in range(avatar.width()):
-                    if avatar.get(x, y) == key:
+                    px = avatar.get(x, y)
+                    if isinstance(px, str):
+                        px = tuple(int(v) for v in px.split())
+                    else:
+                        px = tuple(int(v) for v in px)
+                    if px[:3] == key:
                         avatar.transparency_set(x, y, True)
-        except tk.TclError:
+        except (tk.TclError, ValueError):
             pass
         return avatar
 

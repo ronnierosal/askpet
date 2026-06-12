@@ -24,6 +24,20 @@ ask for one.
 
 ## What's new
 
+**0.5.0** (2026-06-11)
+- Tool coverage: agent modules and skills for Notion, Zoom, Google
+  Workspace, Slack, GitHub, ServiceNow, and Power Automate/Zapier
+  (35 templates / 35 modules / 43 skills).
+- Plan-first by default: every generated prompt now includes a Plan-First
+  module (restate, ask, plan, wait for approval) — like plan mode in
+  Codex/Claude Code — plus a "Dial in the ask" template for vague ideas.
+- The ChatGPT workspace-agent template now writes complete agent
+  instructions including a memory system, self-reflection loop, skill
+  maker, task contracts, and instruction hygiene — the parts people
+  don't know to ask for.
+- Editor: click any module or skill to read its full text; team dropdown
+  removed; chat avatar transparency actually fixed.
+
 **0.4.0** (2026-06-11)
 - The pet now asks follow-up questions when your message is short or
   ambiguous ("Who's affected — one user or everyone?"), then folds your

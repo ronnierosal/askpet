@@ -504,5 +504,118 @@
       "Test likely causes cheapest-first, one variable at a time.",
       "Apply the fix, verify with the affected user, document in the ticket."
     ]
+  },
+  "notion_system": {
+    "name": "Notion system design skill",
+    "topics": [
+      "notion"
+    ],
+    "body": "Build a Notion database/system that stays usable: model, views, templates, owner.",
+    "steps": [
+      "Define what each row represents and who updates it.",
+      "Design properties first (status, owner, dates, relations) — not content.",
+      "Create the views people actually need (by status, by owner, calendar).",
+      "Add a template for new entries so structure survives real use.",
+      "Assign an owner and a review date; archive what nobody updates."
+    ]
+  },
+  "meeting_summary": {
+    "name": "Meeting recording to actions skill",
+    "topics": [
+      "zoom",
+      "reporting"
+    ],
+    "body": "Turn a Zoom/Teams recording or transcript into minutes, decisions, and owned actions.",
+    "steps": [
+      "Get the transcript; note attendees and the meeting's purpose.",
+      "Pull out decisions made, separating them from discussion.",
+      "List action items with owner and due date; flag unowned ones.",
+      "Write a 5-line summary for non-attendees.",
+      "Post to the agreed place (channel/page/ticket) and tag owners."
+    ]
+  },
+  "google_admin_change": {
+    "name": "Google Workspace change skill",
+    "topics": [
+      "google"
+    ],
+    "body": "Make a Workspace admin change safely: scope to OU/group, verify, document.",
+    "steps": [
+      "Confirm the change, the OU/group scope, and the approver.",
+      "Note the current setting (your rollback) before touching anything.",
+      "Apply via Admin console or GAM; prefer group/OU over per-user.",
+      "Wait out propagation; verify with an affected test account.",
+      "Record the change, scope, and rollback in the ticket."
+    ]
+  },
+  "slack_setup": {
+    "name": "Slack channel/integration skill",
+    "topics": [
+      "slack"
+    ],
+    "body": "Set up channels and integrations with governance: naming, purpose, permissions.",
+    "steps": [
+      "Confirm purpose and audience; check an existing channel doesn't cover it.",
+      "Name per convention; set topic/description and channel owner.",
+      "Review any app/integration permissions before installing.",
+      "Set posting permissions and retention appropriate to the content.",
+      "Announce where relevant and add to the channel directory/index."
+    ]
+  },
+  "github_repo": {
+    "name": "GitHub repo setup skill",
+    "topics": [
+      "github"
+    ],
+    "body": "Stand up a repo with protections: access, branch rules, CI, secrets hygiene.",
+    "steps": [
+      "Create the repo with a README stating purpose and owner.",
+      "Set team-based access (least privilege; no individual collaborators).",
+      "Protect the default branch: required reviews, status checks.",
+      "Wire up CI and put credentials in Actions secrets, never code.",
+      "Add CODEOWNERS and a PR template so reviews route correctly."
+    ]
+  },
+  "servicenow_flow": {
+    "name": "ServiceNow ticket workflow skill",
+    "topics": [
+      "servicenow"
+    ],
+    "body": "Work a SNOW record properly: right type, clean updates, honest states, linked CI.",
+    "steps": [
+      "Pick the right record type: incident, request, or change.",
+      "Link the affected CI and fill the real assignment group.",
+      "Keep work notes (internal) and customer comments (external) straight.",
+      "Update state only when the work actually moves; no state-parking.",
+      "Resolve with a cause and fix description a stranger could follow."
+    ]
+  },
+  "flow_build": {
+    "name": "Automation flow build skill",
+    "topics": [
+      "automation"
+    ],
+    "body": "Build a Power Automate/Zapier flow that survives production: errors, owners, kill switch.",
+    "steps": [
+      "Define trigger, inputs, and the exact end state in one sentence.",
+      "Build with a service-account connection, not a personal one.",
+      "Add error handling: retries, failure notifications, dead-letter step.",
+      "Test the unhappy paths (empty input, throttling, permission denied).",
+      "Document owner, purpose, and how to disable it; review quarterly."
+    ]
+  },
+  "dial_in": {
+    "name": "Dial-in-the-ask skill",
+    "topics": [
+      "refine"
+    ],
+    "body": "Turn a vague idea into a sharp request: goal, context, constraints, done criteria.",
+    "steps": [
+      "Write the goal in one sentence a stranger would understand.",
+      "List what the assistant needs to know (context, examples, current state).",
+      "State constraints: tools, time, format, what must NOT change.",
+      "Define what done looks like — measurable if possible.",
+      "Ask the assistant to plan first and confirm before executing."
+    ]
   }
 }

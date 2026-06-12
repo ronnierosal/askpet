@@ -16,6 +16,12 @@ cases = [
     "kql query to find devices that havent checked in for 30 days",
     "draft a change request for the firewall maintenance window",
     "offboard a terminated user and capture evidence",
+    "set up a notion database to track our hardware inventory",
+    "build a power automate flow that posts new jira tickets to slack",
+    "create a github repo for our powershell scripts with branch protection",
+    "help me dial in a request for rebuilding our intune packaging process",
+    "summarize this zoom recording into action items",
+    "i want a chatgpt workspace agent for writing our weekly status reports",
 ]
 for raw in cases:
     cleaned = pm.clean_text(raw, spell)
