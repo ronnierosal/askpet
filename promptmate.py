@@ -30,7 +30,7 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 APP_NAME = "PromptMate"
-APP_VERSION = "0.18.0"
+APP_VERSION = "0.19.0"
 CONTENT_VERSION = "2026.06.16"
 
 # ---------------------------------------------------------------------------
@@ -56,7 +56,9 @@ LEARNED_FILE = DATA_DIR / "learned-corrections.json"
 
 def load_json(path: Path, default):
     try:
-        with open(path, "r", encoding="utf-8") as f:
+        # utf-8-sig: tolerate a BOM from external editors/scripts — a
+        # rejected settings file silently resets every user preference.
+        with open(path, "r", encoding="utf-8-sig") as f:
             return json.load(f)
     except (OSError, ValueError):
         return default
@@ -4587,14 +4589,38 @@ HELP_TOPICS = {
                      "need internet", "cloud ai", "which ai do you use",
                      "what ai do you use", "use chatgpt yourself"],
         "answer": [
-            "Everything I do runs 100% locally on this machine — no cloud "
-            "AI, no API calls, no telemetry, no account. I build prompts "
-            "with local keyword matching, not by sending your text "
-            "anywhere.",
+            "Everything I do runs 100% on this machine — no cloud AI, no "
+            "telemetry, no account. I build prompts with local keyword "
+            "matching, and if Local AI is on, answers come from a model "
+            "running on YOUR PC (Ollama on localhost) — your text never "
+            "leaves the machine either way.",
             "The only time I touch the network is when YOU ask me to: "
-            "downloading a new pet look from codex-pets.net. Your prompts, "
-            "history, and settings live in %LOCALAPPDATA%\\PromptMate "
-            "(Windows) and never leave the machine. 🐾",
+            "downloading a new pet look from codex-pets.net, or talking to "
+            "a local model via Ollama on YOUR machine (localhost) if you've "
+            "enabled Local AI. Your prompts, history, and settings live in "
+            "%LOCALAPPDATA%\\PromptMate (Windows) and never leave the "
+            "machine. 🐾",
+        ],
+    },
+    "local_ai_help": {
+        "keywords": ["local ai", "ollama", "gemma", "local model",
+                     "answer locally", "answer questions yourself",
+                     "use a local model", "use a local llm", "use a local ai",
+                     "offline model", "which model do you"],
+        "answer": [
+            "If Ollama is installed (ollama.com) with a model like Gemma, "
+            "I can answer light asks myself — fully offline:\n"
+            "• Rewrites — “rewrite this to sound professional: …”\n"
+            "• Summaries — “summarize this: …” (paste the text)\n"
+            "• Email drafts — “write an email asking…”\n"
+            "• Quick questions — anything question-shaped\n\n"
+            "Bigger work (code, scripts, multi-step tasks) still gets a "
+            "proper prompt for Codex, Claude Code, ChatGPT, or Claude — a "
+            "small local model shouldn't pretend to do that.",
+            "Right-click me → ✨ Local AI to turn it on/off or pick which "
+            "installed model I use. Every local answer is labeled with the "
+            "model that wrote it. Small models are handy but not brilliant "
+            "— double-check anything important. 🐾",
         ],
     },
     "promptmate_help": {
@@ -4834,8 +4860,9 @@ The full editor (below) gives you fine-grained control:
 6. Click "Copy to Clipboard" and paste it into Codex or ChatGPT web.
 7. "Save Prompt" stores it in your local history.
 
-Everything runs locally. No cloud AI, no API calls, no telemetry.
-Your data lives in:
+Everything runs locally. No cloud AI, no telemetry. Optional Local AI
+answers come from Ollama on this machine (localhost) — nothing leaves
+your PC. Your data lives in:
   Windows: %LOCALAPPDATA%\\PromptMate\\
   macOS:   ~/Library/Application Support/PromptMate/
 """
@@ -5190,6 +5217,133 @@ def fetch_pet_info(pet_id: str) -> dict:
     return data.get("pet", data)
 
 
+# ---------------------------------------------------------------------------
+# Local AI (Ollama): the pet can answer light asks itself — rewrites,
+# summaries, email drafts, quick questions — fully offline via a local
+# model like Gemma. Optional: everything degrades to prompt-building when
+# Ollama isn't running. Stdlib only, same as the rest of the app.
+# ---------------------------------------------------------------------------
+
+OLLAMA_BASE = "http://localhost:11434"
+
+
+def ollama_models(timeout: int = 3) -> list:
+    """Names of locally installed Ollama models; [] if Ollama isn't up."""
+    try:
+        data = json.loads(_http_get(f"{OLLAMA_BASE}/api/tags", timeout=timeout))
+        return [m["name"] for m in data.get("models", [])]
+    except (urllib.error.URLError, OSError, ValueError, KeyError):
+        return []
+
+
+def pick_local_model(models: list, preferred: str = None) -> str:
+    """The user's saved choice if still installed, else prefer Gemma."""
+    if preferred and preferred in models:
+        return preferred
+    for m in models:
+        if m.lower().startswith("gemma"):
+            return m
+    return models[0] if models else ""
+
+
+def ollama_chat_stream(model: str, system: str, user: str, on_chunk,
+                       timeout: int = 300, cancel: "threading.Event" = None) -> str:
+    """Stream a chat response; on_chunk(text) fires per token batch.
+
+    Generous timeout: the first call after idle loads the model into
+    memory. keep_alive holds it warm for subsequent asks. Setting the
+    cancel event aborts the read; leaving the with-block closes the
+    connection, which makes Ollama stop generating server-side.
+    """
+    body = json.dumps({
+        "model": model,
+        "messages": [{"role": "system", "content": system},
+                     {"role": "user", "content": user}],
+        "stream": True,
+        "keep_alive": "30m",
+    }).encode("utf-8")
+    req = urllib.request.Request(OLLAMA_BASE + "/api/chat", data=body,
+                                 headers={"Content-Type": "application/json"})
+    parts = []
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        for line in resp:
+            if cancel is not None and cancel.is_set():
+                raise RuntimeError("cancelled")
+            d = json.loads(line)
+            if d.get("error"):
+                raise RuntimeError(d["error"])
+            piece = d.get("message", {}).get("content", "")
+            if piece:
+                parts.append(piece)
+                on_chunk(piece)
+            if d.get("done"):
+                break
+    return "".join(parts)
+
+
+LOCAL_AI_LANES = {
+    "rewrite": (
+        "You are a precise writing editor. Rewrite the user's text as "
+        "requested (clearer, more professional, shorter — whatever they "
+        "ask). Preserve the meaning and every name, date, and number. "
+        "Reply with ONLY the rewritten text — no preamble, no options, "
+        "no commentary."
+    ),
+    "email": (
+        "You draft workplace emails. Output 'Subject: ...' on the first "
+        "line, then the body. The point goes in the first sentence, one "
+        "clear ask, under 150 words, professional but warm. Reply with "
+        "ONLY the email — no commentary."
+    ),
+    "summarize": (
+        "You summarize text. Lead with the single key point in one "
+        "sentence, then at most 5 short bullets of essentials. Preserve "
+        "names, dates, and numbers exactly. Reply with ONLY the summary."
+    ),
+    "answer": (
+        "You are PromptMate's local assistant, a small model running "
+        "fully offline on the user's own PC. Answer directly and "
+        "concisely — a few sentences, short bullets only if listing. "
+        "If you are not confident, say so plainly rather than guessing. "
+        "No filler, no preamble."
+    ),
+}
+
+
+# The email lane is for DRAFTING; inbox-triage/management asks should get
+# a proper prompt instead of a surprise email draft.
+EMAIL_DRAFT_VERBS = ("draft", "write an email", "write a email", "reply",
+                     "respond", "decline", "compose", "email asking",
+                     "follow up email", "follow-up email", "email to",
+                     "email my", "email the", "out of office")
+
+
+def local_ai_lane(raw: str, rec: dict):
+    """Which local-AI lane should answer this message, or None to use the
+    standard prompt-building flow. Pure routing — checks nothing about
+    whether a model is actually available."""
+    # Anything execution-flavored gets a prompt, not a small-model answer.
+    # "Both" means execution is part of the job, so it's excluded too.
+    if rec["destination"] != "ChatGPT web" or rec["codex_score"] >= 2:
+        return None
+    topics = set(rec["topics"])
+    lw = raw.strip().lower()
+    # Rewrite/summarize need the actual text in the message; a bare
+    # "summarize this" should fall through so the clarifying question
+    # asks for the material.
+    has_payload = len(lw.split()) > 12 or ":" in raw or "\n" in raw
+    if "email_drafting" in topics and any(v in lw for v in EMAIL_DRAFT_VERBS):
+        return "email"
+    if "summarize" in topics and has_payload:
+        return "summarize"
+    if "writing" in topics and has_payload:
+        return "rewrite"
+    question_shaped = lw.endswith("?") or lw.startswith(QUESTION_STARTERS)
+    if question_shaped:
+        return "answer"
+    return None
+
+
 def search_pets(query: str) -> list:
     """Server-side catalog search (matches name/creator/tags site-wide)."""
     q = urllib.parse.quote(query)
@@ -5428,6 +5582,11 @@ class PetOverlay:
         self.settings = load_json(SETTINGS_FILE, {})
         prune_history(history_retention_hours(self.settings))
 
+        # Local AI: detect installed Ollama models off the UI thread.
+        self.local_models = []
+        self.local_ai_enabled = bool(self.settings.get("local_ai_enabled", True))
+        self._refresh_local_models()
+
         ensure_default_pet()
         self.scale = max(1, int(self.settings.get("pet_scale", 2)))  # medium default
         self.pet_id = self.settings.get("pet_id", "kogi")
@@ -5659,6 +5818,27 @@ class PetOverlay:
         hist_menu.add_command(label="🧹 Clear history now",
                               command=self.clear_history_now)
         menu.add_cascade(label="🕘 Prompt history", menu=hist_menu)
+        ai_menu = tk.Menu(menu, tearoff=0)
+        if self.local_models:
+            check = " ✓" if self.local_ai_enabled else ""
+            ai_menu.add_command(label=f"Answer light asks locally{check}",
+                                command=self._toggle_local_ai)
+            ai_menu.add_separator()
+            current_model = self.local_model()
+            for m in self.local_models:
+                mark = " ✓" if m == current_model else ""
+                ai_menu.add_command(label=f"{m}{mark}",
+                                    command=lambda mm=m: self.set_local_model(mm))
+            ai_menu.add_separator()
+            ai_menu.add_command(label="Refresh model list",
+                                command=self._refresh_local_models)
+        else:
+            ai_menu.add_command(label="Ollama not detected", state="disabled")
+            ai_menu.add_command(label="Get it at ollama.com",
+                                command=lambda: webbrowser.open("https://ollama.com"))
+            ai_menu.add_command(label="Check again",
+                                command=self._refresh_local_models)
+        menu.add_cascade(label="✨ Local AI", menu=ai_menu)
         menu.add_separator()
         label = "Stop wandering" if self.wander else "Allow wandering"
         menu.add_command(label=f"🐾 {label}", command=self._toggle_wander)
@@ -5722,6 +5902,29 @@ class PetOverlay:
                        "credited on their pet.").pack(anchor="w", pady=(8, 0))
         ttk.Button(frame, text="Close",
                    command=win.destroy).pack(anchor="e", pady=(12, 0))
+
+    # ---- local AI -------------------------------------------------------------
+
+    def _refresh_local_models(self):
+        def worker():
+            self.local_models = ollama_models()
+        threading.Thread(target=worker, daemon=True).start()
+
+    def local_model(self) -> str:
+        return pick_local_model(self.local_models,
+                                self.settings.get("local_ai_model"))
+
+    def local_ai_ready(self) -> bool:
+        return self.local_ai_enabled and bool(self.local_models)
+
+    def _toggle_local_ai(self):
+        self.local_ai_enabled = not self.local_ai_enabled
+        self.settings["local_ai_enabled"] = self.local_ai_enabled
+        self._save_settings()
+
+    def set_local_model(self, model: str):
+        self.settings["local_ai_model"] = model
+        self._save_settings()
 
     def set_history_retention(self, hours: int):
         self.settings["history_retention_hours"] = hours
@@ -5818,7 +6021,9 @@ class PetOverlay:
         disk["pet_scale"] = self.scale
         disk["pet_id"] = self.pet_id
         disk["pet_wander"] = self.wander
-        for key in ("pet_x", "pet_y"):
+        for key in ("pet_x", "pet_y", "history_retention_hours",
+                    "local_ai_enabled", "local_ai_model",
+                    "local_ai_intro_shown"):
             if key in self.settings:
                 disk[key] = self.settings[key]
         disk["app_version"] = APP_VERSION
@@ -6165,6 +6370,7 @@ class ChatWindow:
         self.messages = []     # (kind, text) history, re-flowed on resize
         self._frames = []      # embedded button frames, destroyed on re-flow
         self._typing = False
+        self._ai_busy = False  # one local-AI stream at a time
         self._y = 12
         self._cw = 440         # canvas width used for the current layout
         self._resize_job = None
@@ -6215,6 +6421,14 @@ class ChatWindow:
         self._add("caption", datetime.now().strftime("Today %H:%M"))
         self._add("pet", CHAT_GREETING)
         self.entry.focus_set()
+        # A destroyed window cancels its pending after() callbacks, so the
+        # poll loop can't do this cleanup itself.
+        self._ai_req = None
+        win.bind("<Destroy>", self._on_destroy)
+
+    def _on_destroy(self, event):
+        if event.widget is self.win and self._ai_req:
+            self._ai_req["cancel"].set()
 
     # ---- header --------------------------------------------------------------
 
@@ -6363,6 +6577,8 @@ class ChatWindow:
             self._draw_bubble(text, "left", "#f2f2f7", "#1c1c1e",
                               font=("Consolas", 8))
             self._draw_actions()
+        elif kind == "actions":
+            self._draw_actions(payload=text)
 
     def _draw_chips(self, items):
         """Clickable module/skill chips, two per row; click shows the text."""
@@ -6417,15 +6633,35 @@ class ChatWindow:
                                 fill=fg, width=maxw, anchor="nw")
         self._finish(by2)
 
-    def _draw_actions(self):
+    def _draw_actions(self, payload=None):
+        # Without a payload the buttons act on self.last (the prompt flow);
+        # with one (local-AI answers) they act on that answer forever, no
+        # matter what gets generated later.
         btns = tk.Frame(self.canvas, bg=self.BG)
-        for label, cmd in (("📋 Copy", self._copy_last), ("💾 Save", self._save_last),
-                           ("🛠 Adjust in editor", self._open_in_editor)):
+        if payload is None:
+            actions = (("📋 Copy", self._copy_last), ("💾 Save", self._save_last),
+                       ("🛠 Adjust in editor", self._open_in_editor))
+        else:
+            actions = (("📋 Copy", lambda: self._copy_payload(payload)),
+                       ("💾 Save", lambda: self._save_payload(payload)),
+                       ("🛠 Adjust in editor",
+                        lambda: self.pet.open_editor(prefill=payload[0])))
+        for label, cmd in actions:
             ttk.Button(btns, text=label, command=cmd).pack(side="left", padx=(0, 4))
         self._frames.append(btns)
         item = self.canvas.create_window(12, self._y, window=btns, anchor="nw")
         self.win.update_idletasks()
         self._finish(self.canvas.bbox(item)[3])
+
+    def _copy_payload(self, payload):
+        self.win.clipboard_clear()
+        self.win.clipboard_append(payload[3])
+        self._add("pet", "Copied — ready to paste. ✅")
+        self.pet.celebrate()
+
+    def _save_payload(self, payload):
+        save_history_entry(*payload)
+        self._add("pet", "Saved to your local history. 💾")
 
     def _draw_typing(self):
         self._round_rect(12, self._y, 64, self._y + 30, r=15,
@@ -6477,6 +6713,16 @@ class ChatWindow:
             return
         cleaned = clean_text(raw, self.spell)
         rec = recommend(cleaned)
+        # Light asks (rewrites, summaries, emails, quick questions) get
+        # answered right here by the local model when one is available.
+        if self.pet.local_ai_ready() and not self._ai_busy:
+            lane = local_ai_lane(raw, rec)
+            if lane:
+                self._local_ai_request(lane, raw, cleaned, rec)
+                return
+        self._standard_request(raw, cleaned, rec)
+
+    def _standard_request(self, raw, cleaned, rec):
         questions = clarifying_questions(cleaned, rec)
         if questions:
             self.pending = {"raw": raw, "answers": [], "questions": questions, "qi": 0}
@@ -6484,6 +6730,127 @@ class ChatWindow:
             self.win.after(random.randint(400, 800), self._ask_next_question)
         else:
             self._generate(raw, [])
+
+    # ---- local AI lane ---------------------------------------------------------
+
+    # Poll ticks are 120ms: allow 180s for the first chunk (cold model
+    # load) and 60s for a stall mid-stream before abandoning.
+    AI_FIRST_CHUNK_TICKS = 1500
+    AI_STALL_TICKS = 500
+
+    def _local_ai_request(self, lane, raw, cleaned, rec):
+        model = self.pet.local_model()
+        if not model:  # model list changed under us
+            self._standard_request(raw, cleaned, rec)
+            return
+        self._ai_busy = True
+        req = {
+            "lane": lane, "raw": raw, "cleaned": cleaned, "rec": rec,
+            "model": model, "events": [], "cancel": threading.Event(),
+            "msg_index": None, "caption_index": None, "buffer": "",
+            "idle_ticks": 0,
+            "user_count": sum(1 for k, _ in self.messages if k == "user"),
+        }
+        self._ai_req = req
+        if not self.pet.settings.get("local_ai_intro_shown"):
+            self.pet.settings["local_ai_intro_shown"] = True
+            self.pet._save_settings()
+            self._add("caption",
+                      f"✨ New: I answer light asks like this one myself, using "
+                      f"{model} fully on this PC. First answer can take a "
+                      f"minute while the model warms up. Right-click me → "
+                      f"Local AI to turn this off.")
+        self._show_typing()
+
+        def worker():
+            try:
+                # The RAW text goes to the model: typo-fixing and alias
+                # expansion must never rewrite content being edited
+                # ("ps" inside an email is not "PowerShell").
+                text = ollama_chat_stream(
+                    model, LOCAL_AI_LANES[lane], raw,
+                    on_chunk=lambda p: req["events"].append(("chunk", p)),
+                    cancel=req["cancel"])
+                req["events"].append(("done", text))
+            except Exception as e:  # any failure falls back to prompt flow
+                req["events"].append(("error", str(e)))
+
+        threading.Thread(target=worker, daemon=True).start()
+        self._poll_local_ai(req)
+
+    def _poll_local_ai(self, req):
+        if not self.is_open():
+            req["cancel"].set()  # stop the worker and Ollama's generation
+            self._ai_busy = False
+            return
+        got_chunk = False
+        while req["events"]:
+            kind, payload = req["events"].pop(0)
+            req["idle_ticks"] = 0
+            if kind == "chunk":
+                if req["msg_index"] is None:
+                    self._hide_typing()
+                    self._add("caption",
+                              f"✨ answered locally by {req['model']}")
+                    req["caption_index"] = len(self.messages) - 1
+                    self._add("pet", "")
+                    req["msg_index"] = len(self.messages) - 1
+                req["buffer"] += payload
+                got_chunk = True
+            elif kind == "done":
+                self._finish_local_ai(req, payload)
+                return
+            else:  # error
+                self._abandon_local_ai(req)
+                return
+        if got_chunk:
+            self.messages[req["msg_index"]] = ("pet", req["buffer"] + " ▌")
+            self._render_all()
+            self.messages[req["msg_index"]] = ("pet", req["buffer"])
+        else:
+            req["idle_ticks"] += 1
+            limit = (self.AI_STALL_TICKS if req["msg_index"] is not None
+                     else self.AI_FIRST_CHUNK_TICKS)
+            if req["idle_ticks"] > limit:
+                req["cancel"].set()
+                self._abandon_local_ai(req)
+                return
+        self.win.after(120, lambda: self._poll_local_ai(req))
+
+    def _finish_local_ai(self, req, payload):
+        self._ai_busy = False
+        final = (payload or "").strip() or req["buffer"].strip()
+        if req["msg_index"] is None or not final:  # empty answer = failure
+            self._abandon_local_ai(req)
+            return
+        self.messages[req["msg_index"]] = ("pet", final)
+        if req["lane"] in ("rewrite", "email", "summarize"):
+            # The action row carries its own payload: a later prompt
+            # changing self.last must not change what these buttons copy.
+            self.messages.append(
+                ("actions", (req["raw"], req["cleaned"], req["rec"], final)))
+        self._render_all()
+
+    def _abandon_local_ai(self, req):
+        """Clean up a failed/cancelled stream without clobbering anything
+        the user did since: remove the partial answer, and only fall back
+        to prompt-building if the conversation hasn't moved on."""
+        self._ai_busy = False
+        self._hide_typing()
+        self.pet._refresh_local_models()  # self-heal if Ollama went away
+        for idx in sorted((i for i in (req["msg_index"], req["caption_index"])
+                           if i is not None), reverse=True):
+            if idx < len(self.messages):
+                del self.messages[idx]
+        self._render_all()
+        user_count = sum(1 for k, _ in self.messages if k == "user")
+        superseded = self.pending is not None or user_count > req["user_count"]
+        if superseded:
+            self._add("caption", "(local AI couldn't answer the earlier ask)")
+            return
+        self._add("caption",
+                  "Local AI didn't answer — building you a prompt instead.")
+        self._standard_request(req["raw"], req["cleaned"], req["rec"])
 
     def _deliver_help(self, bubbles):
         if not self.is_open():

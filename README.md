@@ -41,6 +41,24 @@ still fully local.
 
 ## What's new
 
+**0.19.0** (2026-06-12)
+- Local AI: with Ollama installed (ollama.com) and a model like Gemma,
+  the pet answers light asks itself — fully on your machine. Rewrites
+  ("rewrite this to sound professional: …"), summaries, email drafts,
+  and quick questions stream straight into the chat, labeled with the
+  model that answered. Copy/Save buttons appear under rewrites.
+- Heavier work still gets a proper prompt: anything execution-shaped
+  routes to Codex/Claude Code/ChatGPT/Claude exactly as before, and if
+  the local model fails or stalls, the pet quietly falls back to
+  building you a prompt.
+- Right-click the pet → ✨ Local AI to toggle it, pick which installed
+  model to use, or refresh the model list. Off-by-absence: no Ollama,
+  no change.
+- Privacy unchanged: Ollama traffic is localhost-only; nothing leaves
+  the machine.
+- Fixed: settings for history retention (0.18.0) now persist across
+  restarts.
+
 **0.18.0** (2026-06-12)
 - Prompt history with retention: every generated prompt is now saved
   automatically and expires after 3 days by default. Right-click the

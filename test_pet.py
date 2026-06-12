@@ -1,6 +1,14 @@
 """Pet overlay + chat smoke test (window flashes briefly). Run: python test_pet.py"""
+import atexit
 import tkinter as tk
 import promptmate as pm
+
+# This test drives a real PetOverlay, which saves to the REAL settings
+# file. Snapshot it and restore on exit (even on assert failure) so a
+# test run never changes the user's pet, size, position, or toggles.
+_settings_backup = pm.SETTINGS_FILE.read_bytes() if pm.SETTINGS_FILE.exists() else None
+atexit.register(lambda: pm.SETTINGS_FILE.write_bytes(_settings_backup)
+                if _settings_backup else None)
 
 root = tk.Tk()
 pet = pm.PetOverlay(root)

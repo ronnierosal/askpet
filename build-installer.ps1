@@ -1,9 +1,12 @@
 # Build PromptMate.exe and the Windows installer.
-# Usage:  powershell -ExecutionPolicy Bypass -File build-installer.ps1
+# Usage:  powershell -ExecutionPolicy Bypass -File build-installer.ps1 [-NoSign]
 # Output: installer\PromptMate-Setup-<version>.exe
 #
 # Code signing: if a code-signing cert is present (e.g. on a YubiKey),
 # both the app exe and the installer are signed. Expect PIN prompts.
+# -NoSign builds an unsigned test version (no PIN prompts).
+
+param([switch]$NoSign)
 
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
@@ -20,6 +23,10 @@ $cert = Get-ChildItem Cert:\CurrentUser\My -CodeSigningCert -ErrorAction Silentl
 $timestampUrl = "http://ts.ssl.com"
 
 function Sign-File($path) {
+    if ($NoSign) {
+        Write-Host "  (signing skipped - NoSign test build)"
+        return
+    }
     if (-not $signtool -or -not $cert) {
         Write-Host "  (signing skipped - no signtool or certificate found)"
         return
@@ -33,6 +40,7 @@ Write-Host "== 1/4 Running tests =="
 & $python test_logic.py | Out-Null
 & $python test_history.py | Select-Object -Last 1
 & $python test_spell.py | Select-Object -Last 1
+& $python test_local_ai.py | Select-Object -Last 1
 & $python test_gui.py | Select-Object -Last 1
 & $python test_pet.py | Select-Object -Last 1
 

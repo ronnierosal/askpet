@@ -1,8 +1,14 @@
 """Pet store integration test — hits codex-pets.net (network required).
 Run: python test_petstore.py
 """
+import atexit
 import tkinter as tk
 import promptmate as pm
+
+# Restore the user's real settings on exit — this test switches pets.
+_settings_backup = pm.SETTINGS_FILE.read_bytes() if pm.SETTINGS_FILE.exists() else None
+atexit.register(lambda: pm.SETTINGS_FILE.write_bytes(_settings_backup)
+                if _settings_backup else None)
 
 # Catalog fetch
 pets = pm.fetch_pet_page(1)
