@@ -5708,10 +5708,6 @@ class PetOverlay:
         ttk.Separator(frame).pack(fill="x", pady=10)
         ttk.Label(frame, text="Created by Ronnie Rosal",
                   font=("Segoe UI", 10, "bold")).pack(anchor="w")
-        ttk.Label(frame, wraplength=400, justify="left", text=(
-            "IT backend / systems administrator who builds practical tools "
-            "for everyday work. PromptMate is developed in the open with "
-            "AI pair-programming, one user request at a time.")).pack(anchor="w")
 
         def link(text, url):
             lbl = ttk.Label(frame, text=text, foreground="#0b93f6",
