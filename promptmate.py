@@ -27,8 +27,8 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 APP_NAME = "PromptMate"
-APP_VERSION = "0.12.0"
-CONTENT_VERSION = "2026.06.11"
+APP_VERSION = "0.13.0"
+CONTENT_VERSION = "2026.06.12"
 
 # ---------------------------------------------------------------------------
 # User data locations (never inside the install folder)
@@ -3017,6 +3017,184 @@ def recommend(text: str) -> dict:
     }
 
 
+# ---------------------------------------------------------------------------
+# Best-practices knowledge base: the pet answers questions about prompting,
+# context, handoffs, and PromptMate itself instead of generating a prompt.
+# ---------------------------------------------------------------------------
+
+HELP_TOPICS = {
+    "context_basics": {
+        "keywords": ["what context", "context should", "how much context",
+                     "context to include", "context do i", "good context",
+                     "context matter", "context best"],
+        "answer": [
+            "Context is the single biggest lever you have — a mediocre ask "
+            "with great context beats a perfect ask with none. The AI only "
+            "knows what's in the conversation; it can't see your screen, "
+            "your files, or your last chat.",
+            "What to include:\n"
+            "• The actual material — paste error messages, transcripts, and "
+            "file contents, don't describe them\n"
+            "• Exact names: systems, versions, file paths, ticket numbers\n"
+            "• What you already tried and what happened\n"
+            "• What done looks like\n\n"
+            "What to leave out: history that doesn't change the answer, and "
+            "anything you'd have to say 'ignore that part' about. Lean and "
+            "specific beats long and vague.",
+        ],
+    },
+    "context_clearing": {
+        "keywords": ["clear context", "clearing context", "start fresh",
+                     "when should i start a new", "chat too long",
+                     "chat is too long", "reset the chat", "clear the chat",
+                     "new conversation", "stale context"],
+        "answer": [
+            "Start a fresh chat when the old context starts hurting more "
+            "than helping. Signs it's time:\n"
+            "• The assistant keeps referring back to abandoned approaches\n"
+            "• You're correcting the same misunderstanding repeatedly\n"
+            "• The topic has genuinely changed\n"
+            "• Responses get slower, vaguer, or contradict earlier answers",
+            "Don't just abandon the chat though — do a handoff first: ask it "
+            "to summarize objective, current state, decisions made, and next "
+            "steps into one block, then seed the new chat with it. Ask me to "
+            "build you a handoff prompt and I'll set it up. 🐾",
+        ],
+    },
+    "handoff_howto": {
+        "keywords": ["handoff", "hand off", "move to a new chat",
+                     "continue in a new", "carry over to"],
+        "answer": [
+            "A handoff moves work to a fresh chat without losing what the "
+            "old one knew. The flow:\n"
+            "1. Ask the CURRENT chat for a handoff block: objective, current "
+            "state, decisions made, in-flight work, next steps, gotchas — "
+            "all in one code block\n"
+            "2. Read it before trusting it — assistants summarize their own "
+            "work optimistically; fix what's wrong or missing\n"
+            "3. Add exact identifiers the new chat can't guess (paths, "
+            "versions, URLs)\n"
+            "4. Paste it as the FIRST message of the new chat and ask it to "
+            "confirm understanding before doing anything",
+            "Type something like “make me a handoff prompt” and I'll "
+            "generate the full template for you.",
+        ],
+    },
+    "prompt_basics": {
+        "keywords": ["good prompt", "better prompt", "prompt tips",
+                     "write prompts", "write a good", "best practice",
+                     "best practices", "prompting", "improve my prompts"],
+        "answer": [
+            "The prompts that work share four parts:\n"
+            "• GOAL — one sentence a stranger would understand\n"
+            "• CONTEXT — the real material (errors, files, names), pasted "
+            "not described\n"
+            "• CONSTRAINTS — tools, format, what must NOT change\n"
+            "• DONE — what a good result looks like, measurable if possible",
+            "Three habits that beat any template:\n"
+            "1. Plan first — ask the AI to restate the task and propose a "
+            "plan before doing work; you catch misunderstandings early\n"
+            "2. One task per ask — bundled requests get half-answers\n"
+            "3. Show an example — one example of the output you want beats "
+            "three paragraphs describing it\n\n"
+            "That's exactly what I build into every prompt here — describe "
+            "a task and I'll show you. 🐾",
+        ],
+    },
+    "destination_choice": {
+        "keywords": ["codex or chatgpt", "chatgpt or claude", "which assistant",
+                     "which ai should", "where should i ask", "claude code or",
+                     "when to use codex", "when to use claude"],
+        "answer": [
+            "Rule of thumb:\n"
+            "• Codex / Claude Code — hands-on execution: code, scripts, "
+            "files, repos, testing, anything that touches a machine\n"
+            "• ChatGPT / Claude — thinking and writing: planning, "
+            "architecture, docs, analysis, drafts\n"
+            "• Both — plan it in ChatGPT/Claude first, then hand the "
+            "approved plan to Codex/Claude Code to execute",
+            "I recommend a destination automatically with every prompt I "
+            "build — that's the “Send it to” line in my replies.",
+        ],
+    },
+    "plan_first_why": {
+        "keywords": ["plan first", "plan mode", "why plan", "plan before"],
+        "answer": [
+            "Plan-first means the AI restates your goal, lists assumptions, "
+            "asks its questions, and proposes a numbered plan BEFORE doing "
+            "any work — like plan mode in Codex and Claude Code.",
+            "Why it's worth the extra step: misunderstandings get caught "
+            "when they cost one message, not after 200 lines of wrong code. "
+            "Every prompt I generate includes a Plan-First module by "
+            "default; you'll see the AI check in with you before executing.",
+        ],
+    },
+    "verify_output": {
+        "keywords": ["trust the answer", "hallucinat", "verify the answer",
+                     "double check the ai", "ai is wrong", "made up",
+                     "check its work"],
+        "answer": [
+            "Treat AI output like work from a fast, confident junior: "
+            "usually right, occasionally confidently wrong.\n"
+            "• Numbers, names, links, commands — verify against the source "
+            "before acting\n"
+            "• Code/scripts — run on ONE test target before wide use\n"
+            "• Claims about your environment — the AI can't see it; it's "
+            "pattern-matching\n"
+            "• Ask “what are you least sure about in that answer?” — "
+            "surprisingly effective",
+            "My prompts bake in a Validation module for exactly this: the "
+            "AI has to state what it checked before claiming done.",
+        ],
+    },
+    "promptmate_help": {
+        "keywords": ["promptmate", "what can you do", "how do you work",
+                     "how do i use you", "what do you do", "help me use",
+                     "what are skills", "what are modules", "what are agent"],
+        "answer": [
+            "Here's how I work: describe a task — typos and shorthand are "
+            "fine — and I'll figure out what you need, ask a question or "
+            "two if your message is short, then build a copy-ready prompt "
+            "for Codex, Claude Code, ChatGPT, or Claude.",
+            "What's in my replies:\n"
+            "• Send it to — which assistant fits the task\n"
+            "• Template — the prompt structure (45 of them)\n"
+            "• Chips — the agent modules (expert instructions) and skills "
+            "(step-by-step workflows) I baked in; tap one to read it\n"
+            "• The prompt itself — Copy, Save, or Adjust in editor",
+            "Other tricks: say “skip” to skip my questions; right-click me "
+            "for the full editor, pet sizes, and 2,000+ other pets; ask me "
+            "about prompting best practices anytime — context, handoffs, "
+            "when to start a fresh chat. 🐾",
+        ],
+    },
+}
+
+QUESTION_STARTERS = ("how ", "what ", "whats ", "what's ", "when ", "why ",
+                     "should ", "can you explain", "do i ", "does ", "is it ",
+                     "any tips", "tips on", "tell me about", "help me understand")
+
+
+def answer_help_question(text: str):
+    """Match a best-practices/help question to a knowledge-base answer.
+
+    Returns the answer (list of chat bubbles) or None. Only fires for
+    question-shaped messages so task requests still generate prompts.
+    """
+    lw = text.strip().lower()
+    is_question = lw.endswith("?") or lw.startswith(QUESTION_STARTERS)
+    if not is_question:
+        return None
+    best_key, best_hits = None, 0
+    for key, entry in HELP_TOPICS.items():
+        hits = sum(1 for k in entry["keywords"] if k in lw)
+        if hits > best_hits:
+            best_key, best_hits = key, hits
+    if best_key is None:
+        return None
+    return HELP_TOPICS[best_key]["answer"]
+
+
 def clarifying_questions(cleaned: str, rec: dict) -> list:
     """Decide what to ask before generating, for short/ambiguous requests.
 
@@ -4179,7 +4357,9 @@ CHAT_GREETING = (
     "Hi! Tell me what you're working on — even just a sentence, typos and "
     "shorthand are fine. I might ask a question or two to fill in the gaps, "
     "then I'll build you a copy-ready prompt for Codex, Claude Code, "
-    "ChatGPT, or Claude."
+    "ChatGPT, or Claude.\n\nYou can also ask me questions — like “what makes "
+    "a good prompt?”, “how do I do a handoff?”, or “when should I start a "
+    "fresh chat?”"
 )
 
 SKIP_WORDS = {"skip", "idk", "i dont know", "i don't know", "not sure",
@@ -4509,6 +4689,14 @@ class ChatWindow:
     # ---- follow-up question flow ---------------------------------------------
 
     def _start_request(self, raw):
+        # Question about prompting/PromptMate? Answer it instead of
+        # generating a prompt.
+        help_answer = answer_help_question(raw)
+        if help_answer:
+            self._show_typing()
+            self.win.after(random.randint(400, 800),
+                           lambda: self._deliver_help(help_answer))
+            return
         cleaned = clean_text(raw, self.spell)
         rec = recommend(cleaned)
         questions = clarifying_questions(cleaned, rec)
@@ -4518,6 +4706,13 @@ class ChatWindow:
             self.win.after(random.randint(400, 800), self._ask_next_question)
         else:
             self._generate(raw, [])
+
+    def _deliver_help(self, bubbles):
+        if not self.is_open():
+            return
+        self._hide_typing()
+        for text in bubbles:
+            self._add("pet", text)
 
     def _ask_next_question(self):
         if not self.is_open() or not self.pending:

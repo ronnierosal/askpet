@@ -108,6 +108,21 @@ chat.send()
 assert chat.pending is None and chat.last is not None
 print("skip flow OK")
 
+# Help questions get knowledge-base answers, not generated prompts
+n_before = len(chat.messages)
+chat.entry.insert("1.0", "what makes a good prompt?")
+chat.send()
+chat._deliver_help(pm.answer_help_question("what makes a good prompt?"))
+assert chat.pending is None, "help question should not trigger Q&A"
+assert any("GOAL" in (m[1] or "") for m in chat.messages[n_before:]), "expected best-practices answer"
+assert pm.answer_help_question("how do i do a handoff to a new chat?") is not None
+assert pm.answer_help_question("when should i clear context and start fresh?") is not None
+assert pm.answer_help_question("what can you do?") is not None
+# Task requests must NOT be hijacked by the help KB
+assert pm.answer_help_question("write a prompt for an intune deployment") is None
+assert pm.answer_help_question("explain how conditional access works in simple terms") is None
+print("help knowledge base OK")
+
 # Clickable module/skill chips appear after the reply and show their text
 chat._deliver_reply(chat.last[1], chat.last[2], chat.last[3])
 chip_msgs = [m for m in chat.messages if m[0] == "chips"]

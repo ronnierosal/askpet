@@ -24,6 +24,14 @@ ask for one.
 
 ## What's new
 
+**0.13.0** (2026-06-11)
+- Ask the pet questions: a built-in best-practices knowledge base answers
+  questions about context (what to include, when it hurts), handoffs,
+  when to clear/start a fresh chat, what makes a good prompt, choosing an
+  assistant, plan-first, verifying AI output, and how PromptMate itself
+  works. Question-shaped messages get answers; task descriptions still
+  generate prompts.
+
 **0.12.0** (2026-06-11)
 - Chat handoff support: a template + skill for moving long AI chats to a
   fresh session — generates a single-code-block summary (objective, state,
