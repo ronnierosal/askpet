@@ -13,6 +13,7 @@ import base64
 import difflib
 import io
 import json
+import math
 import os
 import random
 import re
@@ -48,6 +49,7 @@ def user_data_dir() -> Path:
 
 
 DATA_DIR = user_data_dir()
+KNOWLEDGE_DIR = DATA_DIR / "knowledge"
 SETTINGS_FILE = DATA_DIR / "settings.json"
 HISTORY_FILE = DATA_DIR / "prompt-history.json"
 CUSTOM_DICT_FILE = DATA_DIR / "custom-dictionary.json"
@@ -417,7 +419,10 @@ KEYWORD_TOPICS = {
                "scope this out", "think through"],
     "writing": ["rewrite", "reword", "proofread", "edit this", "polish",
                 "make this sound", "tone", "shorten this", "translate",
-                "make it professional", "grammar check"],
+                "make it professional", "grammar check", "make this clearer",
+                "make this friendlier", "make this more", "fix the grammar",
+                "fix my grammar", "fix the spelling", "fix this sentence",
+                "make this shorter", "tighten this"],
     "excel": ["excel", "spreadsheet", "formula", "pivot", "vlookup",
               "xlookup", "sumif", "conditional formatting"],
     "helpdesk": ["password reset", "reset password", "locked out",
@@ -553,7 +558,8 @@ KEYWORD_TOPICS = {
                        "follow up email", "follow-up email", "cold email",
                        "decline politely", "email reply", "out of office message",
                        "email asking", "email my", "email the", "inbox",
-                       "unread email", "email backlog", "triage my email"],
+                       "unread email", "email backlog", "triage my email",
+                       "thank you email", "thank-you email"],
     "meeting_prep": ["meeting prep", "briefing", "brief me", "agenda",
                      "talking points", "one on one", "1:1", "1 on 1",
                      "prep for a meeting", "prep for my meeting",
@@ -4621,6 +4627,11 @@ HELP_TOPICS = {
             "installed model I use. Every local answer is labeled with the "
             "model that wrote it. Small models are handy but not brilliant "
             "— double-check anything important. 🐾",
+            "Power move: knowledge packs. Build one from a YouTube "
+            "channel's transcripts (build_knowledge_pack.py in the repo) "
+            "and I'll ground my answers in that creator's actual content — "
+            "with credit — for hobby topics like FPV drones. Packs stay on "
+            "this machine, personal use only.",
         ],
     },
     "promptmate_help": {
@@ -5261,6 +5272,9 @@ def ollama_chat_stream(model: str, system: str, user: str, on_chunk,
                      {"role": "user", "content": user}],
         "stream": True,
         "keep_alive": "30m",
+        # Low temperature: editing and factual lanes want faithful output,
+        # and small models invent details when sampling runs hot.
+        "options": {"temperature": 0.3, "num_predict": 600},
     }).encode("utf-8")
     req = urllib.request.Request(OLLAMA_BASE + "/api/chat", data=body,
                                  headers={"Content-Type": "application/json"})
@@ -5285,15 +5299,19 @@ LOCAL_AI_LANES = {
     "rewrite": (
         "You are a precise writing editor. Rewrite the user's text as "
         "requested (clearer, more professional, shorter — whatever they "
-        "ask). Preserve the meaning and every name, date, and number. "
-        "Reply with ONLY the rewritten text — no preamble, no options, "
-        "no commentary."
+        "ask). Hard rules: every name, number, date, time, and amount "
+        "from the original appears in the rewrite unchanged; never add "
+        "facts, reasons, or details that are not in the original; keep "
+        "the original intent exactly. Reply with ONLY the rewritten "
+        "text — no preamble, no options, no commentary."
     ),
     "email": (
-        "You draft workplace emails. Output 'Subject: ...' on the first "
-        "line, then the body. The point goes in the first sentence, one "
-        "clear ask, under 150 words, professional but warm. Reply with "
-        "ONLY the email — no commentary."
+        "You draft workplace emails. Your reply ALWAYS starts with "
+        "'Subject: ' on the first line, then a blank line, then the "
+        "body. The point goes in the first sentence, one clear ask, "
+        "under 150 words, professional but warm. Keep every name, "
+        "date, time, and amount the user gave exactly. Reply with ONLY "
+        "the email — no commentary."
     ),
     "summarize": (
         "You summarize text. Lead with the single key point in one "
@@ -5318,27 +5336,175 @@ EMAIL_DRAFT_VERBS = ("draft", "write an email", "write a email", "reply",
                      "email my", "email the", "out of office")
 
 
+# ---------------------------------------------------------------------------
+# Knowledge packs: local transcript collections (built with
+# build_knowledge_pack.py) that ground local-AI answers in real source
+# material — e.g. an FPV pack from a YouTube channel's videos. Content
+# lives only in the user-data dir; creators are credited in answers.
+# ---------------------------------------------------------------------------
+
+_KNOWLEDGE_PACKS = None
+KNOWLEDGE_STOPWORDS = set(
+    """the a an and or of to in on for with is are was were be been being it
+    its this that these those what which how why when where who whats i im
+    you your my me we our do does did can could should would will about any
+    have has had get got like just really very there here they them their
+    not no yes if then than but so at by as from out up down all some más
+    one two going want know think make made need say said see going gonna
+    """.split()
+)
+
+
+def knowledge_packs() -> list:
+    """Load all installed knowledge packs once; [] when none exist."""
+    global _KNOWLEDGE_PACKS
+    if _KNOWLEDGE_PACKS is None:
+        packs = []
+        try:
+            for d in sorted(KNOWLEDGE_DIR.iterdir()):
+                meta = load_json(d / "pack.json", None)
+                chunks = load_json(d / "chunks.json", None)
+                if meta and chunks and meta.get("keywords"):
+                    meta["chunks"] = chunks
+                    packs.append(meta)
+        except OSError:
+            pass
+        _KNOWLEDGE_PACKS = packs
+    return _KNOWLEDGE_PACKS
+
+
+def knowledge_pack_for(text: str):
+    """The first pack whose keywords match the message, else None."""
+    lw = text.lower()
+    for p in knowledge_packs():
+        if any(re.search(r"\b" + re.escape(k.lower()), lw)
+               for k in p["keywords"]):
+            return p
+    return None
+
+
+def _pack_index(pack: dict):
+    """Lazy per-pack search index: lowercase chunk text + word idf."""
+    if "_xl" not in pack:
+        pack["_xl"] = [c["x"].lower() for c in pack["chunks"]]
+        df = {}
+        for xl in pack["_xl"]:
+            for w in set(re.findall(r"[a-z0-9]+", xl)):
+                df[w] = df.get(w, 0) + 1
+        n = max(1, len(pack["_xl"]))
+        pack["_idf"] = {w: math.log(n / (1 + c)) + 1 for w, c in df.items()}
+    return pack
+
+
+def knowledge_retrieve(pack: dict, query: str, k: int = 4) -> list:
+    """Top-k chunks for a query: term frequency × rarity, stdlib only."""
+    _pack_index(pack)
+    words = [w for w in re.findall(r"[a-z0-9]+", query.lower())
+             if len(w) > 2 and w not in KNOWLEDGE_STOPWORDS]
+    if not words:
+        return []
+    scored = []
+    for i, xl in enumerate(pack["_xl"]):
+        s, distinct = 0.0, 0
+        for w in words:
+            # singular/plural tolerant: "motors" matches "motor" and back
+            hits = xl.count(w)
+            alt = w[:-1] if w.endswith("s") else w + "s"
+            hits += xl.count(alt)
+            if hits:
+                distinct += 1
+                s += min(hits, 3) * max(pack["_idf"].get(w, 1.0),
+                                        pack["_idf"].get(alt, 0))
+        # Relevance floor: a single shared word isn't grounding for a real
+        # question — better to fall back to the plain answer lane than to
+        # quote something irrelevant at the model.
+        need = 2 if len(words) >= 3 else 1
+        if s > 0 and distinct >= need:
+            scored.append((s, i))
+    scored.sort(key=lambda t: -t[0])
+    if not scored:
+        return []
+    floor = scored[0][0] * 0.3
+    return [pack["chunks"][i] for s, i in scored[:k] if s >= floor]
+
+
+def knowledge_system_prompt(pack: dict, query: str):
+    """Grounded system prompt for the answer lane, or None if the pack
+    has nothing relevant (caller falls back to the plain answer lane)."""
+    chunks = knowledge_retrieve(pack, query)
+    if not chunks:
+        return None
+    seen_titles = []
+    parts = []
+    for c in chunks:
+        if c["t"] not in seen_titles:
+            seen_titles.append(c["t"])
+        parts.append(f"[from: {c['t']}]\n{c['x']}")
+    excerpts = "\n\n".join(parts)
+    return (
+        "You are PromptMate's local assistant running fully offline. "
+        f"Answer the user's question using the source excerpts below — "
+        f"video transcripts from {pack['credit']} — as your primary "
+        "reference. Prefer what the sources say over your own general "
+        "knowledge; if the excerpts don't cover the question, say so "
+        "plainly and give your best general answer labeled as such. "
+        "Mention which video the information comes from when relevant. "
+        "Be concise: a few sentences or short bullets.\n\n"
+        "=== SOURCE EXCERPTS ===\n" + excerpts
+    )
+
+
+# Instruction openers that unambiguously mean "edit this text" — they get
+# the rewrite lane even when the payload's words trip execution signals
+# ("fix the grammar: ... send me the report" must not score as a fix task).
+REWRITE_OPENERS = ("rewrite", "reword", "proofread", "shorten this",
+                   "fix the grammar", "fix my grammar", "fix the spelling",
+                   "fix this sentence", "make this", "tighten this",
+                   "polish this", "edit this")
+
+
 def local_ai_lane(raw: str, rec: dict):
     """Which local-AI lane should answer this message, or None to use the
     standard prompt-building flow. Pure routing — checks nothing about
     whether a model is actually available."""
-    # Anything execution-flavored gets a prompt, not a small-model answer.
-    # "Both" means execution is part of the job, so it's excluded too.
-    if rec["destination"] != "ChatGPT web" or rec["codex_score"] >= 2:
-        return None
-    topics = set(rec["topics"])
     lw = raw.strip().lower()
     # Rewrite/summarize need the actual text in the message; a bare
     # "summarize this" should fall through so the clarifying question
     # asks for the material.
     has_payload = len(lw.split()) > 12 or ":" in raw or "\n" in raw
+    instruction = lw.split(":", 1)[0] if ":" in lw else lw
+    if has_payload and any(instruction.startswith(v) or f" {v}" in instruction
+                           for v in REWRITE_OPENERS):
+        return "rewrite"
+    # Same bypass for summaries: the CONTENT being summarized ("the
+    # migration", "the server…") must not disqualify summarizing it.
+    if has_payload and any(v in instruction for v in
+                           ("summarize", "summarise", "key points", "tldr",
+                            "tl;dr")):
+        return "summarize"
+    # Knowledge-pack questions (e.g. FPV) answer locally even when words
+    # like "fix" or "motor" trip execution signals — it's a hobby
+    # question, not an IT task.
+    question_shaped = lw.endswith("?") or lw.startswith(QUESTION_STARTERS)
+    if (question_shaped or len(lw.split()) <= 14) and knowledge_pack_for(lw):
+        return "knowledge"
+    # And for email drafting: "write an email asking the landlord to fix
+    # the AC" is an email no matter what the email is about.
+    first_words = lw.split()[:5]
+    if (first_words and first_words[0] in ("write", "draft", "compose", "send")
+            and any("email" in w for w in first_words)):
+        return "email"
+    # Anything execution-flavored gets a prompt, not a small-model answer.
+    # "Both" means execution is part of the job, so it's excluded too.
+    if rec["destination"] != "ChatGPT web" or rec["codex_score"] >= 2:
+        return None
+    topics = set(rec["topics"])
     if "email_drafting" in topics and any(v in lw for v in EMAIL_DRAFT_VERBS):
         return "email"
     if "summarize" in topics and has_payload:
         return "summarize"
     if "writing" in topics and has_payload:
         return "rewrite"
-    question_shaped = lw.endswith("?") or lw.startswith(QUESTION_STARTERS)
     if question_shaped:
         return "answer"
     return None
@@ -5832,6 +5998,13 @@ class PetOverlay:
             ai_menu.add_separator()
             ai_menu.add_command(label="Refresh model list",
                                 command=self._refresh_local_models)
+            packs = knowledge_packs()
+            if packs:
+                ai_menu.add_separator()
+                for p in packs:
+                    ai_menu.add_command(
+                        label=f"📚 {p['name']} ({p.get('videos', '?')} videos)",
+                        state="disabled")
         else:
             ai_menu.add_command(label="Ollama not detected", state="disabled")
             ai_menu.add_command(label="Get it at ollama.com",
@@ -6743,10 +6916,23 @@ class ChatWindow:
         if not model:  # model list changed under us
             self._standard_request(raw, cleaned, rec)
             return
+        # Knowledge lane: ground the answer in pack excerpts; if retrieval
+        # finds nothing relevant, degrade to the plain answer lane.
+        source_note = ""
+        if lane == "knowledge":
+            pack = knowledge_pack_for(raw)
+            system = knowledge_system_prompt(pack, raw) if pack else None
+            if system:
+                source_note = f" · sources: {pack['name']}"
+            else:
+                system = LOCAL_AI_LANES["answer"]
+        else:
+            system = LOCAL_AI_LANES[lane]
         self._ai_busy = True
         req = {
             "lane": lane, "raw": raw, "cleaned": cleaned, "rec": rec,
-            "model": model, "events": [], "cancel": threading.Event(),
+            "model": model, "system": system, "source_note": source_note,
+            "events": [], "cancel": threading.Event(),
             "msg_index": None, "caption_index": None, "buffer": "",
             "idle_ticks": 0,
             "user_count": sum(1 for k, _ in self.messages if k == "user"),
@@ -6768,7 +6954,7 @@ class ChatWindow:
                 # expansion must never rewrite content being edited
                 # ("ps" inside an email is not "PowerShell").
                 text = ollama_chat_stream(
-                    model, LOCAL_AI_LANES[lane], raw,
+                    model, req["system"], raw,
                     on_chunk=lambda p: req["events"].append(("chunk", p)),
                     cancel=req["cancel"])
                 req["events"].append(("done", text))
@@ -6791,7 +6977,8 @@ class ChatWindow:
                 if req["msg_index"] is None:
                     self._hide_typing()
                     self._add("caption",
-                              f"✨ answered locally by {req['model']}")
+                              f"✨ answered locally by {req['model']}"
+                              f"{req['source_note']}")
                     req["caption_index"] = len(self.messages) - 1
                     self._add("pet", "")
                     req["msg_index"] = len(self.messages) - 1

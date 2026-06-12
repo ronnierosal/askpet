@@ -25,3 +25,7 @@ launch-err.txt
 
 # Claude Code local settings
 .claude/settings.local.json
+
+# YouTube transcript cache (knowledge packs - personal use, never committed)
+_subs/
+gemma_battery_results*.json

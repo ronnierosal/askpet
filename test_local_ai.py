@@ -24,6 +24,13 @@ CASES = [
      "contract, and a hiring freeze starting in november", "summarize"),
     ("draft an email to decline a vendor meeting politely", "email"),
     ("write an email asking finance for the budget numbers", "email"),
+    # content words must not disqualify the ask (gemma-battery findings)
+    ("summarize this: the migration to the new server is two weeks behind "
+     "and the deploy keeps failing on the test environment", "summarize"),
+    ("fix the grammar: we cant do the deadline friday, vendor didnt ship "
+     "the parts till the 10th", "rewrite"),
+    ("write an email asking the landlord to fix the office ac", "email"),
+    ("draft a thank you email after a job interview", "email"),
     ("what does dns actually do?", "answer"),
     ("whats the difference between ram and storage", "answer"),
     ("how does mfa stop phishing?", "answer"),
