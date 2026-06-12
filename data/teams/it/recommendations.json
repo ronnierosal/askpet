@@ -704,6 +704,21 @@
       "relay",
       "meet results",
       "check-in tab"
+    ],
+    "handoff": [
+      "handoff",
+      "hand off",
+      "new chat",
+      "fresh chat",
+      "new session",
+      "context window",
+      "summarize this chat",
+      "summarize the chat",
+      "context dump",
+      "continue in another",
+      "start a new conversation",
+      "running out of context",
+      "chat is getting long"
     ]
   },
   "context_checklist_by_topic": {
@@ -1017,6 +1032,11 @@
       "Coach side or Parent side",
       "Sample PDF or data file involved",
       "Relevant AGENTS.md / BACKLOG.md entries"
+    ],
+    "handoff": [
+      "What the chat accomplished so far",
+      "Work still in flight and the next step",
+      "Decisions/constraints already settled (don't relitigate)"
     ]
   },
   "generic_checklist": [

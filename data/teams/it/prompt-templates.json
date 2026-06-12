@@ -322,6 +322,14 @@
     ],
     "body": "Help me build a local, private AI chatbot using Ollama. {TASK}\n\nEnvironment: {INPUTS}\n\nCover, in order:\n1. Model choice for my hardware — e.g. Gemma at the size/quantization my RAM/VRAM supports — with honest expectations vs cloud models\n2. Install and pull commands, and a first smoke test\n3. A system prompt for my use case: role, tone, what to refuse, knowledge limits (small local models need explicit guidance)\n4. Front end options: terminal, Open WebUI, or a small script against the localhost API — recommend one for my needs\n5. If my own documents/data should inform answers: the simplest approach that works (paste-in context first, RAG only if needed)\n6. A test script of 5-10 representative questions and what good answers look like\n\nEverything must run fully local — no cloud calls, no data leaving the machine.\n\nConstraints: {CONSTRAINTS}"
   },
+  "chat_handoff": {
+    "name": "Chat handoff summary",
+    "destination": "ChatGPT web",
+    "topics": [
+      "handoff"
+    ],
+    "body": "This conversation is getting long and I want to continue the work in a fresh chat. {TASK}\n\nWrite a handoff summary I can paste as the FIRST message of a new chat. Output it as ONE markdown code block (never split it) containing:\n\n## Objective — what we're ultimately trying to achieve, one paragraph\n## Current state — what's done and verified, what exists now (files, decisions, working pieces) with exact names/paths\n## Decisions already made — settled choices with their reasons, so the next chat doesn't relitigate them\n## In flight — what we were in the middle of, exactly where it stopped\n## Next steps — ordered, starting with the very next action\n## Gotchas — anything we learned the hard way (failed approaches, constraints, quirks)\n\nRules: be lean — facts the next chat NEEDS, not a transcript. Include exact identifiers (file paths, names, versions, URLs) since the new chat can't see this one. Convert relative dates to absolute. Don't include anything the next chat can read from files it will have access to.\n\nContext: {INPUTS}\nConstraints: {CONSTRAINTS}"
+  },
   "deckside_dev": {
     "name": "DeckSide development task",
     "destination": "Codex",

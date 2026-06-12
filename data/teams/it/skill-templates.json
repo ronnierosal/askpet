@@ -1093,6 +1093,20 @@
       "Fix the leak: tie asset updates into on/offboarding steps."
     ]
   },
+  "chat_handoff": {
+    "name": "Chat handoff skill",
+    "topics": [
+      "handoff"
+    ],
+    "body": "Move work to a fresh chat without losing context: summarize, verify, seed, confirm.",
+    "steps": [
+      "Ask the CURRENT chat for a handoff block: objective, current state, decisions made, in-flight work, next steps, gotchas — one code block.",
+      "Read it before trusting it: fix anything the assistant got wrong or omitted (it summarizes optimistically).",
+      "Add exact identifiers the new chat can't guess: file paths, versions, ticket numbers, URLs.",
+      "Paste it as the first message of the new chat and ask the assistant to confirm its understanding and the next step before doing anything.",
+      "Spot-check the new chat's first answer against a fact from the old one — catch drift early."
+    ]
+  },
   "deckside_feature": {
     "name": "DeckSide feature build skill",
     "topics": [

@@ -24,6 +24,19 @@ ask for one.
 
 ## What's new
 
+**0.12.0** (2026-06-11)
+- Chat handoff support: a template + skill for moving long AI chats to a
+  fresh session — generates a single-code-block summary (objective, state,
+  decisions made, in-flight work, next steps, gotchas) and a workflow for
+  verifying it before seeding the new chat.
+- 45 templates / 64 modules / 82 skills.
+
+**0.11.x** (2026-06-11)
+- DeckSide development support (templates/agents/skills encoding its
+  AGENTS.md rules and capability pattern); pet jitter fix on multi-monitor
+  setups; no wandering while chat is open; pet scale no longer reverts on
+  update; nap animation slowed to a doze.
+
 **0.11.0** (2026-06-11)
 - DeckSide support: a DeckSide development template plus Architect and
   Assistant Designer agents that bake in the app's AGENTS.md rules

@@ -27,8 +27,8 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 APP_NAME = "PromptMate"
-APP_VERSION = "0.11.2"
-CONTENT_VERSION = "2026.06.10"
+APP_VERSION = "0.12.0"
+CONTENT_VERSION = "2026.06.11"
 
 # ---------------------------------------------------------------------------
 # User data locations (never inside the install folder)
@@ -405,6 +405,10 @@ KEYWORD_TOPICS = {
                  "lineup", "hy-tek", "hytek", "meet manager", "swimtopia",
                  "ebsl", "champs", "swimmer", "swim team", "relay",
                  "meet results", "check-in tab"],
+    "handoff": ["handoff", "hand off", "new chat", "fresh chat", "new session",
+                "context window", "summarize this chat", "summarize the chat",
+                "context dump", "continue in another", "start a new conversation",
+                "running out of context", "chat is getting long"],
 }
 
 
@@ -1057,6 +1061,35 @@ PROMPT_TEMPLATES = {
             "good answers look like\n\n"
             "Everything must run fully local — no cloud calls, no data "
             "leaving the machine.\n\nConstraints: {CONSTRAINTS}"
+        ),
+    },
+    "chat_handoff": {
+        "name": "Chat handoff summary",
+        "destination": "ChatGPT web",
+        "topics": ["handoff"],
+        "body": (
+            "This conversation is getting long and I want to continue the "
+            "work in a fresh chat. {TASK}\n\n"
+            "Write a handoff summary I can paste as the FIRST message of a "
+            "new chat. Output it as ONE markdown code block (never split it) "
+            "containing:\n\n"
+            "## Objective — what we're ultimately trying to achieve, one "
+            "paragraph\n"
+            "## Current state — what's done and verified, what exists now "
+            "(files, decisions, working pieces) with exact names/paths\n"
+            "## Decisions already made — settled choices with their reasons, "
+            "so the next chat doesn't relitigate them\n"
+            "## In flight — what we were in the middle of, exactly where it "
+            "stopped\n"
+            "## Next steps — ordered, starting with the very next action\n"
+            "## Gotchas — anything we learned the hard way (failed "
+            "approaches, constraints, quirks)\n\n"
+            "Rules: be lean — facts the next chat NEEDS, not a transcript. "
+            "Include exact identifiers (file paths, names, versions, URLs) "
+            "since the new chat can't see this one. Convert relative dates "
+            "to absolute. Don't include anything the next chat can read "
+            "from files it will have access to.\n\n"
+            "Context: {INPUTS}\nConstraints: {CONSTRAINTS}"
         ),
     },
     "deckside_dev": {
@@ -2778,6 +2811,18 @@ SKILL_TEMPLATES = {
             "Fix the leak: tie asset updates into on/offboarding steps.",
         ],
     },
+    "chat_handoff": {
+        "name": "Chat handoff skill",
+        "topics": ["handoff"],
+        "body": "Move work to a fresh chat without losing context: summarize, verify, seed, confirm.",
+        "steps": [
+            "Ask the CURRENT chat for a handoff block: objective, current state, decisions made, in-flight work, next steps, gotchas — one code block.",
+            "Read it before trusting it: fix anything the assistant got wrong or omitted (it summarizes optimistically).",
+            "Add exact identifiers the new chat can't guess: file paths, versions, ticket numbers, URLs.",
+            "Paste it as the first message of the new chat and ask the assistant to confirm its understanding and the next step before doing anything.",
+            "Spot-check the new chat's first answer against a fact from the old one — catch drift early.",
+        ],
+    },
     "deckside_feature": {
         "name": "DeckSide feature build skill",
         "topics": ["deckside", "appdev"],
@@ -2903,6 +2948,7 @@ CONTEXT_CHECKLIST_BY_TOPIC = {
     "diagram": ["What the diagram must show (audience)", "Components and connections list", "Format needed (Mermaid/Visio/draw.io)"],
     "asset": ["Asset types in scope", "Source of truth today (sheet/RMM/Intune)", "What decision the data feeds"],
     "deckside": ["Which tab/feature (Announcer, Check-in, Dashboard, Lineup, Parent)", "Coach side or Parent side", "Sample PDF or data file involved", "Relevant AGENTS.md / BACKLOG.md entries"],
+    "handoff": ["What the chat accomplished so far", "Work still in flight and the next step", "Decisions/constraints already settled (don't relitigate)"],
 }
 
 GENERIC_CHECKLIST = [
