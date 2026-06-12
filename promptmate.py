@@ -30,7 +30,7 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 APP_NAME = "PromptMate"
-APP_VERSION = "0.17.1"
+APP_VERSION = "0.17.2"
 CONTENT_VERSION = "2026.06.16"
 
 # ---------------------------------------------------------------------------
@@ -156,11 +156,65 @@ KNOWN_WORDS.update(w.lower() for w in CORRECTIONS.values())
 KNOWN_WORDS.update(ALIASES.keys())
 for phrase in ALIASES.values():
     KNOWN_WORDS.update(w.lower() for w in phrase.split())
+# Product/brand names users type at the pet that no dictionary carries.
+KNOWN_WORDS.update(
+    """kogi promptmate codex chatgpt claude anthropic openai gemini copilot
+    notebooklm midjourney sharepoint onedrive sharegate powerpoint gmail
+    granola zoom slack notion github gitlab terraform datadog snowflake
+    fortigate sentinelone crowdstrike ninjaone connectwise screenconnect
+    servicenow workday salesforce hubspot docusign knowbe4 bitwarden
+    lastpass synology unifi ubiquiti meraki jamf veeam webex youtube
+    linkedin atlassian websites onboarding offboarding sysadmin
+    """.split()
+)
 
 
 # ---------------------------------------------------------------------------
 # Text cleanup + spell support (stdlib only)
 # ---------------------------------------------------------------------------
+
+
+# Big English dictionary (370k words, public domain - dwyl/english-words).
+# Loaded lazily; without it the checker would flag everyday words like
+# "meeting" or "calendar" because KNOWN_WORDS is only the IT seed vocab.
+_ENGLISH_WORDS = None
+_ENGLISH_BUCKETS = None  # first letter -> [words], for fast suggestions
+
+CONTRACTIONS = {
+    "don't", "doesn't", "didn't", "can't", "won't", "isn't", "aren't",
+    "wasn't", "weren't", "couldn't", "shouldn't", "wouldn't", "hasn't",
+    "haven't", "hadn't", "mustn't", "needn't", "ain't", "it's", "that's",
+    "what's", "let's", "i'm", "i've", "i'll", "i'd", "you're", "you've",
+    "you'll", "you'd", "we're", "we've", "we'll", "we'd", "they're",
+    "they've", "they'll", "they'd", "he's", "he'll", "he'd", "she's",
+    "she'll", "she'd", "there's", "here's", "who's", "how's", "where's",
+    "when's", "why's",
+}
+
+
+def english_words() -> frozenset:
+    global _ENGLISH_WORDS
+    if _ENGLISH_WORDS is None:
+        if getattr(sys, "frozen", False):
+            path = Path(sys._MEIPASS) / "data" / "english-words.txt"
+        else:
+            path = Path(__file__).resolve().parent / "data" / "english-words.txt"
+        try:
+            with open(path, "r", encoding="ascii", errors="ignore") as f:
+                _ENGLISH_WORDS = frozenset(w.strip() for w in f)
+        except OSError:
+            _ENGLISH_WORDS = frozenset()
+    return _ENGLISH_WORDS
+
+
+def _english_buckets() -> dict:
+    global _ENGLISH_BUCKETS
+    if _ENGLISH_BUCKETS is None:
+        _ENGLISH_BUCKETS = {}
+        for w in english_words():
+            if w:
+                _ENGLISH_BUCKETS.setdefault(w[0], []).append(w)
+    return _ENGLISH_BUCKETS
 
 
 class SpellHelper:
@@ -172,14 +226,17 @@ class SpellHelper:
         self.custom_words = {w.lower() for w in custom.get("words", [])}
 
     def known(self, word: str) -> bool:
-        lw = word.lower()
-        return (
-            lw in KNOWN_WORDS
-            or lw in self.custom_words
-            or lw in ALIASES
-            or len(lw) <= 2
-            or lw.isdigit()
-        )
+        lw = word.lower().strip("'")
+        if (lw in KNOWN_WORDS or lw in self.custom_words or lw in ALIASES
+                or len(lw) <= 2 or lw.isdigit()):
+            return True
+        if "'" in lw:
+            if lw in CONTRACTIONS:
+                return True
+            base, _, suffix = lw.rpartition("'")
+            # possessives ("kogi's") and plural possessives ("users'")
+            return suffix in ("s", "") and self.known(base)
+        return lw in english_words()
 
     def suggestions(self, word: str, n: int = 4) -> list:
         lw = word.lower()
@@ -190,6 +247,12 @@ class SpellHelper:
             out.append(CORRECTIONS[lw])
         pool = KNOWN_WORDS | self.custom_words
         out.extend(difflib.get_close_matches(lw, pool, n=n, cutoff=0.72))
+        # The big dictionary, pre-filtered to same first letter and similar
+        # length so difflib has thousands of candidates, not 370k.
+        if lw:
+            candidates = [w for w in _english_buckets().get(lw[0], [])
+                          if abs(len(w) - len(lw)) <= 2]
+            out.extend(difflib.get_close_matches(lw, candidates, n=n, cutoff=0.78))
         seen, uniq = set(), []
         for s in out:
             if s.lower() not in seen and s.lower() != lw:
@@ -5219,7 +5282,9 @@ class SpellSupport:
     def recheck(self):
         text = self.text.get("1.0", "end-1c")
         self.text.tag_remove("misspelled", "1.0", "end")
-        for m in re.finditer(r"[A-Za-z]+", text):
+        # Keep contractions/possessives as one token so "doesn't" isn't
+        # split into doesn + t and flagged.
+        for m in re.finditer(r"[A-Za-z]+(?:'[A-Za-z]+)*", text):
             if not self.spell.known(m.group(0)):
                 self.text.tag_add("misspelled", f"1.0+{m.start()}c", f"1.0+{m.end()}c")
 

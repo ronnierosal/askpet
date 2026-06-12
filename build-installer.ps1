@@ -31,6 +31,7 @@ function Sign-File($path) {
 
 Write-Host "== 1/4 Running tests =="
 & $python test_logic.py | Out-Null
+& $python test_spell.py | Select-Object -Last 1
 & $python test_gui.py | Select-Object -Last 1
 & $python test_pet.py | Select-Object -Last 1
 
@@ -39,6 +40,7 @@ Write-Host "== 2/4 Building PromptMate.exe (PyInstaller) =="
     --icon assets\promptmate.ico `
     --add-data "assets\kogi\spritesheet.png;assets\kogi" `
     --add-data "assets\kogi\manifest.json;assets\kogi" `
+    --add-data "data\english-words.txt;data" `
     promptmate.py | Out-Null
 
 Write-Host "== 3/4 Signing application =="

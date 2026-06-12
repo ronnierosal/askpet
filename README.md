@@ -41,6 +41,18 @@ still fully local.
 
 ## What's new
 
+**0.17.2** (2026-06-11)
+- Spell check actually works now: a bundled 370k-word English dictionary
+  (public domain, dwyl/english-words) replaces the ~250-word IT seed
+  vocabulary that flagged everyday words like "meeting" and "calendar"
+  as typos — real misspellings were drowning in red noise.
+- Contractions and possessives ("doesn't", "kogi's", "users'") are no
+  longer flagged; suggestions come from the full dictionary
+  ("tommorow" → "tomorrow", "definately" → "definitely").
+- Common product names (ChatGPT, Claude, Notion, Synology, Meraki, …)
+  are pre-seeded so they don't light up red.
+- New test_spell.py suite, run on every build.
+
 **0.17.1** (2026-06-11)
 - Pet browser overhaul: click column headers to sort (name, creator,
   kind, ♥ likes — likes start most-loved-first), a preview image appears
