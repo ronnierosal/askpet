@@ -931,5 +931,180 @@
       "Build the core flow with real-shaped data; skip auth/polish until it works.",
       "Put it in front of a real user; let their friction set the next iteration."
     ]
+  },
+  "linux_service": {
+    "name": "Linux service troubleshooting skill",
+    "topics": [
+      "linux",
+      "fixit"
+    ],
+    "body": "Fix a failing service with evidence: status, journal, config test, restart, enable.",
+    "steps": [
+      "systemctl status <unit> — read the actual state and last error.",
+      "journalctl -u <unit> --since '1 hour ago' for the real failure.",
+      "Validate config before restarting (nginx -t, sshd -t, etc.).",
+      "Restart and watch the journal live; confirm it stays up.",
+      "Ensure it's enabled for boot; note root cause in the ticket."
+    ]
+  },
+  "bash_script": {
+    "name": "Bash script skill",
+    "topics": [
+      "linux"
+    ],
+    "body": "Write bash that fails loudly and safely: strict mode, quoting, dry-run, shellcheck.",
+    "steps": [
+      "Start with set -euo pipefail; quote every variable expansion.",
+      "Take inputs as arguments with a usage message, not edits.",
+      "Add a dry-run mode that echoes destructive commands instead of running them.",
+      "Run shellcheck and fix every warning.",
+      "Test on one target first; log what was changed where."
+    ]
+  },
+  "gpo_troubleshoot": {
+    "name": "GPO troubleshooting skill",
+    "topics": [
+      "ad",
+      "windows"
+    ],
+    "body": "Find why a policy does/doesn't apply: gpresult evidence over guesswork.",
+    "steps": [
+      "Run gpresult /h on the affected machine as the affected user.",
+      "Check the GPO is linked to the right OU and security filtering includes the target.",
+      "Look for Denied entries: WMI filters, inheritance blocks, enforcement conflicts.",
+      "Fix the scoping issue; gpupdate /force and re-run gpresult to confirm.",
+      "Document which GPO wins and why for the next person."
+    ]
+  },
+  "ad_hygiene": {
+    "name": "AD cleanup skill",
+    "topics": [
+      "ad",
+      "audit"
+    ],
+    "body": "Clean stale AD objects safely: report, disable first, delete later, evidence throughout.",
+    "steps": [
+      "Export accounts/computers with lastLogonTimestamp beyond the threshold.",
+      "Review with owners — service accounts hide in stale lists.",
+      "Disable (don't delete) in a dated OU; note the date in the description.",
+      "Wait the agreed soak period for breakage reports.",
+      "Delete past-soak objects; keep the exports as audit evidence."
+    ]
+  },
+  "vm_change": {
+    "name": "VM change with snapshot skill",
+    "topics": [
+      "virtualization",
+      "change"
+    ],
+    "body": "Make VM changes reversibly: snapshot, change, verify, then DELETE the snapshot.",
+    "steps": [
+      "Confirm backup state, then snapshot with a dated description.",
+      "Make the change; verify the app/service, not just the OS booting.",
+      "If broken: revert, reassess — don't stack fixes on failures.",
+      "If good: delete the snapshot within days, not weeks (they grow and slow I/O).",
+      "Record the change and snapshot lifecycle in the ticket."
+    ]
+  },
+  "share_permissions": {
+    "name": "File share permissions skill",
+    "topics": [
+      "storage",
+      "audit"
+    ],
+    "body": "Grant share access the auditable way: groups, AGDLP, exports before and after.",
+    "steps": [
+      "Export current NTFS and share ACLs (your rollback and evidence).",
+      "Create/identify the access group; add users to the group, never to the folder.",
+      "Set NTFS permission for the group at the highest folder that needs it.",
+      "Check inheritance below — broken inheritance is where audits fail.",
+      "Verify as an affected user; export the after-state to the ticket."
+    ]
+  },
+  "db_safe_change": {
+    "name": "Database safe-change skill",
+    "topics": [
+      "database"
+    ],
+    "body": "Change data without disasters: backup, SELECT first, transaction, rowcount, commit.",
+    "steps": [
+      "Confirm a restorable backup exists before anything else.",
+      "SELECT with the exact WHERE clause first; review what you'll touch.",
+      "Run the UPDATE/DELETE inside a transaction.",
+      "Check the rowcount matches the SELECT before COMMIT; rollback if not.",
+      "Record the statement, rowcount, and ticket reference."
+    ]
+  },
+  "data_migration": {
+    "name": "Data migration skill",
+    "topics": [
+      "migration"
+    ],
+    "body": "Migrate in waves with validation: inventory, pilot, validate, cutover, retire later.",
+    "steps": [
+      "Inventory the source: item counts, sizes, owners, permissions, weird cases.",
+      "Map source to destination including how permissions translate.",
+      "Migrate a pilot wave; validate counts, spot-check content, test access as real users.",
+      "Migrate remaining waves with progress comms; freeze source changes near cutover.",
+      "Keep the source read-only until validation passes; retire on schedule, not impulse."
+    ]
+  },
+  "regex_build": {
+    "name": "Regex building skill",
+    "topics": [
+      "regex"
+    ],
+    "body": "Build a regex that's testable: examples first, incremental pattern, edge cases, comments.",
+    "steps": [
+      "Collect 5+ strings that should match and 3+ that should not.",
+      "Ask for the pattern built incrementally with each piece explained.",
+      "Test against your examples; tighten until non-matches stay out.",
+      "Probe edge cases: empty, unicode, very long input, almost-matches.",
+      "Save it with a comment showing sample matches — future-you forgets."
+    ]
+  },
+  "mermaid_diagram": {
+    "name": "Diagram-as-code skill",
+    "topics": [
+      "diagram",
+      "confluence"
+    ],
+    "body": "Produce a Mermaid diagram that stays current: list, generate, refine, commit the source.",
+    "steps": [
+      "List components and connections in plain text first (the AI's input).",
+      "State the audience and the one question the diagram answers.",
+      "Generate Mermaid; render and check it's readable at a glance.",
+      "Cut boxes that don't serve the question; label data flows.",
+      "Commit the Mermaid source next to the docs so updates are edits, not redraws."
+    ]
+  },
+  "asset_audit": {
+    "name": "Asset inventory audit skill",
+    "topics": [
+      "asset",
+      "reporting"
+    ],
+    "body": "Reconcile asset records against reality: exports, diff, chase, correct, prevent.",
+    "steps": [
+      "Export the asset register and the live data (RMM/Intune/MDM).",
+      "Diff: in-register-not-seen (missing) and seen-not-in-register (shadow).",
+      "Chase missing assets via last user/location; flag for write-off past threshold.",
+      "Correct the register; record root causes (skipped intake, offboarding gaps).",
+      "Fix the leak: tie asset updates into on/offboarding steps."
+    ]
+  },
+  "status_report": {
+    "name": "Status report skill",
+    "topics": [
+      "reporting"
+    ],
+    "body": "Write a status report people read: outcomes, numbers, blockers with asks.",
+    "steps": [
+      "Lead with outcomes shipped, not activities performed.",
+      "Quantify where possible (tickets closed, uptime, spend vs budget).",
+      "List blockers WITH the specific ask that unblocks each.",
+      "Preview next period in 3 bullets max.",
+      "Keep it under one screen; link detail instead of including it."
+    ]
   }
 }

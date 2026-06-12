@@ -27,8 +27,8 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 APP_NAME = "PromptMate"
-APP_VERSION = "0.9.0"
-CONTENT_VERSION = "2026.06.8"
+APP_VERSION = "0.10.0"
+CONTENT_VERSION = "2026.06.9"
 
 # ---------------------------------------------------------------------------
 # User data locations (never inside the install folder)
@@ -296,8 +296,9 @@ KEYWORD_TOPICS = {
                   "spreadsheet", "license count", "licenses", "csv", "bulk"],
     "backup": ["backup", "backups", "restore", "disaster recovery",
                "recovery point", "snapshot"],
-    "vendor": ["vendor", "support case", "open a case", "escalate",
-               "microsoft support", "evaluate", "evaluation", "compare tools"],
+    "vendor": ["vendor support", "vendor case", "support case", "open a case",
+               "escalate", "microsoft support", "evaluate", "evaluation",
+               "compare tools", "which tool"],
     "fixit": ["not working", "doesnt work", "doesn't work", "stopped working",
               "broken", "crash", "crashes", "crashing", "keeps dropping",
               "wont open", "won't open", "cant open", "can't open",
@@ -380,6 +381,26 @@ KEYWORD_TOPICS = {
     "appdev": ["build an app", "build a app", "web app", "website",
                "frontend", "backend", "react", "flask", "django", "node",
                "mobile app", "prototype", "mvp", "user interface", "gui app"],
+    "linux": ["linux", "ubuntu", "debian", "centos", "rhel", "bash",
+              "ssh", "systemctl", "systemd", "cron job", "crontab"],
+    "ad": ["active directory", "domain controller", "gpo", "group policy object",
+           "ldap", "ad group", "gpresult", "sysvol", "domain join",
+           "ou structure", "ad replication"],
+    "virtualization": ["vmware", "vsphere", "esxi", "vcenter", "hyper-v",
+                       "hyperv", "proxmox", "snapshot", "datastore",
+                       "virtual host"],
+    "storage": ["file share", "network share", "ntfs", "share permission",
+                "mapped drive", "file server", "quota", "dfs",
+                "folder permission"],
+    "database": ["sql server", "database", "stored procedure", "mysql",
+                 "postgres", "postgresql", "db backup", "table", "index"],
+    "migration": ["migrate", "migration", "cutover", "move to sharepoint",
+                  "tenant migration", "lift and shift", "decommission"],
+    "regex": ["regex", "regular expression", "pattern to match"],
+    "diagram": ["diagram", "flowchart", "mermaid", "visio", "topology",
+                "org chart"],
+    "asset": ["asset", "inventory", "serial number", "warranty",
+              "lifecycle", "loaner"],
 }
 
 
@@ -1034,6 +1055,24 @@ PROMPT_TEMPLATES = {
             "leaving the machine.\n\nConstraints: {CONSTRAINTS}"
         ),
     },
+    "diagram_request": {
+        "name": "Technical diagram (Mermaid)",
+        "destination": "ChatGPT web",
+        "topics": ["diagram"],
+        "body": (
+            "Create a technical diagram for me. {TASK}\n\n"
+            "Components and connections: {INPUTS}\n\n"
+            "Requirements:\n- Output Mermaid source (diagram-as-code) so it "
+            "lives in version control\n"
+            "- One audience, one question the diagram answers — tell me if "
+            "I'm asking for two diagrams in one\n"
+            "- Label every connection with what flows over it\n"
+            "- Fewer boxes beats complete: link or footnote detail rather "
+            "than cramming it in\n\n"
+            "After the diagram, list what you intentionally left out.\n"
+            "Constraints: {CONSTRAINTS}"
+        ),
+    },
     "rewrite_text": {
         "name": "Rewrite / edit text",
         "destination": "ChatGPT web",
@@ -1671,6 +1710,98 @@ AGENT_MODULES = {
             "(one screen, real data), pick boring proven tech the team can "
             "maintain, plan for where it runs and who fixes it at 2am "
             "before adding features, and iterate from real user feedback."
+        ),
+    },
+    "linux": {
+        "name": "Linux Agent",
+        "topics": ["linux"],
+        "body": (
+            "Act as a Linux administrator: systemctl status and journalctl "
+            "before guessing, config-test before restart (nginx -t and "
+            "friends), bash with set -euo pipefail and shellcheck-clean, "
+            "explicit about which distro/version commands target, and "
+            "minimal sudo — say exactly why each elevated command needs it."
+        ),
+    },
+    "active_directory": {
+        "name": "Active Directory Agent",
+        "topics": ["ad"],
+        "body": (
+            "Act as an on-prem Active Directory specialist: changes in the "
+            "right OU with group-based access (AGDLP), gpresult/RSOP "
+            "evidence before blaming a GPO, replication awareness (a change "
+            "isn't done until all DCs agree), recycle bin and tombstone "
+            "awareness before deleting, and never touch schema or "
+            "domain-level GPOs casually."
+        ),
+    },
+    "virtualization": {
+        "name": "Virtualization Agent",
+        "topics": ["virtualization"],
+        "body": (
+            "Act as a virtualization specialist (VMware/Hyper-V): snapshots "
+            "are NOT backups and old snapshots kill performance, check host "
+            "resources before blaming the guest, mind overcommit ratios, "
+            "verify backup/replication state before any host work, and "
+            "know the blast radius — one host change can touch every VM "
+            "on it."
+        ),
+    },
+    "file_storage": {
+        "name": "Storage & Shares Agent",
+        "topics": ["storage"],
+        "body": (
+            "Act as a file storage specialist: permissions via groups never "
+            "individuals (AGDLP), know NTFS vs share permission interaction "
+            "(most restrictive wins), export current ACLs before changing "
+            "anything, watch inheritance breaks — they're where audits "
+            "fail, and treat 'Everyone: Full Control' as an incident."
+        ),
+    },
+    "database": {
+        "name": "Database Agent",
+        "topics": ["database"],
+        "body": (
+            "Act as a database administrator: confirmed backup before any "
+            "change, every UPDATE/DELETE inside a transaction with the "
+            "rowcount checked before COMMIT, SELECT the rows first to see "
+            "what you'll touch, no schema changes during business hours, "
+            "and parameterized queries always — never string-built SQL."
+        ),
+    },
+    "migration": {
+        "name": "Migration Agent",
+        "topics": ["migration"],
+        "body": (
+            "Act as a migration specialist: inventory the source completely "
+            "before promising dates, migrate a pilot wave first and "
+            "validate counts/permissions/access, plan coexistence (what "
+            "works during the transition), communicate cutover clearly, "
+            "and keep the source read-only — not deleted — until "
+            "validation passes."
+        ),
+    },
+    "diagramming": {
+        "name": "Diagram Agent",
+        "topics": ["diagram"],
+        "body": (
+            "Act as a technical diagramming specialist: text-first formats "
+            "(Mermaid) so diagrams live in version control, one audience "
+            "per diagram (exec overview vs engineer detail are different "
+            "drawings), label every connection with what flows over it, "
+            "and fewer boxes beats complete — link to detail instead of "
+            "cramming it in."
+        ),
+    },
+    "asset_mgmt": {
+        "name": "Asset Management Agent",
+        "topics": ["asset"],
+        "body": (
+            "Act as an IT asset manager: one source of truth reconciled "
+            "against reality (RMM/Intune/MDM exports), every asset has an "
+            "owner and a lifecycle stage, capture serial/warranty/purchase "
+            "data at intake not retirement, and tie asset records to "
+            "on/offboarding so nothing walks away."
         ),
     },
 }
@@ -2456,6 +2587,150 @@ SKILL_TEMPLATES = {
             "Put it in front of a real user; let their friction set the next iteration.",
         ],
     },
+    "linux_service": {
+        "name": "Linux service troubleshooting skill",
+        "topics": ["linux", "fixit"],
+        "body": "Fix a failing service with evidence: status, journal, config test, restart, enable.",
+        "steps": [
+            "systemctl status <unit> — read the actual state and last error.",
+            "journalctl -u <unit> --since '1 hour ago' for the real failure.",
+            "Validate config before restarting (nginx -t, sshd -t, etc.).",
+            "Restart and watch the journal live; confirm it stays up.",
+            "Ensure it's enabled for boot; note root cause in the ticket.",
+        ],
+    },
+    "bash_script": {
+        "name": "Bash script skill",
+        "topics": ["linux"],
+        "body": "Write bash that fails loudly and safely: strict mode, quoting, dry-run, shellcheck.",
+        "steps": [
+            "Start with set -euo pipefail; quote every variable expansion.",
+            "Take inputs as arguments with a usage message, not edits.",
+            "Add a dry-run mode that echoes destructive commands instead of running them.",
+            "Run shellcheck and fix every warning.",
+            "Test on one target first; log what was changed where.",
+        ],
+    },
+    "gpo_troubleshoot": {
+        "name": "GPO troubleshooting skill",
+        "topics": ["ad", "windows"],
+        "body": "Find why a policy does/doesn't apply: gpresult evidence over guesswork.",
+        "steps": [
+            "Run gpresult /h on the affected machine as the affected user.",
+            "Check the GPO is linked to the right OU and security filtering includes the target.",
+            "Look for Denied entries: WMI filters, inheritance blocks, enforcement conflicts.",
+            "Fix the scoping issue; gpupdate /force and re-run gpresult to confirm.",
+            "Document which GPO wins and why for the next person.",
+        ],
+    },
+    "ad_hygiene": {
+        "name": "AD cleanup skill",
+        "topics": ["ad", "audit"],
+        "body": "Clean stale AD objects safely: report, disable first, delete later, evidence throughout.",
+        "steps": [
+            "Export accounts/computers with lastLogonTimestamp beyond the threshold.",
+            "Review with owners — service accounts hide in stale lists.",
+            "Disable (don't delete) in a dated OU; note the date in the description.",
+            "Wait the agreed soak period for breakage reports.",
+            "Delete past-soak objects; keep the exports as audit evidence.",
+        ],
+    },
+    "vm_change": {
+        "name": "VM change with snapshot skill",
+        "topics": ["virtualization", "change"],
+        "body": "Make VM changes reversibly: snapshot, change, verify, then DELETE the snapshot.",
+        "steps": [
+            "Confirm backup state, then snapshot with a dated description.",
+            "Make the change; verify the app/service, not just the OS booting.",
+            "If broken: revert, reassess — don't stack fixes on failures.",
+            "If good: delete the snapshot within days, not weeks (they grow and slow I/O).",
+            "Record the change and snapshot lifecycle in the ticket.",
+        ],
+    },
+    "share_permissions": {
+        "name": "File share permissions skill",
+        "topics": ["storage", "audit"],
+        "body": "Grant share access the auditable way: groups, AGDLP, exports before and after.",
+        "steps": [
+            "Export current NTFS and share ACLs (your rollback and evidence).",
+            "Create/identify the access group; add users to the group, never to the folder.",
+            "Set NTFS permission for the group at the highest folder that needs it.",
+            "Check inheritance below — broken inheritance is where audits fail.",
+            "Verify as an affected user; export the after-state to the ticket.",
+        ],
+    },
+    "db_safe_change": {
+        "name": "Database safe-change skill",
+        "topics": ["database"],
+        "body": "Change data without disasters: backup, SELECT first, transaction, rowcount, commit.",
+        "steps": [
+            "Confirm a restorable backup exists before anything else.",
+            "SELECT with the exact WHERE clause first; review what you'll touch.",
+            "Run the UPDATE/DELETE inside a transaction.",
+            "Check the rowcount matches the SELECT before COMMIT; rollback if not.",
+            "Record the statement, rowcount, and ticket reference.",
+        ],
+    },
+    "data_migration": {
+        "name": "Data migration skill",
+        "topics": ["migration"],
+        "body": "Migrate in waves with validation: inventory, pilot, validate, cutover, retire later.",
+        "steps": [
+            "Inventory the source: item counts, sizes, owners, permissions, weird cases.",
+            "Map source to destination including how permissions translate.",
+            "Migrate a pilot wave; validate counts, spot-check content, test access as real users.",
+            "Migrate remaining waves with progress comms; freeze source changes near cutover.",
+            "Keep the source read-only until validation passes; retire on schedule, not impulse.",
+        ],
+    },
+    "regex_build": {
+        "name": "Regex building skill",
+        "topics": ["regex"],
+        "body": "Build a regex that's testable: examples first, incremental pattern, edge cases, comments.",
+        "steps": [
+            "Collect 5+ strings that should match and 3+ that should not.",
+            "Ask for the pattern built incrementally with each piece explained.",
+            "Test against your examples; tighten until non-matches stay out.",
+            "Probe edge cases: empty, unicode, very long input, almost-matches.",
+            "Save it with a comment showing sample matches — future-you forgets.",
+        ],
+    },
+    "mermaid_diagram": {
+        "name": "Diagram-as-code skill",
+        "topics": ["diagram", "confluence"],
+        "body": "Produce a Mermaid diagram that stays current: list, generate, refine, commit the source.",
+        "steps": [
+            "List components and connections in plain text first (the AI's input).",
+            "State the audience and the one question the diagram answers.",
+            "Generate Mermaid; render and check it's readable at a glance.",
+            "Cut boxes that don't serve the question; label data flows.",
+            "Commit the Mermaid source next to the docs so updates are edits, not redraws.",
+        ],
+    },
+    "asset_audit": {
+        "name": "Asset inventory audit skill",
+        "topics": ["asset", "reporting"],
+        "body": "Reconcile asset records against reality: exports, diff, chase, correct, prevent.",
+        "steps": [
+            "Export the asset register and the live data (RMM/Intune/MDM).",
+            "Diff: in-register-not-seen (missing) and seen-not-in-register (shadow).",
+            "Chase missing assets via last user/location; flag for write-off past threshold.",
+            "Correct the register; record root causes (skipped intake, offboarding gaps).",
+            "Fix the leak: tie asset updates into on/offboarding steps.",
+        ],
+    },
+    "status_report": {
+        "name": "Status report skill",
+        "topics": ["reporting"],
+        "body": "Write a status report people read: outcomes, numbers, blockers with asks.",
+        "steps": [
+            "Lead with outcomes shipped, not activities performed.",
+            "Quantify where possible (tickets closed, uptime, spend vs budget).",
+            "List blockers WITH the specific ask that unblocks each.",
+            "Preview next period in 3 bullets max.",
+            "Keep it under one screen; link detail instead of including it.",
+        ],
+    },
 }
 
 CONTEXT_CHECKLIST_BY_TOPIC = {
@@ -2511,6 +2786,15 @@ CONTEXT_CHECKLIST_BY_TOPIC = {
     "mobile": ["Device model and OS version", "MDM enrollment status", "Corporate or BYOD"],
     "printer": ["Printer model and connection (USB/network)", "One user or everyone", "Driver type (universal/specific)"],
     "appdev": ["Who will use it and for what", "Platform (web/desktop/mobile)", "Where it will run/be hosted"],
+    "linux": ["Distro and version", "Service/unit names involved", "Relevant journalctl/log output"],
+    "ad": ["Domain and OU paths", "GPO names in play", "gpresult/event log output"],
+    "virtualization": ["Platform (VMware/Hyper-V) and version", "Host and VM names", "Snapshot/backup state"],
+    "storage": ["Server/share paths", "Groups that should have access", "Current permissions export"],
+    "database": ["Engine and version", "Database/table names", "A recent backup confirmed?"],
+    "migration": ["Source and destination systems", "Data volume and item counts", "Cutover deadline and freeze window"],
+    "regex": ["Sample strings that SHOULD match", "Samples that should NOT match", "Where it runs (PowerShell/Python/grep)"],
+    "diagram": ["What the diagram must show (audience)", "Components and connections list", "Format needed (Mermaid/Visio/draw.io)"],
+    "asset": ["Asset types in scope", "Source of truth today (sheet/RMM/Intune)", "What decision the data feeds"],
 }
 
 GENERIC_CHECKLIST = [
@@ -2527,9 +2811,10 @@ def recommend(text: str) -> dict:
 
     def topic_score(item):
         overlap = set(item["topics"]) & set(topics)
-        # Urgent-signal topics outweigh the product area: "outlook crashing"
-        # gets the troubleshooting shape, an EDR alert gets the EDR shape.
-        return len(overlap) + (0.5 if overlap & {"fixit", "edr"} else 0)
+        # Intent-defining topics outweigh the subject area: "outlook crashing"
+        # gets the troubleshooting shape, "diagram the network" gets the
+        # diagram shape — not the product-area template.
+        return len(overlap) + (0.5 if overlap & {"fixit", "edr", "diagram"} else 0)
 
     # Template: best topic overlap, fall back by destination. Without any
     # topic overlap the tie-break math is meaningless — go straight to the
@@ -3258,10 +3543,10 @@ class PetOverlay:
     Wanders/waves on its own while the chat is closed, sits while it is open.
     """
 
-    TICK_MS = 140
-    WALK_SPEED = 4
-    RUN_SPEED = 10
-    NAP_AFTER_TICKS = 1700  # ~4 minutes without interaction -> nap
+    TICK_MS = 200  # one animation frame per tick; higher = calmer pet
+    WALK_SPEED = 3
+    RUN_SPEED = 7
+    NAP_AFTER_TICKS = 1200  # ~4 minutes without interaction -> nap
 
     def __init__(self, root: tk.Tk):
         self.root = root
@@ -3386,29 +3671,29 @@ class PetOverlay:
             self.set_anim("idle", ticks=random.randint(30, 80))
             return
         roll = random.random()
-        if roll < 0.40:
-            self.set_anim("idle", ticks=random.randint(25, 70))
-        elif roll < 0.55:
-            self.set_anim("sit", ticks=random.randint(25, 60))
-        elif roll < 0.65:
+        if roll < 0.50:
+            self.set_anim("idle", ticks=random.randint(40, 100))
+        elif roll < 0.72:
+            self.set_anim("sit", ticks=random.randint(40, 90))
+        elif roll < 0.78:
             self.set_anim("wave", ticks=len(self.sprites.frames.get("wave", [1])) * 2)
-        elif roll < 0.75:
-            self.set_anim("emote", ticks=random.randint(12, 24))
-        elif roll < 0.80:
+        elif roll < 0.84:
+            self.set_anim("emote", ticks=random.randint(10, 18))
+        elif roll < 0.87:
             # Zoomies! A rare fast dash across the screen.
             direction = random.choice((-1, 1))
             self.set_anim("run", move_dx=direction * self.RUN_SPEED,
-                          ticks=random.randint(15, 35))
-        elif roll < 0.90:
+                          ticks=random.randint(12, 25))
+        elif roll < 0.94:
             # Slow amble — Kogi's signature mosey.
             direction = random.choice((-1, 1))
             self.set_anim("mosey", move_dx=direction * max(2, self.WALK_SPEED // 2),
-                          ticks=random.randint(25, 60))
+                          ticks=random.randint(25, 50))
         else:
             direction = random.choice((-1, 1))
             self.set_anim("walk_right" if direction > 0 else "walk_left",
                           move_dx=direction * self.WALK_SPEED,
-                          ticks=random.randint(20, 60))
+                          ticks=random.randint(20, 45))
 
     def celebrate(self):
         """Quick happy reaction (e.g. when the user copies a prompt)."""

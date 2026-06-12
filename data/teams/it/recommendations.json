@@ -235,14 +235,16 @@
       "snapshot"
     ],
     "vendor": [
-      "vendor",
+      "vendor support",
+      "vendor case",
       "support case",
       "open a case",
       "escalate",
       "microsoft support",
       "evaluate",
       "evaluation",
-      "compare tools"
+      "compare tools",
+      "which tool"
     ],
     "fixit": [
       "not working",
@@ -592,6 +594,96 @@
       "mvp",
       "user interface",
       "gui app"
+    ],
+    "linux": [
+      "linux",
+      "ubuntu",
+      "debian",
+      "centos",
+      "rhel",
+      "bash",
+      "ssh",
+      "systemctl",
+      "systemd",
+      "cron job",
+      "crontab"
+    ],
+    "ad": [
+      "active directory",
+      "domain controller",
+      "gpo",
+      "group policy object",
+      "ldap",
+      "ad group",
+      "gpresult",
+      "sysvol",
+      "domain join",
+      "ou structure",
+      "ad replication"
+    ],
+    "virtualization": [
+      "vmware",
+      "vsphere",
+      "esxi",
+      "vcenter",
+      "hyper-v",
+      "hyperv",
+      "proxmox",
+      "snapshot",
+      "datastore",
+      "virtual host"
+    ],
+    "storage": [
+      "file share",
+      "network share",
+      "ntfs",
+      "share permission",
+      "mapped drive",
+      "file server",
+      "quota",
+      "dfs",
+      "folder permission"
+    ],
+    "database": [
+      "sql server",
+      "database",
+      "stored procedure",
+      "mysql",
+      "postgres",
+      "postgresql",
+      "db backup",
+      "table",
+      "index"
+    ],
+    "migration": [
+      "migrate",
+      "migration",
+      "cutover",
+      "move to sharepoint",
+      "tenant migration",
+      "lift and shift",
+      "decommission"
+    ],
+    "regex": [
+      "regex",
+      "regular expression",
+      "pattern to match"
+    ],
+    "diagram": [
+      "diagram",
+      "flowchart",
+      "mermaid",
+      "visio",
+      "topology",
+      "org chart"
+    ],
+    "asset": [
+      "asset",
+      "inventory",
+      "serial number",
+      "warranty",
+      "lifecycle",
+      "loaner"
     ]
   },
   "context_checklist_by_topic": {
@@ -854,6 +946,51 @@
       "Who will use it and for what",
       "Platform (web/desktop/mobile)",
       "Where it will run/be hosted"
+    ],
+    "linux": [
+      "Distro and version",
+      "Service/unit names involved",
+      "Relevant journalctl/log output"
+    ],
+    "ad": [
+      "Domain and OU paths",
+      "GPO names in play",
+      "gpresult/event log output"
+    ],
+    "virtualization": [
+      "Platform (VMware/Hyper-V) and version",
+      "Host and VM names",
+      "Snapshot/backup state"
+    ],
+    "storage": [
+      "Server/share paths",
+      "Groups that should have access",
+      "Current permissions export"
+    ],
+    "database": [
+      "Engine and version",
+      "Database/table names",
+      "A recent backup confirmed?"
+    ],
+    "migration": [
+      "Source and destination systems",
+      "Data volume and item counts",
+      "Cutover deadline and freeze window"
+    ],
+    "regex": [
+      "Sample strings that SHOULD match",
+      "Samples that should NOT match",
+      "Where it runs (PowerShell/Python/grep)"
+    ],
+    "diagram": [
+      "What the diagram must show (audience)",
+      "Components and connections list",
+      "Format needed (Mermaid/Visio/draw.io)"
+    ],
+    "asset": [
+      "Asset types in scope",
+      "Source of truth today (sheet/RMM/Intune)",
+      "What decision the data feeds"
     ]
   },
   "generic_checklist": [

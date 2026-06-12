@@ -322,6 +322,14 @@
     ],
     "body": "Help me build a local, private AI chatbot using Ollama. {TASK}\n\nEnvironment: {INPUTS}\n\nCover, in order:\n1. Model choice for my hardware — e.g. Gemma at the size/quantization my RAM/VRAM supports — with honest expectations vs cloud models\n2. Install and pull commands, and a first smoke test\n3. A system prompt for my use case: role, tone, what to refuse, knowledge limits (small local models need explicit guidance)\n4. Front end options: terminal, Open WebUI, or a small script against the localhost API — recommend one for my needs\n5. If my own documents/data should inform answers: the simplest approach that works (paste-in context first, RAG only if needed)\n6. A test script of 5-10 representative questions and what good answers look like\n\nEverything must run fully local — no cloud calls, no data leaving the machine.\n\nConstraints: {CONSTRAINTS}"
   },
+  "diagram_request": {
+    "name": "Technical diagram (Mermaid)",
+    "destination": "ChatGPT web",
+    "topics": [
+      "diagram"
+    ],
+    "body": "Create a technical diagram for me. {TASK}\n\nComponents and connections: {INPUTS}\n\nRequirements:\n- Output Mermaid source (diagram-as-code) so it lives in version control\n- One audience, one question the diagram answers — tell me if I'm asking for two diagrams in one\n- Label every connection with what flows over it\n- Fewer boxes beats complete: link or footnote detail rather than cramming it in\n\nAfter the diagram, list what you intentionally left out.\nConstraints: {CONSTRAINTS}"
+  },
   "rewrite_text": {
     "name": "Rewrite / edit text",
     "destination": "ChatGPT web",

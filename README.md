@@ -24,6 +24,18 @@ ask for one.
 
 ## What's new
 
+**0.10.0** (2026-06-11)
+- Calmer pet: slower animation tick, gentler movement speeds, and more
+  time idling/sitting between activities.
+- Sysadmin content round: Linux (services, bash), on-prem Active Directory
+  (GPO troubleshooting, stale-object cleanup), virtualization
+  (VMware/Hyper-V snapshot discipline), file shares & NTFS permissions,
+  database safe-changes, data migrations, regex building, diagrams-as-code
+  (Mermaid), asset inventory audits, and status reports.
+- New Technical Diagram template; routing fixes for vendor/database and
+  diagram asks.
+- 43 templates / 62 modules / 77 skills.
+
 **0.9.0** (2026-06-11)
 - The pet defaults to Medium size (right-click → Pet size to change).
 - More pet life: naps after ~4 minutes of being ignored (wakes with a

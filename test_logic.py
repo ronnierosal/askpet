@@ -42,6 +42,13 @@ cases = [
     "iphone wont get the new mdm wifi profile",
     "print queue stuck for everyone on the 2nd floor printer",
     "build a small web app for tracking loaner laptops",
+    "nginx service keeps failing on the ubuntu box",
+    "gpo drive mapping not applying to the sales ou",
+    "need to migrate the hr file share to sharepoint",
+    "regex to pull ticket numbers out of email subjects",
+    "update prices in the sql server products table for vendor x",
+    "make a mermaid diagram of our network topology",
+    "audit our laptop inventory against intune",
 ]
 for raw in cases:
     cleaned = pm.clean_text(raw, spell)
