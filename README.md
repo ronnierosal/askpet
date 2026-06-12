@@ -22,7 +22,39 @@ ask for one.
 
 ![PromptMate chat](docs/chat-screenshot.png)
 
-## Quick start
+## What's new
+
+**0.2.0** (2026-06-11)
+- Desktop pet mode is now the default: the pet floats over all windows,
+  wanders, waves, and naps; click it to chat.
+- iMessage-style chat with bubbles, typing indicator, and inline
+  Copy / Save / Adjust buttons on every generated prompt.
+- Pet browser: switch to any of 2,000+ community pets from codex-pets.net
+  (right-click → Change pet…), with creator credits.
+- Destinations now include Claude and Claude Code alongside Codex and
+  ChatGPT web.
+
+**0.1.0** (2026-06-11)
+- Initial MVP: prompt templates, agent modules, skill templates, local
+  typo/alias correction, intent scoring, prompt history, full editor.
+
+## Install (Windows)
+
+Build the installer yourself (see [Building the Windows
+installer](#building-the-windows-installer)), then run
+`installer\PromptMate-Setup-<version>.exe`. It installs per-user — no admin
+rights — with optional desktop and start-at-sign-in shortcuts, and upgrades
+cleanly over a running copy. For silent/enterprise deployment:
+
+```
+PromptMate-Setup-0.2.0.exe /VERYSILENT /NORESTART
+```
+
+Prebuilt installers are intentionally **not** published on GitHub: the
+build bundles the default pet's sprite, which is creator-owned artwork
+(see [Pets & artwork credits](#pets--artwork-credits)).
+
+## Quick start (from source)
 
 Requires Python 3.10+ (Tkinter is included in the standard installer). No
 packages needed to run the app:
