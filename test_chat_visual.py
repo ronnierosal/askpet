@@ -1,6 +1,6 @@
 """Visual check of the chat: drive a follow-up Q&A conversation, screenshot. Dev only (uses Pillow)."""
 import tkinter as tk
-import promptmate as pm
+import askpet as pm
 from PIL import ImageGrab
 
 root = tk.Tk()

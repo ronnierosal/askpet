@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Smoke test for the MCP server (python promptmate.py --mcp).
+"""Smoke test for the MCP server (python askpet.py --mcp).
 
 Spawns the server as a subprocess and speaks newline-delimited JSON-RPC
 over its pipes — the same way a real MCP client does. Offline.
@@ -13,7 +13,7 @@ import sys
 class McpClient:
     def __init__(self):
         self.proc = subprocess.Popen(
-            [sys.executable, "promptmate.py", "--mcp"],
+            [sys.executable, "askpet.py", "--mcp"],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             encoding="utf-8", bufsize=1)
         self._id = 0
@@ -57,7 +57,7 @@ def main():
             "capabilities": {},
             "clientInfo": {"name": "test_mcp", "version": "0"},
         })["result"]
-        assert init["serverInfo"]["name"] == "PromptMate", init
+        assert init["serverInfo"]["name"] == "AskPet", init
         assert "tools" in init["capabilities"], init
         c.notify("notifications/initialized")
         print(f"initialize OK (protocol {init['protocolVersion']})")

@@ -3,7 +3,7 @@ Run: python test_petstore.py
 """
 import atexit
 import tkinter as tk
-import promptmate as pm
+import askpet as pm
 
 # Restore the user's real settings on exit — this test switches pets.
 _settings_backup = pm.SETTINGS_FILE.read_bytes() if pm.SETTINGS_FILE.exists() else None

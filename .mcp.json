@@ -1,8 +1,8 @@
 {
   "mcpServers": {
-    "promptmate": {
+    "askpet": {
       "command": "python",
-      "args": ["promptmate.py", "--mcp"]
+      "args": ["askpet.py", "--mcp"]
     }
   }
 }

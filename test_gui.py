@@ -2,11 +2,11 @@
 Run: python test_gui.py
 """
 import tkinter as tk
-import promptmate as pm
+import askpet as pm
 
 root = tk.Tk()
 root.withdraw()  # don't flash a window during the test
-app = pm.PromptMateApp(root)
+app = pm.AskPetApp(root)
 
 app.input_text.insert("1.0", "need a powershel scirpt to deply an intune app pakage")
 app._recheck_spelling()

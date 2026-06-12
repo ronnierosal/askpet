@@ -10,7 +10,7 @@ Usage: python mega_battery.py [--verbose]
 import sys
 from collections import defaultdict
 
-import promptmate as pm
+import askpet as pm
 
 DEFAULT_MODULES = {"plan_first", "harness", "validation"}
 GENERIC_TEMPLATES = {"chatgpt_planning", "codex_execution"}

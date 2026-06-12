@@ -1,11 +1,11 @@
-# PromptMate — Product Spec
+# AskPet — Product Spec
 
 ## Objective
-- Build PromptMate, a local-only Windows/macOS app that helps users create optimized copy-ready prompts.
-- PromptMate guides users through a lightweight chatbot/pet-style interface and recommends the right destination (Codex, Claude Code, ChatGPT web, or Claude), templates, agent modules, and skills.
+- Build AskPet, a local-only Windows/macOS app that helps users create optimized copy-ready prompts.
+- AskPet guides users through a lightweight chatbot/pet-style interface and recommends the right destination (Codex, Claude Code, ChatGPT web, or Claude), templates, agent modules, and skills.
 
 ## Current State
-- App name: PromptMate.
+- App name: AskPet.
 - Target platform: Windows and macOS.
 - Language: Python preferred.
 - Dependency model: no external dependencies for MVP.
@@ -19,7 +19,7 @@
 ## Important Context / Constraints
 - User works in IT backend/system administration.
 - Common technologies/workflows: Azure Functions, Intune deployments, Microsoft 365/O365, Entra ID/Azure AD, Okta, PowerShell automation, Jira ticketing, Atlassian/Confluence internal documentation, Infrastructure as Code, audit/access evidence workflows.
-- PromptMate must support messy user input: spelling errors, poor grammar, missing punctuation, aliases and shorthand.
+- AskPet must support messy user input: spelling errors, poor grammar, missing punctuation, aliases and shorthand.
 - MVP spell/grammar support is practical but local:
   - fuzzy matching using Python standard library difflib
   - local typo dictionary
@@ -35,7 +35,7 @@
   1. Prompt Templates — reusable prompt structures with placeholders
   2. Agent Modules — reusable instruction blocks, not actual AI agents
   3. Skill Templates — reusable workflow templates that can later become ChatGPT/Codex skills or workflows
-- PromptMate recommends whether the final prompt belongs in Codex/Claude Code, ChatGPT/Claude, or Both.
+- AskPet recommends whether the final prompt belongs in Codex/Claude Code, ChatGPT/Claude, or Both.
 
 ## Decision Logic
 - Recommend **Codex / Claude Code** when the task involves: code, files, repo work, scripts, local project changes, testing, implementation.
@@ -43,8 +43,8 @@
 - Recommend **Both** when ChatGPT/Claude should design the approach and Codex/Claude Code should execute it locally.
 
 ## MVP User Flow
-1. User opens PromptMate.
-2. User clicks/talks to the PromptMate pet/chat UI.
+1. User opens AskPet.
+2. User clicks/talks to the AskPet pet/chat UI.
 3. User describes what they are trying to do.
 4. App cleans spelling/grammar/punctuation enough to classify intent.
 5. App detects team profile, task type, likely destination, and keywords.
@@ -59,13 +59,13 @@
 - Left-click the pet opens/closes a chat window; drag moves it (position persisted); right-click opens a menu (chat, full editor, wandering toggle, exit).
 - The pet idles, blinks, waves, emotes, and occasionally walks across the screen; it sits while the chat is open.
 - Chat replies include interpretation, destination recommendation, context hints, and the generated prompt with Copy / Save / Adjust-in-editor buttons.
-- `python promptmate.py --editor` opens the classic full editor without the pet.
+- `python askpet.py --editor` opens the classic full editor without the pet.
 
 ## Local Folder Structure
 
 ```
-PromptMate/
-├── promptmate.py
+AskPet/
+├── askpet.py
 ├── assets/kogi/            (spritesheet.png + manifest.json; convert_sprites.py is the dev-time converter)
 ├── data/
 │   ├── app-version.json
@@ -77,7 +77,7 @@ PromptMate/
 
 ## Runtime/User Data Locations
 - Never store user data inside the application install folder.
-- Windows: `%LOCALAPPDATA%\PromptMate\` — macOS: `~/Library/Application Support/PromptMate/`
+- Windows: `%LOCALAPPDATA%\AskPet\` — macOS: `~/Library/Application Support/AskPet/`
 - Store locally: settings.json, prompt-history.json, custom-dictionary.json, learned-corrections.json, user-created templates/modules/skills.
 
 ## Initial Agent Modules
@@ -105,8 +105,8 @@ Self-learning is local reflection notes/templates, not uncontrolled autonomy. Me
 
 ## Update/Deployment Architecture (future)
 - Deploy via Intune/Jamf/NinjaOne; silent install; install over current version without breaking active use; never overwrite locked running files.
-- Architecture: PromptMate Launcher (tiny, rarely changes) + versioned side-by-side app installs + content library + user data.
-- New version installs silently; pet prompts "PromptMate update is ready. Restart now or later?"; launcher opens newest version on next restart.
+- Architecture: AskPet Launcher (tiny, rarely changes) + versioned side-by-side app installs + content library + user data.
+- New version installs silently; pet prompts "AskPet update is ready. Restart now or later?"; launcher opens newest version on next restart.
 - Separate app version from content library version. Channels: Production, Pilot, Development. Migration logic for settings/templates/modules/skills on schema changes.
 
 ## MVP Coding Direction
@@ -115,7 +115,7 @@ Self-learning is local reflection notes/templates, not uncontrolled autonomy. Me
 - Keep UI simple and functional.
 
 ## Build Order
-1. Single-file Python Tkinter MVP named promptmate.py. ✅
+1. Single-file Python Tkinter MVP named askpet.py. ✅
 2. Local seed libraries for IT team templates/modules/skills. ✅
 3. Fuzzy matching and correction dictionary. ✅
 4. Intent scoring and destination recommendation. ✅

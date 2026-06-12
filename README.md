@@ -1,4 +1,4 @@
-# PromptMate 🐾
+# AskPet 🐾
 
 A local-only desktop pet that turns messy task descriptions into optimized,
 copy-ready prompts for **Codex**, **Claude Code**, **ChatGPT**, or **Claude**.
@@ -20,19 +20,19 @@ Everything runs locally: no cloud AI, no accounts, no telemetry. The only
 network access is downloading a pet sprite from codex-pets.net when *you*
 ask for one.
 
-![PromptMate chat](docs/chat-screenshot.png)
+![AskPet chat](docs/chat-screenshot.png)
 
 ## MCP server
 
-PromptMate doubles as a local MCP server, so coding agents (Claude Code,
+AskPet doubles as a local MCP server, so coding agents (Claude Code,
 Claude Desktop, anything MCP-capable) can use it as a tool:
 
 ```
-python promptmate.py --mcp
+python askpet.py --mcp
 ```
 
 The repo ships a `.mcp.json`, so Claude Code sessions opened in this folder
-get the `promptmate` server automatically. Five tools: `ask` (chat with the
+get the `askpet` server automatically. Five tools: `ask` (chat with the
 brain — prompts for tasks, knowledge-base answers for questions),
 `build_prompt` (task + clarification answers → final prompt),
 `list_library`, `search_library`, and `get_item` (browse the
@@ -40,6 +40,15 @@ template/module/skill content). Stateless, read-only, stdlib-only — and
 still fully local.
 
 ## What's new
+
+**0.20.0** (2026-06-12)
+- PromptMate is now **AskPet**. The app outgrew its name: you don't
+  just build prompts anymore — you ask your pet, and it answers
+  (locally via Ollama, grounded in your knowledge packs) or builds the
+  prompt when the job is bigger than a small model. Same pet, same
+  data: settings, history, pets, dictionaries, and knowledge packs
+  migrate automatically from the PromptMate folder on first launch.
+- Repo renamed: github.com/ronnierosal/askpet (old links redirect).
 
 **0.19.0** (2026-06-12)
 - Local AI: with Ollama installed (ollama.com) and a model like Gemma,
@@ -64,9 +73,9 @@ still fully local.
   automatically and expires after 3 days by default. Right-click the
   pet → 🕘 Prompt history to keep 24 hours, 3 days, or 7 days instead,
   or clear everything immediately. Pruning runs at startup and on
-  every save; history stays local in %LOCALAPPDATA%\PromptMate as
+  every save; history stays local in %LOCALAPPDATA%\AskPet as
   always.
-- About PromptMate (right-click the pet): app and content-library
+- About AskPet (right-click the pet): app and content-library
   versions, library counts, a word from the creator, and a link to the
   GitHub repo.
 
@@ -80,7 +89,7 @@ still fully local.
 
 **0.17.3** (2026-06-12)
 - Pet search survives typos online too: when codex-pets.net's exact
-  search returns nothing, PromptMate retries progressively shorter
+  search returns nothing, AskPet retries progressively shorter
   prefixes per word — "godzila" finds "Godzilla Blue" site-wide now,
   not just among already-loaded pets.
 
@@ -125,7 +134,7 @@ still fully local.
   variants, 0 flagged.
 
 **0.16.0** (2026-06-11)
-- PromptMate isn't just for IT anymore: a non-technical roles round adds
+- AskPet isn't just for IT anymore: a non-technical roles round adds
   agents and skills for chiefs of staff (decision memos, OKRs, exec
   briefs), executive assistants (calendar triage, travel itineraries,
   inbox triage), email writing (one ask, deadline bold, two-tone drafts),
@@ -165,7 +174,7 @@ still fully local.
 - 48 templates / 73 modules / 93 skills.
 
 **0.14.0** (2026-06-11)
-- MCP server mode (`--mcp`): use PromptMate's prompt-building brain from
+- MCP server mode (`--mcp`): use AskPet's prompt-building brain from
   Claude Code or any MCP client — see the MCP server section above.
 - Battery-tested routing round: word-anchored topic keywords ("edr" no
   longer matches "onedrive"), bulk/CSV ops get their own topic and Codex
@@ -184,7 +193,7 @@ still fully local.
 - Ask the pet questions: a built-in best-practices knowledge base answers
   questions about context (what to include, when it hurts), handoffs,
   when to clear/start a fresh chat, what makes a good prompt, choosing an
-  assistant, plan-first, verifying AI output, and how PromptMate itself
+  assistant, plan-first, verifying AI output, and how AskPet itself
   works. Question-shaped messages get answers; task descriptions still
   generate prompts.
 
@@ -317,12 +326,12 @@ still fully local.
 
 Build the installer yourself (see [Building the Windows
 installer](#building-the-windows-installer)), then run
-`installer\PromptMate-Setup-<version>.exe`. It installs per-user — no admin
+`installer\AskPet-Setup-<version>.exe`. It installs per-user — no admin
 rights — with optional desktop and start-at-sign-in shortcuts, and upgrades
 cleanly over a running copy. For silent/enterprise deployment:
 
 ```
-PromptMate-Setup-0.2.0.exe /VERYSILENT /NORESTART
+AskPet-Setup-0.2.0.exe /VERYSILENT /NORESTART
 ```
 
 Prebuilt installers are intentionally **not** published on GitHub: the
@@ -335,8 +344,8 @@ Requires Python 3.10+ (Tkinter is included in the standard installer). No
 packages needed to run the app:
 
 ```
-python promptmate.py            # pet mode (default)
-python promptmate.py --editor   # classic full editor, no pet
+python askpet.py            # pet mode (default)
+python askpet.py --editor   # classic full editor, no pet
 ```
 
 On first run the pet appears near the bottom-right of your screen:
@@ -348,18 +357,18 @@ On first run the pet appears near the bottom-right of your screen:
 | Right-click the pet | Menu: chat, full editor, change pet, credits, wandering, exit |
 
 Type a task in the chat (e.g. `need a powershel scirpt to deply an intune
-app pakage to pilot grp`) and press Enter. PromptMate fixes the typos,
+app pakage to pilot grp`) and press Enter. AskPet fixes the typos,
 expands shorthand (`iac`, `o365`, `aad`…), and replies with the
 recommendation and the copy-ready prompt.
 
 ## Pets & artwork credits
 
-PromptMate's pets come from [codex-pets.net](https://codex-pets.net), a
+AskPet's pets come from [codex-pets.net](https://codex-pets.net), a
 gallery of community-made desktop pet sprites. Right-click the pet →
 **Change pet…** to browse the catalog (2,000+ pets) and switch.
 
 **The sprites are not included in this repository.** They are artwork by
-individual creators with no published license, so PromptMate downloads a
+individual creators with no published license, so AskPet downloads a
 pet only when you select it, caches it in your local user-data folder for
 personal use, and shows the creator's name in the pet browser, the chat,
 and the **About this pet** menu. Please don't redistribute downloaded
@@ -381,8 +390,8 @@ when running from source; the packaged Windows build includes it.
 
 | Platform | Location |
 |---|---|
-| Windows | `%LOCALAPPDATA%\PromptMate\` |
-| macOS | `~/Library/Application Support/PromptMate/` |
+| Windows | `%LOCALAPPDATA%\AskPet\` |
+| macOS | `~/Library/Application Support/AskPet/` |
 
 Settings, prompt history, your custom dictionary, learned corrections, and
 downloaded pets. Never inside the install folder; never uploaded anywhere.
@@ -395,7 +404,7 @@ Dev machine needs PyInstaller and [Inno Setup](https://jrsoftware.org/isinfo.php
 powershell -ExecutionPolicy Bypass -File build-installer.ps1
 ```
 
-Produces `installer\PromptMate-Setup-<version>.exe` — per-user install (no
+Produces `installer\AskPet-Setup-<version>.exe` — per-user install (no
 admin), silent-install capable for Intune (`/VERYSILENT /NORESTART`),
 upgrades over a running copy and relaunches it. User data survives
 upgrades and uninstalls.
@@ -403,8 +412,8 @@ upgrades and uninstalls.
 ## Project layout
 
 ```
-promptmate.py        the whole app (stdlib-only at runtime)
-promptmate-spec.md   product spec
+askpet.py        the whole app (stdlib-only at runtime)
+askpet-spec.md   product spec
 data/                seed libraries exported as JSON (templates, modules, skills)
 dictionary/          alias + correction dictionaries (JSON export)
 docs/                how-to-use guide

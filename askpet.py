@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-PromptMate — local-only prompt builder for Codex / ChatGPT web.
+AskPet — local-only prompt builder for Codex / ChatGPT web.
 
 Single-file Tkinter MVP. No external dependencies, no network calls,
 no telemetry. Seed data lives in this file; later it can be refactored
 into JSON files under data/.
 
-Run:  python promptmate.py
+Run:  python askpet.py
 """
 
 import base64
@@ -30,9 +30,9 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from tkinter import messagebox, ttk
 
-APP_NAME = "PromptMate"
-APP_VERSION = "0.19.0"
-CONTENT_VERSION = "2026.06.16"
+APP_NAME = "AskPet"
+APP_VERSION = "0.20.0"
+CONTENT_VERSION = "2026.06.17"
 
 # ---------------------------------------------------------------------------
 # User data locations (never inside the install folder)
@@ -46,6 +46,31 @@ def user_data_dir() -> Path:
     if sys.platform == "darwin":
         return Path.home() / "Library" / "Application Support" / APP_NAME
     return Path.home() / ".local" / "share" / APP_NAME
+
+
+def _legacy_data_dir() -> Path:
+    """Where PromptMate (this app's former name) kept user data."""
+    if sys.platform == "win32":
+        base = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
+        return base / "PromptMate"
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / "PromptMate"
+    return Path.home() / ".local" / "share" / "PromptMate"
+
+
+def migrate_legacy_data():
+    """One-time move of PromptMate-era user data (settings, history,
+    pets, knowledge packs, dictionaries) into the AskPet directory."""
+    old, new = _legacy_data_dir(), user_data_dir()
+    if new.exists() or not old.exists():
+        return
+    try:
+        old.rename(new)
+    except OSError:
+        try:  # cross-volume or files still held open: copy instead
+            shutil.copytree(old, new)
+        except OSError:
+            pass  # a fresh start beats failing to launch
 
 
 DATA_DIR = user_data_dir()
@@ -162,7 +187,7 @@ for phrase in ALIASES.values():
     KNOWN_WORDS.update(w.lower() for w in phrase.split())
 # Product/brand names users type at the pet that no dictionary carries.
 KNOWN_WORDS.update(
-    """kogi promptmate codex chatgpt claude anthropic openai gemini copilot
+    """kogi askpet codex chatgpt claude anthropic openai gemini copilot
     notebooklm midjourney sharepoint onedrive sharegate powerpoint gmail
     granola zoom slack notion github gitlab terraform datadog snowflake
     fortigate sentinelone crowdstrike ninjaone connectwise screenconnect
@@ -4458,7 +4483,7 @@ def recommend(text: str) -> dict:
 
 # ---------------------------------------------------------------------------
 # Best-practices knowledge base: the pet answers questions about prompting,
-# context, handoffs, and PromptMate itself instead of generating a prompt.
+# context, handoffs, and AskPet itself instead of generating a prompt.
 # ---------------------------------------------------------------------------
 
 HELP_TOPICS = {
@@ -4604,7 +4629,7 @@ HELP_TOPICS = {
             "downloading a new pet look from codex-pets.net, or talking to "
             "a local model via Ollama on YOUR machine (localhost) if you've "
             "enabled Local AI. Your prompts, history, and settings live in "
-            "%LOCALAPPDATA%\\PromptMate (Windows) and never leave the "
+            "%LOCALAPPDATA%\\AskPet (Windows) and never leave the "
             "machine. 🐾",
         ],
     },
@@ -4634,8 +4659,8 @@ HELP_TOPICS = {
             "this machine, personal use only.",
         ],
     },
-    "promptmate_help": {
-        "keywords": ["promptmate", "what can you do", "how do you work",
+    "askpet_help": {
+        "keywords": ["askpet", "what can you do", "how do you work",
                      "how do i use you", "what do you do", "help me use",
                      "what are skills", "what are modules", "what are agent"],
         "answer": [
@@ -4840,13 +4865,13 @@ def save_history_entry(raw: str, cleaned: str, rec: dict, prompt: str):
 # ---------------------------------------------------------------------------
 
 PET_GREETING = (
-    "Hi! I'm PromptMate. 🐾\n\n"
+    "Hi! I'm AskPet. 🐾\n\n"
     "Tell me what you're trying to do — typos and shorthand are fine. "
     "I'll recommend where it belongs (Codex or ChatGPT web), pick a "
     "template, and build you a copy-ready prompt."
 )
 
-HELP_TEXT = """How to use PromptMate
+HELP_TEXT = """How to use AskPet
 
 Kogi the pet floats above all your windows:
 - Left-click Kogi to open/close the chat.
@@ -4860,9 +4885,9 @@ The full editor (below) gives you fine-grained control:
 
 1. Pick your team (IT for now — more teams later).
 2. Type what you're trying to do in the chat box. Messy input is fine —
-   PromptMate fixes common typos and expands shorthand like "iac" or "o365".
+   AskPet fixes common typos and expands shorthand like "iac" or "o365".
    Unknown words get a red underline; right-click one for suggestions.
-3. Click "Ask PromptMate" (or press Ctrl+Enter).
+3. Click "Ask AskPet" (or press Ctrl+Enter).
 4. Review the recommendations:
    - Destination: Codex, ChatGPT web, or Both
    - Prompt template, agent modules, skill templates
@@ -4874,12 +4899,12 @@ The full editor (below) gives you fine-grained control:
 Everything runs locally. No cloud AI, no telemetry. Optional Local AI
 answers come from Ollama on this machine (localhost) — nothing leaves
 your PC. Your data lives in:
-  Windows: %LOCALAPPDATA%\\PromptMate\\
-  macOS:   ~/Library/Application Support/PromptMate/
+  Windows: %LOCALAPPDATA%\\AskPet\\
+  macOS:   ~/Library/Application Support/AskPet/
 """
 
 
-class PromptMateApp:
+class AskPetApp:
     def __init__(self, root: tk.Tk):
         self.root = root
         self.spell = SpellHelper()
@@ -4899,7 +4924,7 @@ class PromptMateApp:
         top = ttk.Frame(self.root, padding=8)
         top.pack(fill="x")
 
-        ttk.Label(top, text="🐾 PromptMate", font=("Segoe UI", 14, "bold")).pack(side="left")
+        ttk.Label(top, text="🐾 AskPet", font=("Segoe UI", 14, "bold")).pack(side="left")
 
         self.update_label = ttk.Label(top, text=f"App v{APP_VERSION} · Content {CONTENT_VERSION} · Up to date",
                                       foreground="#2a7a2a")
@@ -4914,7 +4939,7 @@ class PromptMateApp:
         left = ttk.Frame(main, padding=4)
         main.add(left, weight=1)
 
-        chat_frame = ttk.LabelFrame(left, text="Talk to PromptMate", padding=6)
+        chat_frame = ttk.LabelFrame(left, text="Talk to AskPet", padding=6)
         chat_frame.pack(fill="x")
 
         self.pet_label = ttk.Label(chat_frame, text=PET_GREETING, wraplength=440,
@@ -4931,7 +4956,7 @@ class PromptMateApp:
 
         btn_row = ttk.Frame(chat_frame)
         btn_row.pack(fill="x")
-        ttk.Button(btn_row, text="Ask PromptMate  (Ctrl+Enter)", command=self._ask).pack(side="left")
+        ttk.Button(btn_row, text="Ask AskPet  (Ctrl+Enter)", command=self._ask).pack(side="left")
         ttk.Button(btn_row, text="Clear", command=self._clear).pack(side="left", padx=6)
 
         rec_frame = ttk.LabelFrame(left, text="Recommendations", padding=6)
@@ -5157,7 +5182,7 @@ class PromptMateApp:
 
     def _show_help(self):
         win = tk.Toplevel(self.root)
-        win.title("How to use PromptMate")
+        win.title("How to use AskPet")
         win.geometry("560x520")
         txt = tk.Text(win, wrap="word", padx=10, pady=10, font=("Segoe UI", 10))
         txt.insert("1.0", HELP_TEXT)
@@ -5193,7 +5218,7 @@ else:
 # ---------------------------------------------------------------------------
 # Pet store: download pets from codex-pets.net at the user's request.
 #
-# This is the ONLY network access in PromptMate, it never happens
+# This is the ONLY network access in AskPet, it never happens
 # automatically, and nothing is sent except the download request itself.
 # Sprites are user-uploaded artwork with no published license, so they are
 # cached locally for personal use and never redistributed with the app;
@@ -5319,7 +5344,7 @@ LOCAL_AI_LANES = {
         "names, dates, and numbers exactly. Reply with ONLY the summary."
     ),
     "answer": (
-        "You are PromptMate's local assistant, a small model running "
+        "You are AskPet's local assistant, a small model running "
         "fully offline on the user's own PC. Answer directly and "
         "concisely — a few sentences, short bullets only if listing. "
         "If you are not confident, say so plainly rather than guessing. "
@@ -5442,7 +5467,7 @@ def knowledge_system_prompt(pack: dict, query: str):
         parts.append(f"[from: {c['t']}]\n{c['x']}")
     excerpts = "\n\n".join(parts)
     return (
-        "You are PromptMate's local assistant running fully offline. "
+        "You are AskPet's local assistant running fully offline. "
         f"Answer the user's question using the source excerpts below — "
         f"video transcripts from {pack['credit']} — as your primary "
         "reference. Prefer what the sources say over your own general "
@@ -5538,7 +5563,7 @@ def install_pet(pet_id: str, info: dict = None) -> Path:
         raise RuntimeError(
             "Switching pets needs the Pillow library to convert sprite "
             "images.\n\nRun:  pip install Pillow\n(The installed version of "
-            "PromptMate includes it already.)")
+            "AskPet includes it already.)")
 
     info = info or fetch_pet_info(pet_id)
     download_url = info.get("downloadUrl") or f"/api/pets/{pet_id}/download"
@@ -5967,7 +5992,7 @@ class PetOverlay:
         menu.add_separator()
         menu.add_command(label="🔄 Change pet…", command=self.open_pet_browser)
         menu.add_command(label=f"ℹ About {self.pet_name()}", command=self.show_pet_credit)
-        menu.add_command(label="🐾 About PromptMate", command=self.show_about)
+        menu.add_command(label="🐾 About AskPet", command=self.show_about)
         size_menu = tk.Menu(menu, tearoff=0)
         for label, scale in (("Large", 1), ("Medium", 2), ("Small", 3)):
             check = " ✓" if scale == self.scale else ""
@@ -6016,7 +6041,7 @@ class PetOverlay:
         label = "Stop wandering" if self.wander else "Allow wandering"
         menu.add_command(label=f"🐾 {label}", command=self._toggle_wander)
         menu.add_separator()
-        menu.add_command(label="❌ Exit PromptMate", command=self.quit)
+        menu.add_command(label="❌ Exit AskPet", command=self.quit)
         menu.tk_popup(event.x_root, event.y_root)
 
     def pet_name(self) -> str:
@@ -6038,7 +6063,7 @@ class PetOverlay:
 
     def show_about(self):
         win = tk.Toplevel(self.root)
-        win.title("About PromptMate")
+        win.title("About AskPet")
         win.wm_attributes("-topmost", True)
         win.resizable(False, False)
         frame = ttk.Frame(win, padding=16)
@@ -6068,8 +6093,8 @@ class PetOverlay:
             lbl.pack(anchor="w", pady=(4, 0))
             lbl.bind("<Button-1>", lambda e: webbrowser.open(url))
 
-        link("github.com/ronnierosal/promptmate",
-             "https://github.com/ronnierosal/promptmate")
+        link("github.com/ronnierosal/askpet",
+             "https://github.com/ronnierosal/askpet")
         ttk.Label(frame, wraplength=400, justify="left", foreground="#666666",
                   text="Pet art from codex-pets.net — every artist is "
                        "credited on their pet.").pack(anchor="w", pady=(8, 0))
@@ -6171,7 +6196,7 @@ class PetOverlay:
             self.editor.root.lift()
         else:
             win = tk.Toplevel(self.root)
-            self.editor = PromptMateApp(win)
+            self.editor = AskPetApp(win)
             win.protocol("WM_DELETE_WINDOW", win.destroy)
         if prefill:
             self.editor.input_text.delete("1.0", "end")
@@ -6551,7 +6576,7 @@ class ChatWindow:
 
         win = tk.Toplevel(pet.root)
         self.win = win
-        win.title(f"{pet.pet_name()} — PromptMate")
+        win.title(f"{pet.pet_name()} — AskPet")
         win.wm_attributes("-topmost", True)
         win.minsize(340, 400)
         self._place_near_pet(440, 600)
@@ -6674,11 +6699,11 @@ class ChatWindow:
             self.win.destroy()
 
     def on_pet_changed(self):
-        self.win.title(f"{self.pet.pet_name()} — PromptMate")
+        self.win.title(f"{self.pet.pet_name()} — AskPet")
         self._update_header()
         self._add("caption", f"{self.pet.pet_name()} joined the chat "
                              f"(art by {pet_credit(self.pet.pet_meta)})")
-        self._add("pet", "New look, same PromptMate! What are we working on?")
+        self._add("pet", "New look, same AskPet! What are we working on?")
 
     def _on_wheel(self, event):
         if self.is_open():
@@ -6876,7 +6901,7 @@ class ChatWindow:
     # ---- follow-up question flow ---------------------------------------------
 
     def _start_request(self, raw):
-        # Question about prompting/PromptMate? Answer it instead of
+        # Question about prompting/AskPet? Answer it instead of
         # generating a prompt.
         help_answer = answer_help_question(raw)
         if help_answer:
@@ -7127,7 +7152,7 @@ class ChatWindow:
 # ---------------------------------------------------------------------------
 # MCP server (--mcp): exposes the prompt-building brain over the Model
 # Context Protocol (stdio, JSON-RPC 2.0, newline-delimited) so coding agents
-# like Claude Code can use PromptMate as a tool. Stateless and read-only:
+# like Claude Code can use AskPet as a tool. Stateless and read-only:
 # nothing here writes to user data. Stdlib only, same as the rest of the app.
 # ---------------------------------------------------------------------------
 
@@ -7137,9 +7162,9 @@ MCP_TOOLS = [
     {
         "name": "ask",
         "description": (
-            "Send PromptMate a message exactly like chatting with the pet. "
+            "Send AskPet a message exactly like chatting with the pet. "
             "Question-shaped messages about prompting best practices, context, "
-            "handoffs, or PromptMate itself get a knowledge-base answer. Task "
+            "handoffs, or AskPet itself get a knowledge-base answer. Task "
             "descriptions get a full recommendation: destination assistant, "
             "template, agent modules, skills, context checklist, clarifying "
             "questions, and a copy-ready prompt. Typos and shorthand are fine."
@@ -7182,7 +7207,7 @@ MCP_TOOLS = [
     {
         "name": "list_library",
         "description": (
-            "List PromptMate's content library: prompt templates, agent "
+            "List AskPet's content library: prompt templates, agent "
             "modules (expert operating instructions), and skills "
             "(step-by-step workflows). Returns keys, names, and topics; use "
             "get_item for full bodies."
@@ -7377,7 +7402,7 @@ def run_mcp_server():
                 "capabilities": {"tools": {}},
                 "serverInfo": {"name": APP_NAME, "version": APP_VERSION},
                 "instructions": (
-                    "PromptMate builds copy-ready, best-practice prompts for "
+                    "AskPet builds copy-ready, best-practice prompts for "
                     "IT tasks and answers prompting how-to questions. Start "
                     "with the ask tool; everything runs locally."
                 ),
@@ -7409,6 +7434,7 @@ def run_mcp_server():
 
 
 def main():
+    migrate_legacy_data()  # PromptMate -> AskPet user data, one-time
     if "--mcp" in sys.argv:
         run_mcp_server()
         return
@@ -7424,7 +7450,7 @@ def main():
         pass
 
     if "--editor" in sys.argv:
-        app = PromptMateApp(root)
+        app = AskPetApp(root)
         root.protocol("WM_DELETE_WINDOW", app.on_close)
     else:
         PetOverlay(root)

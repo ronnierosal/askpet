@@ -1,6 +1,6 @@
 import time
 
-import promptmate as pm
+import askpet as pm
 
 t0 = time.perf_counter()
 s = pm.SpellHelper()

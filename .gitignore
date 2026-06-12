@@ -6,7 +6,7 @@ __pycache__/
 build/
 dist/
 installer/
-PromptMate.spec
+AskPet.spec
 
 # Generated prompt output
 output/
@@ -17,7 +17,7 @@ output/
 assets/kogi/
 assets/*.webp
 assets/*.zip
-assets/promptmate.ico
+assets/askpet.ico
 
 # Local scratch (the committed copy lives in docs/)
 /chat-screenshot.png

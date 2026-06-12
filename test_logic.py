@@ -1,5 +1,5 @@
-"""Quick logic smoke test for PromptMate (no GUI). Run: python test_logic.py"""
-import promptmate as pm
+"""Quick logic smoke test for AskPet (no GUI). Run: python test_logic.py"""
+import askpet as pm
 
 spell = pm.SpellHelper()
 
@@ -28,7 +28,7 @@ cases = [
     "explain how conditional access works in simple terms",
     "build an integration with the ninjaone api to pull device inventory",
     "set up an mcp server so claude can read our confluence",
-    "i want a local ai chatbot like promptmate using ollama with gemma",
+    "i want a local ai chatbot like askpet using ollama with gemma",
     "deploy a cleanup script to all servers through ninjaone",
     "sumo logic query for failed vpn logins last 24 hours",
     "sentinelone flagged a powershell script on the cfo laptop",

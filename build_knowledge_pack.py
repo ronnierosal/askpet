@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Build a local PromptMate knowledge pack from a YouTube channel's
+"""Build a local AskPet knowledge pack from a YouTube channel's
 auto-transcripts. Dev tool — requires yt-dlp (pip install yt-dlp).
 
-The pack lands in the user-data dir (%LOCALAPPDATA%/PromptMate/knowledge)
+The pack lands in the user-data dir (%LOCALAPPDATA%/AskPet/knowledge)
 for personal, local use only. Transcript content is NEVER committed to
 the repo or redistributed; the creator is credited in every answer.
 
@@ -20,7 +20,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-import promptmate as pm
+import askpet as pm
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 PY = sys.executable

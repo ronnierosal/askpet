@@ -11,7 +11,7 @@ import sys
 import time
 from collections import Counter
 
-import promptmate as pm
+import askpet as pm
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 spell = pm.SpellHelper()

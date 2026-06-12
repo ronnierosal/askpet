@@ -7,7 +7,7 @@ import tempfile
 from datetime import datetime, timedelta
 from pathlib import Path
 
-import promptmate as pm
+import askpet as pm
 
 tmp = Path(tempfile.mkdtemp()) / "prompt-history.json"
 pm.HISTORY_FILE = tmp  # all history helpers read the module global

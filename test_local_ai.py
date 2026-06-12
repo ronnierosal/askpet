@@ -4,7 +4,7 @@ to Ollama on localhost and is skipped (with a notice) when it isn't up."""
 
 import sys
 
-import promptmate as pm
+import askpet as pm
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 spell = pm.SpellHelper()

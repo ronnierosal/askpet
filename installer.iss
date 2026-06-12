@@ -1,17 +1,17 @@
-﻿; PromptMate Windows installer (Inno Setup)
+﻿; AskPet Windows installer (Inno Setup)
 ;
 ; Per-user install: no admin rights needed, deployable via Intune in user
-; context. Supports silent install:  PromptMate-Setup.exe /VERYSILENT /NORESTART
-; Installs over an existing version; user data in %LOCALAPPDATA%\PromptMate
+; context. Supports silent install:  AskPet-Setup.exe /VERYSILENT /NORESTART
+; Installs over an existing version; user data in %LOCALAPPDATA%\AskPet
 ; is never touched (and is preserved on uninstall).
 
-#define AppName "PromptMate"
+#define AppName "AskPet"
 #define AppVersion "0.19.0"
 #define AppPublisher "SLDD IT"
-#define AppExeName "PromptMate.exe"
+#define AppExeName "AskPet.exe"
 
 [Setup]
-AppId={{A87EFF63-539B-4486-A445-8C0622F20915}
+AppId={{2A6A714C-C209-4444-9124-3C3B8A5252FF}
 AppName={#AppName}
 AppVersion={#AppVersion}
 AppPublisher={#AppPublisher}
@@ -20,22 +20,22 @@ DisableProgramGroupPage=yes
 DisableDirPage=yes
 PrivilegesRequired=lowest
 OutputDir=installer
-OutputBaseFilename=PromptMate-Setup-{#AppVersion}
-SetupIconFile=assets\promptmate.ico
+OutputBaseFilename=AskPet-Setup-{#AppVersion}
+SetupIconFile=assets\askpet.ico
 UninstallDisplayIcon={app}\{#AppExeName}
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
-; Close a running PromptMate during upgrade, restart it after.
+; Close a running AskPet during upgrade, restart it after.
 CloseApplications=yes
 RestartApplications=yes
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription: "Additional shortcuts:"; Flags: unchecked
-Name: "startup"; Description: "Start PromptMate when I sign in"; GroupDescription: "Startup:"; Flags: unchecked
+Name: "startup"; Description: "Start AskPet when I sign in"; GroupDescription: "Startup:"; Flags: unchecked
 
 [Files]
-Source: "dist\PromptMate\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "dist\AskPet\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{userprograms}\{#AppName}"; Filename: "{app}\{#AppExeName}"

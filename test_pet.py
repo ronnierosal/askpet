@@ -1,7 +1,7 @@
 """Pet overlay + chat smoke test (window flashes briefly). Run: python test_pet.py"""
 import atexit
 import tkinter as tk
-import promptmate as pm
+import askpet as pm
 
 # This test drives a real PetOverlay, which saves to the REAL settings
 # file. Snapshot it and restore on exit (even on assert failure) so a

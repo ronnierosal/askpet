@@ -134,13 +134,33 @@
       "use chatgpt yourself"
     ],
     "answer": [
-      "Everything I do runs 100% locally on this machine — no cloud AI, no API calls, no telemetry, no account. I build prompts with local keyword matching, not by sending your text anywhere.",
-      "The only time I touch the network is when YOU ask me to: downloading a new pet look from codex-pets.net. Your prompts, history, and settings live in %LOCALAPPDATA%\\PromptMate (Windows) and never leave the machine. 🐾"
+      "Everything I do runs 100% on this machine — no cloud AI, no telemetry, no account. I build prompts with local keyword matching, and if Local AI is on, answers come from a model running on YOUR PC (Ollama on localhost) — your text never leaves the machine either way.",
+      "The only time I touch the network is when YOU ask me to: downloading a new pet look from codex-pets.net, or talking to a local model via Ollama on YOUR machine (localhost) if you've enabled Local AI. Your prompts, history, and settings live in %LOCALAPPDATA%\\AskPet (Windows) and never leave the machine. 🐾"
     ]
   },
-  "promptmate_help": {
+  "local_ai_help": {
     "keywords": [
-      "promptmate",
+      "local ai",
+      "ollama",
+      "gemma",
+      "local model",
+      "answer locally",
+      "answer questions yourself",
+      "use a local model",
+      "use a local llm",
+      "use a local ai",
+      "offline model",
+      "which model do you"
+    ],
+    "answer": [
+      "If Ollama is installed (ollama.com) with a model like Gemma, I can answer light asks myself — fully offline:\n• Rewrites — “rewrite this to sound professional: …”\n• Summaries — “summarize this: …” (paste the text)\n• Email drafts — “write an email asking…”\n• Quick questions — anything question-shaped\n\nBigger work (code, scripts, multi-step tasks) still gets a proper prompt for Codex, Claude Code, ChatGPT, or Claude — a small local model shouldn't pretend to do that.",
+      "Right-click me → ✨ Local AI to turn it on/off or pick which installed model I use. Every local answer is labeled with the model that wrote it. Small models are handy but not brilliant — double-check anything important. 🐾",
+      "Power move: knowledge packs. Build one from a YouTube channel's transcripts (build_knowledge_pack.py in the repo) and I'll ground my answers in that creator's actual content — with credit — for hobby topics like FPV drones. Packs stay on this machine, personal use only."
+    ]
+  },
+  "askpet_help": {
+    "keywords": [
+      "askpet",
       "what can you do",
       "how do you work",
       "how do i use you",

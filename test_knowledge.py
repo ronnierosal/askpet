@@ -7,7 +7,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-import promptmate as pm
+import askpet as pm
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 

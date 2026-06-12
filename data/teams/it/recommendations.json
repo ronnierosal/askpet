@@ -432,7 +432,16 @@
       "shorten this",
       "translate",
       "make it professional",
-      "grammar check"
+      "grammar check",
+      "make this clearer",
+      "make this friendlier",
+      "make this more",
+      "fix the grammar",
+      "fix my grammar",
+      "fix the spelling",
+      "fix this sentence",
+      "make this shorter",
+      "tighten this"
     ],
     "excel": [
       "excel",
@@ -1002,7 +1011,9 @@
       "inbox",
       "unread email",
       "email backlog",
-      "triage my email"
+      "triage my email",
+      "thank you email",
+      "thank-you email"
     ],
     "meeting_prep": [
       "meeting prep",
