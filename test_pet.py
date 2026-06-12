@@ -44,12 +44,29 @@ pet.open_editor(prefill=raw)
 assert pet.editor.rec is not None
 print("editor destination:", pet.editor.rec["destination"])
 
-# Pet resize via scale
+# Pet resize via scale (default is now medium = scale 2)
 pet.set_scale(2)
 assert pet.sprites.w == 96 and pet.sprites.h == 104, (pet.sprites.w, pet.sprites.h)
 pet.set_scale(1)
 assert pet.sprites.w == 192
 print("pet resize OK")
+
+# Nap when ignored, wake on interaction
+pet.chat and pet.chat.close()
+pet.idle_ticks = pet.NAP_AFTER_TICKS + 1
+pet._choose_behavior()
+assert pet.anim == "sleepy", pet.anim
+class FakeEvent: x_root = 0; y_root = 0
+pet._on_press(FakeEvent())
+assert pet.anim == "wave" and pet.idle_ticks == 0
+pet._press_xy = None
+print("nap/wake OK")
+
+# Celebrate resets idle and emotes
+pet.idle_ticks = 500
+pet.celebrate()
+assert pet.anim == "emote" and pet.idle_ticks == 0
+print("celebrate OK")
 
 # Follow-up question flow: short fix-it message triggers questions
 pet.toggle_chat()

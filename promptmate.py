@@ -27,7 +27,7 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 APP_NAME = "PromptMate"
-APP_VERSION = "0.8.0"
+APP_VERSION = "0.9.0"
 CONTENT_VERSION = "2026.06.8"
 
 # ---------------------------------------------------------------------------
@@ -3260,6 +3260,8 @@ class PetOverlay:
 
     TICK_MS = 140
     WALK_SPEED = 4
+    RUN_SPEED = 10
+    NAP_AFTER_TICKS = 1700  # ~4 minutes without interaction -> nap
 
     def __init__(self, root: tk.Tk):
         self.root = root
@@ -3269,7 +3271,7 @@ class PetOverlay:
         self.settings = load_json(SETTINGS_FILE, {})
 
         ensure_default_pet()
-        self.scale = max(1, int(self.settings.get("pet_scale", 1)))
+        self.scale = max(1, int(self.settings.get("pet_scale", 2)))  # medium default
         self.pet_id = self.settings.get("pet_id", "kogi")
         self.pet_dir = local_pet_dir(self.pet_id)
         self.pet_meta = load_json(self.pet_dir / "pet.json",
@@ -3326,6 +3328,7 @@ class PetOverlay:
         self.move_dx = 0
         self.behavior_ticks = len(self.anim_frames()) * 2
         self.wander = bool(self.settings.get("pet_wander", True))
+        self.idle_ticks = 0  # ticks since the user last interacted
 
         self._tick()
 
@@ -3357,12 +3360,14 @@ class PetOverlay:
             sw = self.root.winfo_screenwidth()
             if x <= 0 or x >= sw - self.sprites.w:
                 self.move_dx = -self.move_dx
-                self.set_anim("walk_right" if self.move_dx > 0 else "walk_left",
-                              move_dx=self.move_dx, ticks=self.behavior_ticks)
+                if self.anim in ("walk_right", "walk_left"):
+                    self.set_anim("walk_right" if self.move_dx > 0 else "walk_left",
+                                  move_dx=self.move_dx, ticks=self.behavior_ticks)
                 x = min(max(0, x), sw - self.sprites.w)
             self.root.geometry(f"+{x}+{y}")
 
         self.behavior_ticks -= 1
+        self.idle_ticks += 1
         if self.behavior_ticks <= 0 and not self._dragging:
             self._choose_behavior()
 
@@ -3373,23 +3378,42 @@ class PetOverlay:
             # Listening pose while the chat is open.
             self.set_anim("sit", ticks=random.randint(30, 60))
             return
+        if self.idle_ticks > self.NAP_AFTER_TICKS:
+            # Ignored for a while: nap until the user interacts again.
+            self.set_anim("sleepy", ticks=random.randint(60, 120))
+            return
         if not self.wander:
             self.set_anim("idle", ticks=random.randint(30, 80))
             return
         roll = random.random()
-        if roll < 0.45:
+        if roll < 0.40:
             self.set_anim("idle", ticks=random.randint(25, 70))
-        elif roll < 0.60:
+        elif roll < 0.55:
             self.set_anim("sit", ticks=random.randint(25, 60))
-        elif roll < 0.72:
+        elif roll < 0.65:
             self.set_anim("wave", ticks=len(self.sprites.frames.get("wave", [1])) * 2)
-        elif roll < 0.82:
+        elif roll < 0.75:
             self.set_anim("emote", ticks=random.randint(12, 24))
+        elif roll < 0.80:
+            # Zoomies! A rare fast dash across the screen.
+            direction = random.choice((-1, 1))
+            self.set_anim("run", move_dx=direction * self.RUN_SPEED,
+                          ticks=random.randint(15, 35))
+        elif roll < 0.90:
+            # Slow amble — Kogi's signature mosey.
+            direction = random.choice((-1, 1))
+            self.set_anim("mosey", move_dx=direction * max(2, self.WALK_SPEED // 2),
+                          ticks=random.randint(25, 60))
         else:
             direction = random.choice((-1, 1))
             self.set_anim("walk_right" if direction > 0 else "walk_left",
                           move_dx=direction * self.WALK_SPEED,
                           ticks=random.randint(20, 60))
+
+    def celebrate(self):
+        """Quick happy reaction (e.g. when the user copies a prompt)."""
+        self.idle_ticks = 0
+        self.set_anim("emote", ticks=random.randint(14, 22))
 
     # ---- mouse interaction --------------------------------------------------
 
@@ -3397,6 +3421,10 @@ class PetOverlay:
         self._press_xy = (event.x_root, event.y_root)
         self._win_xy = (self.root.winfo_x(), self.root.winfo_y())
         self._dragging = False
+        was_napping = self.idle_ticks > self.NAP_AFTER_TICKS
+        self.idle_ticks = 0
+        if was_napping:
+            self.set_anim("wave")  # woke up!
 
     def _on_motion(self, event):
         if not self._press_xy:
@@ -3404,6 +3432,8 @@ class PetOverlay:
         dx = event.x_root - self._press_xy[0]
         dy = event.y_root - self._press_xy[1]
         if abs(dx) > 4 or abs(dy) > 4:
+            if not self._dragging and self.anim != "run":
+                self.set_anim("run", ticks=9999)  # legs scramble while carried
             self._dragging = True
         if self._dragging:
             self.root.geometry(f"+{self._win_xy[0] + dx}+{self._win_xy[1] + dy}")
@@ -3411,10 +3441,12 @@ class PetOverlay:
     def _on_release(self, event):
         if self._dragging:
             self._save_position()
+            self.set_anim("emote", ticks=random.randint(10, 16))  # shake it off
         else:
             self.toggle_chat()
         self._press_xy = None
         self._dragging = False
+        self.idle_ticks = 0
 
     def _on_menu(self, event):
         menu = tk.Menu(self.root, tearoff=0)
@@ -3984,6 +4016,7 @@ class ChatWindow:
             return
         self.entry.delete("1.0", "end")
         self._add("user", raw)
+        self.pet.idle_ticks = 0
         if self.pending:
             self._handle_answer(raw)
         else:
@@ -4065,6 +4098,7 @@ class ChatWindow:
         self.win.clipboard_clear()
         self.win.clipboard_append(self.last[3])
         self._add("pet", "Copied! Paste it into Codex, Claude Code, ChatGPT, or Claude. ✅")
+        self.pet.celebrate()
 
     def _save_last(self):
         if not self.last:

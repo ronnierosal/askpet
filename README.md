@@ -24,6 +24,13 @@ ask for one.
 
 ## What's new
 
+**0.9.0** (2026-06-11)
+- The pet defaults to Medium size (right-click → Pet size to change).
+- More pet life: naps after ~4 minutes of being ignored (wakes with a
+  wave when touched), rare zoomies dashes, slow mosey ambles, legs
+  scramble while you drag it, a shake-off emote when dropped, and a
+  happy celebration whenever you copy a prompt.
+
 **0.8.0** (2026-06-11)
 - Full Microsoft cloud coverage: Azure admin (RBAC, tagging, cost,
   teardown), Exchange Online (mailboxes, DLs, transport rules), and
