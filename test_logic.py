@@ -22,6 +22,10 @@ cases = [
     "help me dial in a request for rebuilding our intune packaging process",
     "summarize this zoom recording into action items",
     "i want a chatgpt workspace agent for writing our weekly status reports",
+    "rewrite this email to sound more professional",
+    "user is locked out of their account again, third time this week",
+    "excel formula to find duplicates across two sheets",
+    "explain how conditional access works in simple terms",
 ]
 for raw in cases:
     cleaned = pm.clean_text(raw, spell)

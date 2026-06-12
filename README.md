@@ -24,6 +24,16 @@ ask for one.
 
 ## What's new
 
+**0.6.0** (2026-06-11)
+- Chat replies now show clickable module/skill chips — tap one to read
+  exactly what it adds to your prompt.
+- Content informed by what people actually ask AI at work (writing/editing
+  text is ~40% of work usage) and top helpdesk tickets (password resets #1):
+  new Writing Editor, Spreadsheet, and Helpdesk agents; rewrite/edit
+  template; skills for text editing, Excel formulas, account lockouts,
+  software requests, explaining concepts, and document summaries
+  (36 templates / 38 modules / 49 skills).
+
 **0.5.0** (2026-06-11)
 - Tool coverage: agent modules and skills for Notion, Zoom, Google
   Workspace, Slack, GitHub, ServiceNow, and Power Automate/Zapier

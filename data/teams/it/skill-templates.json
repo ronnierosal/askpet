@@ -604,6 +604,91 @@
       "Document owner, purpose, and how to disable it; review quarterly."
     ]
   },
+  "text_rewrite": {
+    "name": "Text rewrite/edit skill",
+    "topics": [
+      "writing"
+    ],
+    "body": "Edit text without losing the author's voice: audience, tone, cut, verify meaning.",
+    "steps": [
+      "State the audience and the tone you're aiming for.",
+      "Paste the original text in full — never a paraphrase of it.",
+      "Ask for the edit plus a list of what changed and why.",
+      "Check the edit kept your meaning; flag anything that drifted.",
+      "Read it aloud once before sending — awkward spots will surface."
+    ]
+  },
+  "excel_formula": {
+    "name": "Spreadsheet formula skill",
+    "topics": [
+      "excel"
+    ],
+    "body": "Get a working formula: real layout in, explained formula out, sanity-checked.",
+    "steps": [
+      "Describe the sheet by actual columns (A: name, B: date, ...).",
+      "Give 2-3 sample rows and the exact result you expect for them.",
+      "State your version: Excel 365, older Excel, or Google Sheets.",
+      "Ask for the formula plus a plain-English explanation of each part.",
+      "Test on the sample rows first, then spot-check edge cases (blanks, duplicates)."
+    ]
+  },
+  "account_lockout": {
+    "name": "Account lockout/reset skill",
+    "topics": [
+      "helpdesk",
+      "entra"
+    ],
+    "body": "Handle resets and lockouts safely: verify, unlock, find the cause, document.",
+    "steps": [
+      "Verify the requester's identity per policy before touching anything.",
+      "Check WHY it locked: bad password attempts, stale credentials on a device, sync issue.",
+      "Unlock/reset with a one-time credential; force change at next sign-in.",
+      "Confirm the user is in and MFA still works.",
+      "Note the cause in the ticket; repeated lockouts deserve a root-cause look."
+    ]
+  },
+  "software_request": {
+    "name": "Software/access request skill",
+    "topics": [
+      "helpdesk"
+    ],
+    "body": "Fulfill requests cleanly: approval, license, standard install, verify, record.",
+    "steps": [
+      "Check the request has manager/owner approval if policy requires it.",
+      "Confirm license availability or note the cost for procurement.",
+      "Prefer the standard packaged install (Company Portal/Self Service) over manual.",
+      "Verify the user can launch and sign in to the software.",
+      "Record license assignment and close with what was provided."
+    ]
+  },
+  "explain_concept": {
+    "name": "Explain-a-concept skill",
+    "topics": [
+      "learning"
+    ],
+    "body": "Learn something properly: level-set, analogy, example, then test yourself.",
+    "steps": [
+      "State what you already know so the explanation starts at your level.",
+      "Ask for a plain-English explanation with one analogy.",
+      "Ask for a concrete example from your own context (IT/admin).",
+      "Ask what people commonly get wrong about it.",
+      "Explain it back in 2 sentences and ask the assistant to correct you."
+    ]
+  },
+  "doc_summarize": {
+    "name": "Document summary skill",
+    "topics": [
+      "summarize"
+    ],
+    "body": "Summaries people actually use: audience first, structure, decisions and actions pulled out.",
+    "steps": [
+      "Say who the summary is for and what they'll do with it.",
+      "Set the length budget (e.g. 5 bullets, half a page).",
+      "Ask for decisions, action items, and open questions as separate lists.",
+      "Ask what the summary left out that the reader might still need.",
+      "Spot-check 2-3 claims against the original before forwarding."
+    ]
+  },
   "dial_in": {
     "name": "Dial-in-the-ask skill",
     "topics": [

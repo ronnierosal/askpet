@@ -80,6 +80,18 @@ chat.send()
 assert chat.pending is None and chat.last is not None
 print("skip flow OK")
 
+# Clickable module/skill chips appear after the reply and show their text
+chat._deliver_reply(chat.last[1], chat.last[2], chat.last[3])
+chip_msgs = [m for m in chat.messages if m[0] == "chips"]
+assert chip_msgs, "no chips message in reply"
+chips = chip_msgs[-1][1]
+assert any(c["kind"] == "module" for c in chips)
+n_before = len(chat.messages)
+chat._show_item(chips[0])
+assert len(chat.messages) == n_before + 1, "clicking a chip should add a bubble"
+assert chat.messages[-1][1].startswith(pm.AGENT_MODULES[chips[0]["key"]]["name"])
+print(f"chips OK ({len(chips)} chips, click shows text)")
+
 # Chat re-flow on width change
 n_msgs = len(chat.messages)
 chat._cw = 600

@@ -327,6 +327,67 @@
       "improve my prompt",
       "scope this out",
       "think through"
+    ],
+    "writing": [
+      "rewrite",
+      "reword",
+      "proofread",
+      "edit this",
+      "polish",
+      "make this sound",
+      "tone",
+      "shorten this",
+      "translate",
+      "make it professional",
+      "grammar check"
+    ],
+    "excel": [
+      "excel",
+      "spreadsheet",
+      "formula",
+      "pivot",
+      "vlookup",
+      "xlookup",
+      "sumif",
+      "conditional formatting"
+    ],
+    "helpdesk": [
+      "password reset",
+      "reset password",
+      "locked out",
+      "account locked",
+      "mfa reset",
+      "cant log in",
+      "can't log in",
+      "cant sign in",
+      "can't sign in",
+      "forgot password",
+      "software request",
+      "install request",
+      "needs access to",
+      "new laptop",
+      "new monitor",
+      "request hardware"
+    ],
+    "learning": [
+      "explain",
+      "how does",
+      "what is",
+      "whats the difference",
+      "what's the difference",
+      "teach me",
+      "walk me through",
+      "eli5",
+      "in simple terms"
+    ],
+    "summarize": [
+      "summarize",
+      "summarise",
+      "tldr",
+      "tl;dr",
+      "key points",
+      "summary of",
+      "condense"
     ]
   },
   "context_checklist_by_topic": {
@@ -484,6 +545,31 @@
       "The rough idea in your own words",
       "What done looks like",
       "Constraints (time, tools, approvals)"
+    ],
+    "writing": [
+      "The text to work on (paste it)",
+      "Audience and desired tone",
+      "Length limit (if any)"
+    ],
+    "excel": [
+      "Column layout / sample rows",
+      "What the result should show",
+      "Excel version (or Google Sheets)"
+    ],
+    "helpdesk": [
+      "User identity already verified?",
+      "Asset/account details",
+      "Ticket number"
+    ],
+    "learning": [
+      "Your current familiarity level",
+      "Why you need to know (context)",
+      "Preferred depth: overview vs deep dive"
+    ],
+    "summarize": [
+      "The document/text to summarize (paste or attach)",
+      "Who the summary is for",
+      "Target length"
     ]
   },
   "generic_checklist": [

@@ -27,8 +27,8 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 APP_NAME = "PromptMate"
-APP_VERSION = "0.5.0"
-CONTENT_VERSION = "2026.06.5"
+APP_VERSION = "0.6.0"
+CONTENT_VERSION = "2026.06.6"
 
 # ---------------------------------------------------------------------------
 # User data locations (never inside the install folder)
@@ -318,6 +318,21 @@ KEYWORD_TOPICS = {
     "refine": ["dial in", "refine", "brainstorm", "requirements",
                "not sure how to ask", "help me ask", "improve my prompt",
                "scope this out", "think through"],
+    "writing": ["rewrite", "reword", "proofread", "edit this", "polish",
+                "make this sound", "tone", "shorten this", "translate",
+                "make it professional", "grammar check"],
+    "excel": ["excel", "spreadsheet", "formula", "pivot", "vlookup",
+              "xlookup", "sumif", "conditional formatting"],
+    "helpdesk": ["password reset", "reset password", "locked out",
+                 "account locked", "mfa reset", "cant log in", "can't log in",
+                 "cant sign in", "can't sign in", "forgot password",
+                 "software request", "install request", "needs access to",
+                 "new laptop", "new monitor", "request hardware"],
+    "learning": ["explain", "how does", "what is", "whats the difference",
+                 "what's the difference", "teach me", "walk me through",
+                 "eli5", "in simple terms"],
+    "summarize": ["summarize", "summarise", "tldr", "tl;dr", "key points",
+                  "summary of", "condense"],
 }
 
 
@@ -852,6 +867,21 @@ PROMPT_TEMPLATES = {
             "Ticket context: {INPUTS}\nConstraints: {CONSTRAINTS}"
         ),
     },
+    "rewrite_text": {
+        "name": "Rewrite / edit text",
+        "destination": "ChatGPT web",
+        "topics": ["writing", "summarize"],
+        "body": (
+            "Edit this text for me. {TASK}\n\n"
+            "Audience and tone: {INPUTS}\n\n"
+            "Rules:\n- Preserve my meaning and voice — edit, don't rewrite "
+            "from scratch\n- Fix clarity, grammar, and flow; cut filler\n"
+            "- Keep it the same length or shorter unless I said otherwise\n\n"
+            "Give me:\n1. The edited version\n2. A short list of what you "
+            "changed and why\n3. Anything that was ambiguous where you had "
+            "to guess my intent\n\nConstraints: {CONSTRAINTS}"
+        ),
+    },
     "dial_in": {
         "name": "Dial in the ask (plan first)",
         "destination": "Both",
@@ -1079,7 +1109,7 @@ AGENT_MODULES = {
     },
     "explainer": {
         "name": "Explainer Agent",
-        "topics": [],
+        "topics": ["learning"],
         "body": (
             "After the technical answer, add a short plain-English "
             "explanation a junior admin could follow: what we did, why, and "
@@ -1253,6 +1283,39 @@ AGENT_MODULES = {
             "references owned by a service account not a person, throttling "
             "awareness, and a kill switch — every flow needs an owner and a "
             "way to turn it off."
+        ),
+    },
+    "writing_editor": {
+        "name": "Writing Editor Agent",
+        "topics": ["writing", "summarize"],
+        "body": (
+            "Act as an editor, not a rewriter: preserve the author's voice "
+            "and meaning, fix clarity and grammar, cut filler, and match the "
+            "stated audience and tone. Show the edited version first, then a "
+            "short list of what you changed and why. Never pad — shorter is "
+            "usually better."
+        ),
+    },
+    "spreadsheet": {
+        "name": "Spreadsheet Agent",
+        "topics": ["excel", "reporting"],
+        "body": (
+            "Act as an Excel/Sheets specialist. Ask for the actual column "
+            "layout before writing formulas; prefer modern functions "
+            "(XLOOKUP, FILTER, LET) but state version requirements; explain "
+            "each formula piece by piece; and always include a way to "
+            "sanity-check the result against a few known rows."
+        ),
+    },
+    "helpdesk": {
+        "name": "Helpdesk Agent",
+        "topics": ["helpdesk"],
+        "body": (
+            "Act as a frontline IT support specialist: verify identity "
+            "before account actions, follow the least-disruptive fix first, "
+            "write user-facing replies in plain language, capture what was "
+            "done in the ticket, and spot repeat issues that deserve a KB "
+            "article or automation instead of another one-off fix."
         ),
     },
 }
@@ -1762,6 +1825,78 @@ SKILL_TEMPLATES = {
             "Document owner, purpose, and how to disable it; review quarterly.",
         ],
     },
+    "text_rewrite": {
+        "name": "Text rewrite/edit skill",
+        "topics": ["writing"],
+        "body": "Edit text without losing the author's voice: audience, tone, cut, verify meaning.",
+        "steps": [
+            "State the audience and the tone you're aiming for.",
+            "Paste the original text in full — never a paraphrase of it.",
+            "Ask for the edit plus a list of what changed and why.",
+            "Check the edit kept your meaning; flag anything that drifted.",
+            "Read it aloud once before sending — awkward spots will surface.",
+        ],
+    },
+    "excel_formula": {
+        "name": "Spreadsheet formula skill",
+        "topics": ["excel"],
+        "body": "Get a working formula: real layout in, explained formula out, sanity-checked.",
+        "steps": [
+            "Describe the sheet by actual columns (A: name, B: date, ...).",
+            "Give 2-3 sample rows and the exact result you expect for them.",
+            "State your version: Excel 365, older Excel, or Google Sheets.",
+            "Ask for the formula plus a plain-English explanation of each part.",
+            "Test on the sample rows first, then spot-check edge cases (blanks, duplicates).",
+        ],
+    },
+    "account_lockout": {
+        "name": "Account lockout/reset skill",
+        "topics": ["helpdesk", "entra"],
+        "body": "Handle resets and lockouts safely: verify, unlock, find the cause, document.",
+        "steps": [
+            "Verify the requester's identity per policy before touching anything.",
+            "Check WHY it locked: bad password attempts, stale credentials on a device, sync issue.",
+            "Unlock/reset with a one-time credential; force change at next sign-in.",
+            "Confirm the user is in and MFA still works.",
+            "Note the cause in the ticket; repeated lockouts deserve a root-cause look.",
+        ],
+    },
+    "software_request": {
+        "name": "Software/access request skill",
+        "topics": ["helpdesk"],
+        "body": "Fulfill requests cleanly: approval, license, standard install, verify, record.",
+        "steps": [
+            "Check the request has manager/owner approval if policy requires it.",
+            "Confirm license availability or note the cost for procurement.",
+            "Prefer the standard packaged install (Company Portal/Self Service) over manual.",
+            "Verify the user can launch and sign in to the software.",
+            "Record license assignment and close with what was provided.",
+        ],
+    },
+    "explain_concept": {
+        "name": "Explain-a-concept skill",
+        "topics": ["learning"],
+        "body": "Learn something properly: level-set, analogy, example, then test yourself.",
+        "steps": [
+            "State what you already know so the explanation starts at your level.",
+            "Ask for a plain-English explanation with one analogy.",
+            "Ask for a concrete example from your own context (IT/admin).",
+            "Ask what people commonly get wrong about it.",
+            "Explain it back in 2 sentences and ask the assistant to correct you.",
+        ],
+    },
+    "doc_summarize": {
+        "name": "Document summary skill",
+        "topics": ["summarize"],
+        "body": "Summaries people actually use: audience first, structure, decisions and actions pulled out.",
+        "steps": [
+            "Say who the summary is for and what they'll do with it.",
+            "Set the length budget (e.g. 5 bullets, half a page).",
+            "Ask for decisions, action items, and open questions as separate lists.",
+            "Ask what the summary left out that the reader might still need.",
+            "Spot-check 2-3 claims against the original before forwarding.",
+        ],
+    },
     "dial_in": {
         "name": "Dial-in-the-ask skill",
         "topics": ["refine"],
@@ -1808,6 +1943,11 @@ CONTEXT_CHECKLIST_BY_TOPIC = {
     "servicenow": ["Instance and table (incident/request/change)", "Assignment group", "Related CI / CMDB record"],
     "automation": ["Trigger event and source system", "Target systems and connectors", "What should happen on failure"],
     "refine": ["The rough idea in your own words", "What done looks like", "Constraints (time, tools, approvals)"],
+    "writing": ["The text to work on (paste it)", "Audience and desired tone", "Length limit (if any)"],
+    "excel": ["Column layout / sample rows", "What the result should show", "Excel version (or Google Sheets)"],
+    "helpdesk": ["User identity already verified?", "Asset/account details", "Ticket number"],
+    "learning": ["Your current familiarity level", "Why you need to know (context)", "Preferred depth: overview vs deep dive"],
+    "summarize": ["The document/text to summarize (paste or attach)", "Who the summary is for", "Target length"],
 }
 
 GENERIC_CHECKLIST = [
@@ -3169,10 +3309,38 @@ class ChatWindow:
             self._draw_bubble(text, "right", self.USER_BUBBLE, "#ffffff")
         elif kind == "pet":
             self._draw_bubble(text, "left", self.PET_BUBBLE, "#000000")
+        elif kind == "chips":
+            self._draw_chips(text)
         elif kind == "prompt":
             self._draw_bubble(text, "left", "#f2f2f7", "#1c1c1e",
                               font=("Consolas", 8))
             self._draw_actions()
+
+    def _draw_chips(self, items):
+        """Clickable module/skill chips, two per row; click shows the text."""
+        holder = tk.Frame(self.canvas, bg=self.BG)
+        row = None
+        for i, it in enumerate(items):
+            if i % 2 == 0:
+                row = tk.Frame(holder, bg=self.BG)
+                row.pack(anchor="w")
+            ttk.Button(row, text=it["label"],
+                       command=lambda it=it: self._show_item(it)).pack(
+                side="left", padx=(0, 4), pady=2)
+        self._frames.append(holder)
+        item = self.canvas.create_window(12, self._y, window=holder, anchor="nw")
+        self.win.update_idletasks()
+        self._finish(self.canvas.bbox(item)[3])
+
+    def _show_item(self, it):
+        source = AGENT_MODULES if it["kind"] == "module" else SKILL_TEMPLATES
+        obj = source.get(it["key"])
+        if not obj:
+            return
+        text = f"{obj['name']}\n\n{obj['body']}"
+        if obj.get("steps"):
+            text += "\n" + "\n".join(f"{i}. {s}" for i, s in enumerate(obj["steps"], 1))
+        self._add("pet", text)
 
     def _draw_caption(self, text):
         item = self.canvas.create_text(self._cw // 2, self._y + 4, text=text,
@@ -3299,16 +3467,22 @@ class ChatWindow:
             return
         self._hide_typing()
         template_name = PROMPT_TEMPLATES[rec["template"]]["name"]
-        module_names = ", ".join(AGENT_MODULES[m]["name"] for m in rec["modules"])
         opener = random.choice(("Got it!", "Okay, here's what I make of it:",
                                 "Perfect, that helps."))
         self._add("pet", f"{opener} I read that as:\n“{cleaned}”")
         self._add("pet", f"➜ Send it to: {DEST_LABELS[rec['destination']]}\n{rec['reason']}")
-        details = f"Template: {template_name}\nModules: {module_names}"
+        details = f"Template: {template_name}"
         if rec["checklist"]:
             hints = "\n".join(f"• {c}" for c in rec["checklist"][:5])
             details += f"\n\nIt'll work even better if you paste in:\n{hints}"
         self._add("pet", details)
+        chips = ([{"label": f"🧩 {AGENT_MODULES[m]['name']}", "kind": "module", "key": m}
+                  for m in rec["modules"]]
+                 + [{"label": f"🛠 {SKILL_TEMPLATES[s]['name']}", "kind": "skill", "key": s}
+                    for s in rec["skills"]])
+        if chips:
+            self._add("caption", "I baked these in — tap one to read what it adds:")
+            self._add("chips", chips)
         self._add("prompt", prompt)
 
     def _copy_last(self):

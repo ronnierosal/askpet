@@ -273,6 +273,15 @@
     ],
     "body": "Draft a reply to a support ticket. {TASK}\n\nRequirements:\n- Acknowledge the actual problem in the user's terms\n- What was found/done, in plain language\n- Next step and who owns it (them or us), with timing\n- Professional, warm, no blame, no jargon\n\nTicket context: {INPUTS}\nConstraints: {CONSTRAINTS}"
   },
+  "rewrite_text": {
+    "name": "Rewrite / edit text",
+    "destination": "ChatGPT web",
+    "topics": [
+      "writing",
+      "summarize"
+    ],
+    "body": "Edit this text for me. {TASK}\n\nAudience and tone: {INPUTS}\n\nRules:\n- Preserve my meaning and voice — edit, don't rewrite from scratch\n- Fix clarity, grammar, and flow; cut filler\n- Keep it the same length or shorter unless I said otherwise\n\nGive me:\n1. The edited version\n2. A short list of what you changed and why\n3. Anything that was ambiguous where you had to guess my intent\n\nConstraints: {CONSTRAINTS}"
+  },
   "dial_in": {
     "name": "Dial in the ask (plan first)",
     "destination": "Both",
