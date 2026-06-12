@@ -27,8 +27,8 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 APP_NAME = "PromptMate"
-APP_VERSION = "0.2.0"
-CONTENT_VERSION = "2026.06.2"
+APP_VERSION = "0.3.0"
+CONTENT_VERSION = "2026.06.3"
 
 # ---------------------------------------------------------------------------
 # User data locations (never inside the install folder)
@@ -267,7 +267,7 @@ CHATGPT_SIGNALS = {
 
 KEYWORD_TOPICS = {
     "azure_function": ["azure function", "azure functions", "function app"],
-    "intune": ["intune"],
+    "intune": ["intune", "autopilot", "enrollment", "device compliance"],
     "m365": ["microsoft 365", "office 365", "exchange", "sharepoint", "onedrive", "mailbox"],
     "entra": ["entra", "azure ad", "active directory", "conditional access", "mfa", "sso"],
     "okta": ["okta", "scim", "saml"],
@@ -292,9 +292,11 @@ KEYWORD_TOPICS = {
     "monitoring": ["monitoring", "alert", "alerts", "log analytics", "kql",
                    "sentinel", "splunk", "dashboard"],
     "reporting": ["report", "reporting", "metrics", "kpi", "export",
-                  "spreadsheet", "license count", "licenses"],
+                  "spreadsheet", "license count", "licenses", "csv", "bulk"],
     "backup": ["backup", "backups", "restore", "disaster recovery",
                "recovery point", "snapshot"],
+    "vendor": ["vendor", "support case", "open a case", "escalate",
+               "microsoft support", "evaluate", "evaluation", "compare tools"],
 }
 
 
@@ -683,6 +685,131 @@ PROMPT_TEMPLATES = {
             "Facts to include: {INPUTS}\nConstraints: {CONSTRAINTS}"
         ),
     },
+    "graph_api": {
+        "name": "Microsoft Graph API script",
+        "destination": "Codex",
+        "topics": ["m365", "entra", "powershell"],
+        "body": (
+            "Write a Microsoft Graph script. {TASK}\n\n"
+            "Requirements:\n- State required Graph permissions (least privilege) "
+            "and whether delegated or application\n"
+            "- Handle paging and throttling (429 with Retry-After)\n"
+            "- Batch where possible; read-only dry-run mode first\n"
+            "- Inputs: {INPUTS}\n- Constraints: {CONSTRAINTS}\n\n"
+            "Verification: {VERIFICATION}"
+        ),
+    },
+    "conditional_access": {
+        "name": "Conditional Access policy",
+        "destination": "Both",
+        "topics": ["entra", "security"],
+        "body": (
+            "Design or change a Conditional Access policy. {TASK}\n\n"
+            "Requirements:\n- Start in report-only mode; define what success "
+            "looks like in the sign-in logs before enforcing\n"
+            "- Exclude break-glass accounts and document them\n"
+            "- State exactly who/what is in scope and excluded, and why\n"
+            "- Lockout risk assessment and rollback steps\n\n"
+            "Policy intent: {INPUTS}\nConstraints: {CONSTRAINTS}\n"
+            "Verification: {VERIFICATION}"
+        ),
+    },
+    "device_policy": {
+        "name": "Device policy / configuration profile",
+        "destination": "Both",
+        "topics": ["intune"],
+        "body": (
+            "Create or modify a device policy (Intune configuration/compliance "
+            "or GPO). {TASK}\n\n"
+            "Cover:\n- The exact settings and their values, with rationale\n"
+            "- Assignment scoping and conflict behavior with existing policies\n"
+            "- Pilot ring first; how to confirm the setting applied on a device\n"
+            "- User impact and rollback\n\n"
+            "Scope: {INPUTS}\nConstraints: {CONSTRAINTS}\nVerification: {VERIFICATION}"
+        ),
+    },
+    "collab_admin": {
+        "name": "Teams/SharePoint/OneDrive admin",
+        "destination": "Both",
+        "topics": ["m365"],
+        "body": (
+            "Teams/SharePoint/OneDrive administration task. {TASK}\n\n"
+            "Cover:\n- Admin-center steps and PowerShell/Graph equivalent\n"
+            "- Permission/sharing implications (internal vs external)\n"
+            "- Governance: naming, ownership, lifecycle of what's created\n"
+            "- Rollback steps\n\n"
+            "Context: {INPUTS}\nConstraints: {CONSTRAINTS}\nVerification: {VERIFICATION}"
+        ),
+    },
+    "bulk_data": {
+        "name": "Bulk data operation (CSV)",
+        "destination": "Codex",
+        "topics": ["reporting", "powershell"],
+        "body": (
+            "Bulk operation driven by a CSV/export. {TASK}\n\n"
+            "Requirements:\n- Validate the input file first: required columns, "
+            "duplicates, empty values; reject bad rows to an errors file\n"
+            "- Dry-run mode that reports what WOULD change\n"
+            "- Process in batches with progress output and a results log\n"
+            "- Inputs: {INPUTS}\n- Constraints: {CONSTRAINTS}\n\n"
+            "Verification: {VERIFICATION}"
+        ),
+    },
+    "vendor_case": {
+        "name": "Vendor support case",
+        "destination": "ChatGPT web",
+        "topics": ["vendor"],
+        "body": (
+            "Help me open or escalate a vendor support case. {TASK}\n\n"
+            "Produce:\n- A tight problem statement: expected vs actual, since when\n"
+            "- Environment details and exact reproduction steps\n"
+            "- The diagnostics/logs to attach (tell me what to collect)\n"
+            "- Business impact statement to justify the severity requested\n"
+            "- Questions to push back with if first response is boilerplate\n\n"
+            "Details: {INPUTS}\nConstraints: {CONSTRAINTS}"
+        ),
+    },
+    "vendor_eval": {
+        "name": "Tool/vendor evaluation",
+        "destination": "ChatGPT web",
+        "topics": ["vendor"],
+        "body": (
+            "Evaluate tools/vendors for a need. {TASK}\n\n"
+            "Produce:\n- Requirements split into must-have vs nice-to-have\n"
+            "- Comparison table of realistic candidates\n"
+            "- Security/compliance considerations (SSO, data residency, audit)\n"
+            "- Licensing model gotchas and exit/migration cost\n"
+            "- A recommendation with reasoning\n\n"
+            "Context: {INPUTS}\nConstraints: {CONSTRAINTS}"
+        ),
+    },
+    "training_guide": {
+        "name": "Training material / user guide",
+        "destination": "ChatGPT web",
+        "topics": ["confluence"],
+        "body": (
+            "Create end-user training material. {TASK}\n\n"
+            "Requirements:\n- Written for non-technical users; no jargon\n"
+            "- Task-based sections: 'How do I…' with numbered steps\n"
+            "- What the user should see after each step\n"
+            "- FAQ section from likely confusion points\n"
+            "- Where to get help when stuck\n\n"
+            "Audience and scope: {INPUTS}\nConstraints: {CONSTRAINTS}"
+        ),
+    },
+    "ticket_reply": {
+        "name": "Support ticket reply",
+        "destination": "ChatGPT web",
+        "topics": ["jira"],
+        "body": (
+            "Draft a reply to a support ticket. {TASK}\n\n"
+            "Requirements:\n- Acknowledge the actual problem in the user's terms\n"
+            "- What was found/done, in plain language\n"
+            "- Next step and who owns it (them or us), with timing\n"
+            "- Professional, warm, no blame, no jargon\n\n"
+            "Ticket context: {INPUTS}\nConstraints: {CONSTRAINTS}"
+        ),
+    },
 }
 
 AGENT_MODULES = {
@@ -882,6 +1009,66 @@ AGENT_MODULES = {
             "slices, estimate effort per slice, flag dependencies and "
             "unknowns, and confirm the order. Push back on scope creep by "
             "listing it as explicit follow-up work."
+        ),
+    },
+    "graph": {
+        "name": "Microsoft Graph Agent",
+        "topics": ["m365", "entra"],
+        "body": (
+            "Prefer Microsoft Graph over legacy modules where it can do the "
+            "job. Always state the exact Graph permissions needed and whether "
+            "delegated or application; least privilege. Handle paging and "
+            "throttling (429/Retry-After) in every script."
+        ),
+    },
+    "identity": {
+        "name": "Identity Agent",
+        "topics": ["entra", "okta", "onboarding"],
+        "body": (
+            "Act as an identity specialist (Entra ID/Okta): lifecycle joins/"
+            "moves/leaves, group-based access over direct grants, MFA and "
+            "Conditional Access awareness, break-glass account protection, "
+            "and session/token revocation when access must end immediately."
+        ),
+    },
+    "endpoint": {
+        "name": "Endpoint Agent",
+        "topics": ["intune"],
+        "body": (
+            "Act as an endpoint/device specialist: Intune enrollment, "
+            "Autopilot, compliance and configuration profiles, app "
+            "deployment rings, and device-side verification — always confirm "
+            "the policy or app actually landed on a real device."
+        ),
+    },
+    "collaboration": {
+        "name": "Collaboration Agent",
+        "topics": ["m365"],
+        "body": (
+            "Act as a Teams/SharePoint/OneDrive specialist with a governance "
+            "mindset: ownership, naming, internal vs external sharing "
+            "implications, and lifecycle (what happens to this site/team in "
+            "two years). Flag sprawl-creating choices."
+        ),
+    },
+    "vendor_liaison": {
+        "name": "Vendor Liaison Agent",
+        "topics": ["vendor"],
+        "body": (
+            "When dealing with vendor support: reproduce before reporting, "
+            "write expected-vs-actual problem statements, attach the "
+            "diagnostics they will ask for preemptively, state business "
+            "impact to justify severity, and keep a case timeline."
+        ),
+    },
+    "cost": {
+        "name": "Cost Optimization Agent",
+        "topics": ["reporting"],
+        "body": (
+            "Watch for cost: licensing tier fit, unused seats, oversized "
+            "resources, and egress/storage surprises. When proposing a "
+            "solution, state its recurring cost and the cheaper alternative "
+            "you considered."
         ),
     },
 }
@@ -1199,6 +1386,102 @@ SKILL_TEMPLATES = {
             "Park open questions with who will answer them by when.",
         ],
     },
+    "graph_script": {
+        "name": "Graph API script skill",
+        "topics": ["m365", "entra"],
+        "body": "Build a Graph script safely: permissions, dry-run, paging, throttling, evidence.",
+        "steps": [
+            "Identify the exact Graph endpoints and least-privilege permissions.",
+            "Get the app registration/consent approved before writing code.",
+            "Build read-only first; print what WOULD change as a dry run.",
+            "Add paging and 429/Retry-After handling; test on a small scope.",
+            "Run for real in batches; log results as evidence.",
+        ],
+    },
+    "ca_rollout": {
+        "name": "Conditional Access rollout skill",
+        "topics": ["entra", "security"],
+        "body": "Roll out a CA policy without locking anyone out: report-only, review, enforce.",
+        "steps": [
+            "Define intent: who must do what, under which conditions.",
+            "Exclude break-glass accounts; verify they still work.",
+            "Deploy in report-only mode for an agreed soak period.",
+            "Review sign-in log impact; fix false positives before enforcing.",
+            "Enforce, monitor the first 24h closely, document the policy.",
+        ],
+    },
+    "autopilot_provision": {
+        "name": "Device provisioning skill",
+        "topics": ["intune", "onboarding"],
+        "body": "Provision a device end to end: enroll, apply profiles, verify, hand over.",
+        "steps": [
+            "Register/assign the device (Autopilot profile or manual enrollment).",
+            "Confirm group membership drives the right apps and policies.",
+            "Provision and watch enrollment status for failures.",
+            "Verify on-device: compliance state, required apps, drive encryption.",
+            "Hand over with the user-facing quick-start info.",
+        ],
+    },
+    "teams_provision": {
+        "name": "Teams/site provisioning skill",
+        "topics": ["m365"],
+        "body": "Create a team/site with governance: owner, naming, sharing, lifecycle.",
+        "steps": [
+            "Confirm the request has a business owner and a clear purpose.",
+            "Apply naming convention and at least two owners.",
+            "Set sharing: internal/external, guest policy, sensitivity label.",
+            "Provision and verify member access works.",
+            "Record it in the inventory with a review/expiry date.",
+        ],
+    },
+    "support_case": {
+        "name": "Vendor support case skill",
+        "topics": ["vendor"],
+        "body": "Open vendor cases that get answered: repro, evidence, impact, follow-up cadence.",
+        "steps": [
+            "Reproduce the issue and write expected vs actual behavior.",
+            "Collect the diagnostics the vendor will ask for (logs, versions, IDs).",
+            "State business impact and the severity you're requesting.",
+            "Open the case; record the case number in your ticket.",
+            "Set a follow-up cadence; escalate with impact data if it stalls.",
+        ],
+    },
+    "csv_bulk_ops": {
+        "name": "Bulk operations skill",
+        "topics": ["reporting", "powershell"],
+        "body": "Run bulk changes from a CSV without disasters: validate, dry-run, batch, log.",
+        "steps": [
+            "Validate the input: required columns, duplicates, empties; reject bad rows.",
+            "Dry-run and review the would-change list with the requester.",
+            "Run a small batch first (5-10 rows); verify results.",
+            "Run the rest in batches with progress and a results log.",
+            "Keep input + results log as the change evidence.",
+        ],
+    },
+    "cert_renewal": {
+        "name": "Certificate renewal skill",
+        "topics": ["network", "security"],
+        "body": "Renew a certificate without an outage: inventory, renew, deploy, verify, record.",
+        "steps": [
+            "Identify every place the current cert is used (servers, LBs, services).",
+            "Generate the CSR/renewal with the right SANs and key size.",
+            "Deploy to one node first; verify chain and expiry with a TLS check.",
+            "Roll to remaining nodes; restart services that cache certs.",
+            "Update the cert inventory with the new expiry and set a reminder.",
+        ],
+    },
+    "dns_change": {
+        "name": "DNS change skill",
+        "topics": ["network"],
+        "body": "Make DNS changes safely: lower TTL first, change, verify propagation, revert path.",
+        "steps": [
+            "Record the current record values (your rollback).",
+            "Lower TTL ahead of the change window if cutover timing matters.",
+            "Make the change; verify against authoritative and public resolvers.",
+            "Test the dependent service end to end, not just the lookup.",
+            "Restore TTL and document the change with timestamps.",
+        ],
+    },
 }
 
 CONTEXT_CHECKLIST_BY_TOPIC = {
@@ -1223,6 +1506,7 @@ CONTEXT_CHECKLIST_BY_TOPIC = {
     "monitoring": ["Data source / workspace name", "The condition worth alerting on", "Who should receive alerts"],
     "reporting": ["Data source and time range", "Who consumes the report", "A known reference number to validate against"],
     "backup": ["Backup product and scope", "RTO/RPO targets", "Last successful restore test date"],
+    "vendor": ["Product name and version", "Case number (if existing)", "Logs/diagnostics already collected"],
 }
 
 GENERIC_CHECKLIST = [
@@ -2071,6 +2355,12 @@ class PetOverlay:
         menu.add_separator()
         menu.add_command(label="🔄 Change pet…", command=self.open_pet_browser)
         menu.add_command(label=f"ℹ About {self.pet_name()}", command=self.show_pet_credit)
+        size_menu = tk.Menu(menu, tearoff=0)
+        for label, scale in (("Large", 1), ("Medium", 2), ("Small", 3)):
+            check = " ✓" if scale == self.scale else ""
+            size_menu.add_command(label=label + check,
+                                  command=lambda s=scale: self.set_scale(s))
+        menu.add_cascade(label="📏 Pet size", menu=size_menu)
         menu.add_separator()
         label = "Stop wandering" if self.wander else "Allow wandering"
         menu.add_command(label=f"🐾 {label}", command=self._toggle_wander)
@@ -2095,12 +2385,26 @@ class PetOverlay:
     def open_pet_browser(self):
         PetBrowser(self)
 
+    def set_scale(self, scale: int):
+        """Resize the pet (1 = full sprite size, larger = smaller pet)."""
+        self.scale = max(1, int(scale))
+        self.settings["pet_scale"] = self.scale
+        self._reload_sprites()
+        self._save_settings()
+
     def switch_pet(self, pet_id: str):
         """Reload sprites for a newly selected pet and resize the overlay."""
         self.pet_id = pet_id
         self.pet_dir = local_pet_dir(pet_id)
         self.pet_meta = load_json(self.pet_dir / "pet.json",
                                   {"id": pet_id, "displayName": pet_id.title()})
+        self._reload_sprites()
+        self.settings["pet_id"] = pet_id
+        self._save_settings()
+        if self.chat and self.chat.is_open():
+            self.chat.on_pet_changed()
+
+    def _reload_sprites(self):
         self.sprites = SpriteLibrary(self.pet_dir, scale=self.scale)
         w, h = self.sprites.w, self.sprites.h
         self.canvas.delete("all")
@@ -2110,10 +2414,6 @@ class PetOverlay:
         sw, sh = self.root.winfo_screenwidth(), self.root.winfo_screenheight()
         self.root.geometry(f"{w}x{h}+{min(x, sw - w)}+{min(y, sh - h)}")
         self.set_anim("wave")
-        self.settings["pet_id"] = pet_id
-        self._save_settings()
-        if self.chat and self.chat.is_open():
-            self.chat.on_pet_changed()
 
     def _toggle_wander(self):
         self.wander = not self.wander
@@ -2299,59 +2599,111 @@ CHAT_GREETING = (
 
 
 class ChatWindow:
-    """iMessage-style chat window opened by clicking the pet."""
+    """iMessage-style chat window opened by clicking the pet.
+
+    Messages are kept in a history list and re-flowed whenever the window is
+    resized, so bubbles always wrap to the current width.
+    """
 
     BG = "#ffffff"
+    HEADER_BG = "#f6f6f7"
     USER_BUBBLE = "#0b93f6"
     PET_BUBBLE = "#e9e9eb"
     CAPTION = "#8e8e93"
-    WIDTH = 420
 
     def __init__(self, pet: PetOverlay):
         self.pet = pet
         self.spell = pet.spell
-        self.last = None  # (raw, cleaned, rec, prompt)
-        self._y = 12       # layout cursor in the canvas
-        self._typing_items = []
+        self.last = None       # (raw, cleaned, rec, prompt)
+        self.messages = []     # (kind, text) history, re-flowed on resize
+        self._frames = []      # embedded button frames, destroyed on re-flow
+        self._typing = False
+        self._y = 12
+        self._cw = 440         # canvas width used for the current layout
+        self._resize_job = None
+        self._placeholder_on = False
 
         win = tk.Toplevel(pet.root)
         self.win = win
         win.title(f"{pet.pet_name()} — PromptMate")
         win.wm_attributes("-topmost", True)
-        win.resizable(False, True)
-        self._place_near_pet(self.WIDTH, 580)
+        win.minsize(340, 400)
+        self._place_near_pet(440, 600)
         win.configure(bg=self.BG)
+
+        self._build_header()
 
         # Conversation canvas
         log_frame = tk.Frame(win, bg=self.BG)
         log_frame.pack(fill="both", expand=True)
-        self.canvas = tk.Canvas(log_frame, bg=self.BG, highlightthickness=0,
-                                width=self.WIDTH)
+        self.canvas = tk.Canvas(log_frame, bg=self.BG, highlightthickness=0)
         scroll = ttk.Scrollbar(log_frame, command=self.canvas.yview)
         self.canvas.configure(yscrollcommand=scroll.set)
         scroll.pack(side="right", fill="y")
         self.canvas.pack(fill="both", expand=True)
-        self.canvas.bind_all("<MouseWheel>", self._on_wheel)
+        self.canvas.bind("<MouseWheel>", self._on_wheel)
+        self.canvas.bind("<Configure>", self._on_canvas_resize)
 
-        # Input row: rounded-feel entry + round blue send button
+        # Input row: entry with placeholder + round blue send button
         input_frame = tk.Frame(win, bg=self.BG, padx=8, pady=8)
         input_frame.pack(fill="x")
-        entry_holder = tk.Frame(input_frame, bg="#d1d1d6", padx=1, pady=1)
-        entry_holder.pack(side="left", fill="both", expand=True)
-        self.entry = tk.Text(entry_holder, height=2, wrap="word", relief="flat",
-                             font=("Segoe UI", 10), undo=True, padx=8, pady=6)
-        self.entry.pack(fill="both", expand=True)
-        SpellSupport(self.entry, self.spell)
-        self.entry.bind("<Return>", self._on_return)
+        # Button first, from the right, so the entry can never squeeze it out
+        # (a Text widget's default requested width is ~80 chars).
         send_btn = tk.Button(input_frame, text="↑", command=self.send,
                              bg=self.USER_BUBBLE, fg="white", relief="flat",
                              font=("Segoe UI", 13, "bold"), width=3, cursor="hand2",
                              activebackground="#0a84d0", activeforeground="white")
-        send_btn.pack(side="left", padx=(8, 0))
+        send_btn.pack(side="right", padx=(8, 0), fill="y")
+        entry_holder = tk.Frame(input_frame, bg="#d1d1d6", padx=1, pady=1)
+        entry_holder.pack(side="left", fill="both", expand=True)
+        self.entry = tk.Text(entry_holder, height=2, width=10, wrap="word",
+                             relief="flat", font=("Segoe UI", 10), undo=True,
+                             padx=8, pady=6)
+        self.entry.pack(fill="both", expand=True)
+        SpellSupport(self.entry, self.spell)
+        self.entry.bind("<Return>", self._on_return)
+        self.entry.bind("<FocusIn>", self._clear_placeholder)
+        self.entry.bind("<FocusOut>", self._set_placeholder)
 
-        self._caption(datetime.now().strftime("Today %H:%M"))
-        self._pet_bubble(CHAT_GREETING)
+        self._add("caption", datetime.now().strftime("Today %H:%M"))
+        self._add("pet", CHAT_GREETING)
         self.entry.focus_set()
+
+    # ---- header --------------------------------------------------------------
+
+    def _build_header(self):
+        header = tk.Frame(self.win, bg=self.HEADER_BG)
+        header.pack(fill="x")
+        self.avatar_label = tk.Label(header, bg=self.HEADER_BG)
+        self.avatar_label.pack(side="left", padx=(10, 8), pady=4)
+        box = tk.Frame(header, bg=self.HEADER_BG)
+        box.pack(side="left", pady=4)
+        self.header_name = tk.Label(box, bg=self.HEADER_BG, anchor="w",
+                                    font=("Segoe UI", 11, "bold"))
+        self.header_name.pack(anchor="w")
+        self.header_sub = tk.Label(box, bg=self.HEADER_BG, fg=self.CAPTION,
+                                   anchor="w", font=("Segoe UI", 8))
+        self.header_sub.pack(anchor="w")
+        tk.Frame(self.win, bg="#d1d1d6", height=1).pack(fill="x")
+        self._update_header()
+
+    def _update_header(self):
+        self.header_name.config(text=self.pet.pet_name())
+        self.header_sub.config(text=f"art by {pet_credit(self.pet.pet_meta)} · "
+                                    "codex-pets.net")
+        self._avatar = self._make_avatar()
+        if self._avatar:
+            self.avatar_label.config(image=self._avatar)
+
+    def _make_avatar(self):
+        if not self.pet.sprites.ok:
+            return None
+        frames = self.pet.sprites.frames.get("idle") or next(iter(self.pet.sprites.frames.values()))
+        frame = frames[0]
+        factor = max(1, frame.height() // 40)
+        return frame.subsample(factor, factor)
+
+    # ---- window plumbing ------------------------------------------------------
 
     def _place_near_pet(self, w, h):
         px, py = self.pet.root.winfo_x(), self.pet.root.winfo_y()
@@ -2371,15 +2723,39 @@ class ChatWindow:
 
     def on_pet_changed(self):
         self.win.title(f"{self.pet.pet_name()} — PromptMate")
-        self._caption(f"{self.pet.pet_name()} joined the chat "
-                      f"(art by {pet_credit(self.pet.pet_meta)})")
-        self._pet_bubble("New look, same PromptMate! What are we working on?")
-
-    # ---- bubble drawing -----------------------------------------------------
+        self._update_header()
+        self._add("caption", f"{self.pet.pet_name()} joined the chat "
+                             f"(art by {pet_credit(self.pet.pet_meta)})")
+        self._add("pet", "New look, same PromptMate! What are we working on?")
 
     def _on_wheel(self, event):
         if self.is_open():
             self.canvas.yview_scroll(-1 * (event.delta // 120), "units")
+
+    def _on_canvas_resize(self, event):
+        if abs(event.width - self._cw) < 8:
+            return
+        self._cw = event.width
+        if self._resize_job:
+            self.win.after_cancel(self._resize_job)
+        self._resize_job = self.win.after(120, self._render_all)
+
+    # ---- placeholder -----------------------------------------------------------
+
+    def _set_placeholder(self, *_):
+        if not self.entry.get("1.0", "end-1c").strip():
+            self._placeholder_on = True
+            self.entry.config(fg=self.CAPTION)
+            self.entry.delete("1.0", "end")
+            self.entry.insert("1.0", "Message")
+
+    def _clear_placeholder(self, *_):
+        if self._placeholder_on:
+            self._placeholder_on = False
+            self.entry.delete("1.0", "end")
+            self.entry.config(fg="#000000")
+
+    # ---- bubble drawing ---------------------------------------------------------
 
     def _round_rect(self, x1, y1, x2, y2, r=14, **kw):
         pts = [x1 + r, y1, x2 - r, y1, x2, y1, x2, y1 + r, x2, y2 - r, x2, y2,
@@ -2388,18 +2764,48 @@ class ChatWindow:
 
     def _finish(self, bottom):
         self._y = bottom + 8
-        self.canvas.configure(scrollregion=(0, 0, self.WIDTH, self._y))
+        self.canvas.configure(scrollregion=(0, 0, self._cw, self._y))
         self.canvas.yview_moveto(1.0)
 
-    def _caption(self, text):
-        item = self.canvas.create_text(self.WIDTH // 2, self._y + 4, text=text,
+    def _add(self, kind, text=None):
+        """Append a message to history and draw it."""
+        self.messages.append((kind, text))
+        self._draw(kind, text)
+
+    def _render_all(self):
+        """Re-flow the whole conversation at the current width."""
+        self._resize_job = None
+        for f in self._frames:
+            f.destroy()
+        self._frames = []
+        self.canvas.delete("all")
+        self._y = 12
+        for kind, text in self.messages:
+            self._draw(kind, text)
+        if self._typing:
+            self._draw_typing()
+
+    def _draw(self, kind, text):
+        if kind == "caption":
+            self._draw_caption(text)
+        elif kind == "user":
+            self._draw_bubble(text, "right", self.USER_BUBBLE, "#ffffff")
+        elif kind == "pet":
+            self._draw_bubble(text, "left", self.PET_BUBBLE, "#000000")
+        elif kind == "prompt":
+            self._draw_bubble(text, "left", "#f2f2f7", "#1c1c1e",
+                              font=("Consolas", 8))
+            self._draw_actions()
+
+    def _draw_caption(self, text):
+        item = self.canvas.create_text(self._cw // 2, self._y + 4, text=text,
                                        fill=self.CAPTION, font=("Segoe UI", 8),
-                                       anchor="n", width=self.WIDTH - 60,
+                                       anchor="n", width=max(120, self._cw - 60),
                                        justify="center")
         self._finish(self.canvas.bbox(item)[3])
 
-    def _bubble(self, text, side, fill, fg, font=("Segoe UI", 10), pad=10):
-        maxw = int(self.WIDTH * 0.74)
+    def _draw_bubble(self, text, side, fill, fg, font=("Segoe UI", 10), pad=10):
+        maxw = max(180, int(self._cw * 0.74))
         tmp = self.canvas.create_text(0, -10000, text=text, font=font,
                                       width=maxw, anchor="nw")
         x1, y1, x2, y2 = self.canvas.bbox(tmp)
@@ -2407,7 +2813,7 @@ class ChatWindow:
         self.canvas.delete(tmp)
 
         if side == "right":
-            bx2 = self.WIDTH - 24
+            bx2 = self._cw - 24
             bx1 = bx2 - tw - 2 * pad
         else:
             bx1 = 12
@@ -2417,38 +2823,31 @@ class ChatWindow:
         self.canvas.create_text(bx1 + pad, by1 + pad, text=text, font=font,
                                 fill=fg, width=maxw, anchor="nw")
         self._finish(by2)
-        return by2
 
-    def _pet_bubble(self, text):
-        self._bubble(text, "left", self.PET_BUBBLE, "#000000")
-
-    def _user_bubble(self, text):
-        self._bubble(text, "right", self.USER_BUBBLE, "#ffffff")
-
-    def _prompt_bubble(self, prompt):
-        self._bubble(prompt, "left", "#f2f2f7", "#1c1c1e", font=("Consolas", 8))
+    def _draw_actions(self):
         btns = tk.Frame(self.canvas, bg=self.BG)
         for label, cmd in (("📋 Copy", self._copy_last), ("💾 Save", self._save_last),
                            ("🛠 Adjust in editor", self._open_in_editor)):
             ttk.Button(btns, text=label, command=cmd).pack(side="left", padx=(0, 4))
+        self._frames.append(btns)
         item = self.canvas.create_window(12, self._y, window=btns, anchor="nw")
         self.win.update_idletasks()
         self._finish(self.canvas.bbox(item)[3])
 
-    def _show_typing(self):
-        item = self._round_rect(12, self._y, 64, self._y + 30, r=15,
-                                fill=self.PET_BUBBLE, outline=self.PET_BUBBLE)
-        dots = self.canvas.create_text(38, self._y + 15, text="• • •",
-                                       fill=self.CAPTION, font=("Segoe UI", 9))
-        self._typing_items = [item, dots]
-        self._typing_y = self._y
+    def _draw_typing(self):
+        self._round_rect(12, self._y, 64, self._y + 30, r=15,
+                         fill=self.PET_BUBBLE, outline=self.PET_BUBBLE)
+        self.canvas.create_text(38, self._y + 15, text="• • •",
+                                fill=self.CAPTION, font=("Segoe UI", 9))
         self._finish(self._y + 30)
 
+    def _show_typing(self):
+        self._typing = True
+        self._draw_typing()
+
     def _hide_typing(self):
-        for item in self._typing_items:
-            self.canvas.delete(item)
-        self._typing_items = []
-        self._y = self._typing_y
+        self._typing = False
+        self._render_all()
 
     # ---- actions ----------------------------------------------------------
 
@@ -2459,11 +2858,13 @@ class ChatWindow:
         return "break"
 
     def send(self):
+        if self._placeholder_on:
+            return
         raw = self.entry.get("1.0", "end-1c").strip()
         if not raw:
             return
         self.entry.delete("1.0", "end")
-        self._user_bubble(raw)
+        self._add("user", raw)
 
         cleaned = clean_text(raw, self.spell)
         rec = recommend(cleaned)
@@ -2479,28 +2880,28 @@ class ChatWindow:
         self._hide_typing()
         template_name = PROMPT_TEMPLATES[rec["template"]]["name"]
         module_names = ", ".join(AGENT_MODULES[m]["name"] for m in rec["modules"])
-        self._pet_bubble(f"Got it! I read that as:\n“{cleaned}”")
-        self._pet_bubble(f"➜ Send it to: {DEST_LABELS[rec['destination']]}\n{rec['reason']}")
+        self._add("pet", f"Got it! I read that as:\n“{cleaned}”")
+        self._add("pet", f"➜ Send it to: {DEST_LABELS[rec['destination']]}\n{rec['reason']}")
         details = f"Template: {template_name}\nModules: {module_names}"
         if rec["checklist"]:
             hints = "\n".join(f"• {c}" for c in rec["checklist"][:5])
             details += f"\n\nIt'll work better if you paste in:\n{hints}"
-        self._pet_bubble(details)
-        self._prompt_bubble(prompt)
+        self._add("pet", details)
+        self._add("prompt", prompt)
 
     def _copy_last(self):
         if not self.last:
             return
         self.win.clipboard_clear()
         self.win.clipboard_append(self.last[3])
-        self._pet_bubble("Copied! Paste it into Codex, Claude Code, ChatGPT, or Claude. ✅")
+        self._add("pet", "Copied! Paste it into Codex, Claude Code, ChatGPT, or Claude. ✅")
 
     def _save_last(self):
         if not self.last:
             return
         raw, cleaned, rec, prompt = self.last
         save_history_entry(raw, cleaned, rec, prompt)
-        self._pet_bubble("Saved to your local history. 💾")
+        self._add("pet", "Saved to your local history. 💾")
 
     def _open_in_editor(self):
         if self.last:

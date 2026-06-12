@@ -373,5 +373,122 @@
       "Write a 5-line summary for people who skipped the meeting.",
       "Park open questions with who will answer them by when."
     ]
+  },
+  "graph_script": {
+    "name": "Graph API script skill",
+    "topics": [
+      "m365",
+      "entra"
+    ],
+    "body": "Build a Graph script safely: permissions, dry-run, paging, throttling, evidence.",
+    "steps": [
+      "Identify the exact Graph endpoints and least-privilege permissions.",
+      "Get the app registration/consent approved before writing code.",
+      "Build read-only first; print what WOULD change as a dry run.",
+      "Add paging and 429/Retry-After handling; test on a small scope.",
+      "Run for real in batches; log results as evidence."
+    ]
+  },
+  "ca_rollout": {
+    "name": "Conditional Access rollout skill",
+    "topics": [
+      "entra",
+      "security"
+    ],
+    "body": "Roll out a CA policy without locking anyone out: report-only, review, enforce.",
+    "steps": [
+      "Define intent: who must do what, under which conditions.",
+      "Exclude break-glass accounts; verify they still work.",
+      "Deploy in report-only mode for an agreed soak period.",
+      "Review sign-in log impact; fix false positives before enforcing.",
+      "Enforce, monitor the first 24h closely, document the policy."
+    ]
+  },
+  "autopilot_provision": {
+    "name": "Device provisioning skill",
+    "topics": [
+      "intune",
+      "onboarding"
+    ],
+    "body": "Provision a device end to end: enroll, apply profiles, verify, hand over.",
+    "steps": [
+      "Register/assign the device (Autopilot profile or manual enrollment).",
+      "Confirm group membership drives the right apps and policies.",
+      "Provision and watch enrollment status for failures.",
+      "Verify on-device: compliance state, required apps, drive encryption.",
+      "Hand over with the user-facing quick-start info."
+    ]
+  },
+  "teams_provision": {
+    "name": "Teams/site provisioning skill",
+    "topics": [
+      "m365"
+    ],
+    "body": "Create a team/site with governance: owner, naming, sharing, lifecycle.",
+    "steps": [
+      "Confirm the request has a business owner and a clear purpose.",
+      "Apply naming convention and at least two owners.",
+      "Set sharing: internal/external, guest policy, sensitivity label.",
+      "Provision and verify member access works.",
+      "Record it in the inventory with a review/expiry date."
+    ]
+  },
+  "support_case": {
+    "name": "Vendor support case skill",
+    "topics": [
+      "vendor"
+    ],
+    "body": "Open vendor cases that get answered: repro, evidence, impact, follow-up cadence.",
+    "steps": [
+      "Reproduce the issue and write expected vs actual behavior.",
+      "Collect the diagnostics the vendor will ask for (logs, versions, IDs).",
+      "State business impact and the severity you're requesting.",
+      "Open the case; record the case number in your ticket.",
+      "Set a follow-up cadence; escalate with impact data if it stalls."
+    ]
+  },
+  "csv_bulk_ops": {
+    "name": "Bulk operations skill",
+    "topics": [
+      "reporting",
+      "powershell"
+    ],
+    "body": "Run bulk changes from a CSV without disasters: validate, dry-run, batch, log.",
+    "steps": [
+      "Validate the input: required columns, duplicates, empties; reject bad rows.",
+      "Dry-run and review the would-change list with the requester.",
+      "Run a small batch first (5-10 rows); verify results.",
+      "Run the rest in batches with progress and a results log.",
+      "Keep input + results log as the change evidence."
+    ]
+  },
+  "cert_renewal": {
+    "name": "Certificate renewal skill",
+    "topics": [
+      "network",
+      "security"
+    ],
+    "body": "Renew a certificate without an outage: inventory, renew, deploy, verify, record.",
+    "steps": [
+      "Identify every place the current cert is used (servers, LBs, services).",
+      "Generate the CSR/renewal with the right SANs and key size.",
+      "Deploy to one node first; verify chain and expiry with a TLS check.",
+      "Roll to remaining nodes; restart services that cache certs.",
+      "Update the cert inventory with the new expiry and set a reminder."
+    ]
+  },
+  "dns_change": {
+    "name": "DNS change skill",
+    "topics": [
+      "network"
+    ],
+    "body": "Make DNS changes safely: lower TTL first, change, verify propagation, revert path.",
+    "steps": [
+      "Record the current record values (your rollback).",
+      "Lower TTL ahead of the change window if cutover timing matters.",
+      "Make the change; verify against authoritative and public resolvers.",
+      "Test the dependent service end to end, not just the lookup.",
+      "Restore TTL and document the change with timestamps."
+    ]
   }
 }

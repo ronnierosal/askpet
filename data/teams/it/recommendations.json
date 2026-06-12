@@ -82,7 +82,10 @@
       "function app"
     ],
     "intune": [
-      "intune"
+      "intune",
+      "autopilot",
+      "enrollment",
+      "device compliance"
     ],
     "m365": [
       "microsoft 365",
@@ -217,7 +220,9 @@
       "export",
       "spreadsheet",
       "license count",
-      "licenses"
+      "licenses",
+      "csv",
+      "bulk"
     ],
     "backup": [
       "backup",
@@ -226,6 +231,16 @@
       "disaster recovery",
       "recovery point",
       "snapshot"
+    ],
+    "vendor": [
+      "vendor",
+      "support case",
+      "open a case",
+      "escalate",
+      "microsoft support",
+      "evaluate",
+      "evaluation",
+      "compare tools"
     ]
   },
   "context_checklist_by_topic": {
@@ -333,6 +348,11 @@
       "Backup product and scope",
       "RTO/RPO targets",
       "Last successful restore test date"
+    ],
+    "vendor": [
+      "Product name and version",
+      "Case number (if existing)",
+      "Logs/diagnostics already collected"
     ]
   },
   "generic_checklist": [

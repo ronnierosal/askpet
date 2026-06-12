@@ -24,6 +24,16 @@ ask for one.
 
 ## What's new
 
+**0.3.0** (2026-06-11)
+- Pet resizing: right-click → Pet size → Large / Medium / Small.
+- Chat window is fully resizable — bubbles re-flow to the new width.
+- Chat UI polish: header bar with pet avatar, name, and artist credit;
+  input placeholder; fixed a bug that hid the send button.
+- Third content expansion: 33 prompt templates, 26 agent modules, 34 skill
+  templates (Graph API, Conditional Access, device policy, Teams/SharePoint,
+  bulk CSV ops, vendor cases/evaluations, training guides, ticket replies,
+  cert renewal, DNS changes, and more).
+
 **0.2.0** (2026-06-11)
 - Desktop pet mode is now the default: the pet floats over all windows,
   wanders, waves, and naps; click it to chat.

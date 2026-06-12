@@ -11,6 +11,12 @@ chat.entry.insert("1.0", "need a powershel scirpt to deply an intune app to pilo
 chat.send()
 
 def grab():
+    # widen the window to exercise re-flow, wait past the debounce, capture
+    chat.win.geometry("560x600")
+    root.after(300, grab2)
+
+def grab2():
+    root.update()
     chat.canvas.yview_moveto(0.0)  # show the top of the conversation
     root.update()
     w = chat.win

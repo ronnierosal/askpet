@@ -44,5 +44,25 @@ pet.open_editor(prefill=raw)
 assert pet.editor.rec is not None
 print("editor destination:", pet.editor.rec["destination"])
 
+# Pet resize via scale
+pet.set_scale(2)
+assert pet.sprites.w == 96 and pet.sprites.h == 104, (pet.sprites.w, pet.sprites.h)
+pet.set_scale(1)
+assert pet.sprites.w == 192
+print("pet resize OK")
+
+# Chat re-flow on width change
+pet.toggle_chat()
+chat = pet.chat
+chat.entry.insert("1.0", "test message for reflow")
+chat.send()
+chat._deliver_reply(*[chat.last[1], chat.last[2], chat.last[3]])
+n_msgs = len(chat.messages)
+chat._cw = 600
+chat._render_all()
+assert len(chat.messages) == n_msgs, "re-flow lost messages"
+print(f"chat re-flow OK ({n_msgs} messages redrawn at new width)")
+chat.close()
+
 root.destroy()
 print("PET SMOKE TEST PASSED")

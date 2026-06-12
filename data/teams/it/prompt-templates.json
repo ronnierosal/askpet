@@ -196,5 +196,81 @@
       "incident"
     ],
     "body": "Draft a communication to users/stakeholders. {TASK}\n\nRequirements:\n- Plain language, no jargon\n- What happened/is happening, who is affected, what they should do\n- Timing expectations and where updates will be posted\n- Two versions: short (chat/banner) and full (email)\n\nFacts to include: {INPUTS}\nConstraints: {CONSTRAINTS}"
+  },
+  "graph_api": {
+    "name": "Microsoft Graph API script",
+    "destination": "Codex",
+    "topics": [
+      "m365",
+      "entra",
+      "powershell"
+    ],
+    "body": "Write a Microsoft Graph script. {TASK}\n\nRequirements:\n- State required Graph permissions (least privilege) and whether delegated or application\n- Handle paging and throttling (429 with Retry-After)\n- Batch where possible; read-only dry-run mode first\n- Inputs: {INPUTS}\n- Constraints: {CONSTRAINTS}\n\nVerification: {VERIFICATION}"
+  },
+  "conditional_access": {
+    "name": "Conditional Access policy",
+    "destination": "Both",
+    "topics": [
+      "entra",
+      "security"
+    ],
+    "body": "Design or change a Conditional Access policy. {TASK}\n\nRequirements:\n- Start in report-only mode; define what success looks like in the sign-in logs before enforcing\n- Exclude break-glass accounts and document them\n- State exactly who/what is in scope and excluded, and why\n- Lockout risk assessment and rollback steps\n\nPolicy intent: {INPUTS}\nConstraints: {CONSTRAINTS}\nVerification: {VERIFICATION}"
+  },
+  "device_policy": {
+    "name": "Device policy / configuration profile",
+    "destination": "Both",
+    "topics": [
+      "intune"
+    ],
+    "body": "Create or modify a device policy (Intune configuration/compliance or GPO). {TASK}\n\nCover:\n- The exact settings and their values, with rationale\n- Assignment scoping and conflict behavior with existing policies\n- Pilot ring first; how to confirm the setting applied on a device\n- User impact and rollback\n\nScope: {INPUTS}\nConstraints: {CONSTRAINTS}\nVerification: {VERIFICATION}"
+  },
+  "collab_admin": {
+    "name": "Teams/SharePoint/OneDrive admin",
+    "destination": "Both",
+    "topics": [
+      "m365"
+    ],
+    "body": "Teams/SharePoint/OneDrive administration task. {TASK}\n\nCover:\n- Admin-center steps and PowerShell/Graph equivalent\n- Permission/sharing implications (internal vs external)\n- Governance: naming, ownership, lifecycle of what's created\n- Rollback steps\n\nContext: {INPUTS}\nConstraints: {CONSTRAINTS}\nVerification: {VERIFICATION}"
+  },
+  "bulk_data": {
+    "name": "Bulk data operation (CSV)",
+    "destination": "Codex",
+    "topics": [
+      "reporting",
+      "powershell"
+    ],
+    "body": "Bulk operation driven by a CSV/export. {TASK}\n\nRequirements:\n- Validate the input file first: required columns, duplicates, empty values; reject bad rows to an errors file\n- Dry-run mode that reports what WOULD change\n- Process in batches with progress output and a results log\n- Inputs: {INPUTS}\n- Constraints: {CONSTRAINTS}\n\nVerification: {VERIFICATION}"
+  },
+  "vendor_case": {
+    "name": "Vendor support case",
+    "destination": "ChatGPT web",
+    "topics": [
+      "vendor"
+    ],
+    "body": "Help me open or escalate a vendor support case. {TASK}\n\nProduce:\n- A tight problem statement: expected vs actual, since when\n- Environment details and exact reproduction steps\n- The diagnostics/logs to attach (tell me what to collect)\n- Business impact statement to justify the severity requested\n- Questions to push back with if first response is boilerplate\n\nDetails: {INPUTS}\nConstraints: {CONSTRAINTS}"
+  },
+  "vendor_eval": {
+    "name": "Tool/vendor evaluation",
+    "destination": "ChatGPT web",
+    "topics": [
+      "vendor"
+    ],
+    "body": "Evaluate tools/vendors for a need. {TASK}\n\nProduce:\n- Requirements split into must-have vs nice-to-have\n- Comparison table of realistic candidates\n- Security/compliance considerations (SSO, data residency, audit)\n- Licensing model gotchas and exit/migration cost\n- A recommendation with reasoning\n\nContext: {INPUTS}\nConstraints: {CONSTRAINTS}"
+  },
+  "training_guide": {
+    "name": "Training material / user guide",
+    "destination": "ChatGPT web",
+    "topics": [
+      "confluence"
+    ],
+    "body": "Create end-user training material. {TASK}\n\nRequirements:\n- Written for non-technical users; no jargon\n- Task-based sections: 'How do I…' with numbered steps\n- What the user should see after each step\n- FAQ section from likely confusion points\n- Where to get help when stuck\n\nAudience and scope: {INPUTS}\nConstraints: {CONSTRAINTS}"
+  },
+  "ticket_reply": {
+    "name": "Support ticket reply",
+    "destination": "ChatGPT web",
+    "topics": [
+      "jira"
+    ],
+    "body": "Draft a reply to a support ticket. {TASK}\n\nRequirements:\n- Acknowledge the actual problem in the user's terms\n- What was found/done, in plain language\n- Next step and who owns it (them or us), with timing\n- Professional, warm, no blame, no jargon\n\nTicket context: {INPUTS}\nConstraints: {CONSTRAINTS}"
   }
 }
