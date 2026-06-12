@@ -27,7 +27,7 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 APP_NAME = "PromptMate"
-APP_VERSION = "0.11.1"
+APP_VERSION = "0.11.2"
 CONTENT_VERSION = "2026.06.10"
 
 # ---------------------------------------------------------------------------
@@ -3653,10 +3653,14 @@ class PetOverlay:
     Wanders/waves on its own while the chat is closed, sits while it is open.
     """
 
-    TICK_MS = 200  # one animation frame per tick; higher = calmer pet
+    TICK_MS = 200  # base tick; movement anims advance every tick
     WALK_SPEED = 3
     RUN_SPEED = 7
     NAP_AFTER_TICKS = 1200  # ~4 minutes without interaction -> nap
+    # Frames advance every Nth tick per animation. The sleepy row is a set
+    # of distinct poses, not a loop — cycle it VERY slowly or it looks
+    # frantic instead of asleep.
+    FRAME_HOLD = {"sleepy": 13, "idle": 2, "sit": 2, "emote": 3}
 
     def __init__(self, root: tk.Tk):
         self.root = root
@@ -3744,11 +3748,13 @@ class PetOverlay:
         self.behavior_ticks = ticks if ticks is not None else len(self.anim_frames()) * 3
 
     def _tick(self):
+        self._tick_n = getattr(self, "_tick_n", 0) + 1
         frames = self.anim_frames()
         if self.sprites.ok:
             frame = frames[self.frame_i % len(frames)]
             self.canvas.itemconfigure(self.sprite_item, image=frame)
-        self.frame_i += 1
+        if self._tick_n % self.FRAME_HOLD.get(self.anim, 1) == 0:
+            self.frame_i += 1
 
         if self.move_dx and not self._dragging:
             if self.chat and self.chat.is_open():
@@ -3975,9 +3981,18 @@ class PetOverlay:
         self._save_settings()
 
     def _save_settings(self):
-        self.settings["pet_wander"] = self.wander
-        self.settings["app_version"] = APP_VERSION
-        save_json(SETTINGS_FILE, self.settings)
+        # Merge live pet state onto fresh disk contents. Never dump the
+        # in-memory dict wholesale: it holds values from launch time and
+        # would resurrect stale settings (e.g. an old pet_scale) on save.
+        disk = load_json(SETTINGS_FILE, {})
+        disk["pet_scale"] = self.scale
+        disk["pet_id"] = self.pet_id
+        disk["pet_wander"] = self.wander
+        for key in ("pet_x", "pet_y"):
+            if key in self.settings:
+                disk[key] = self.settings[key]
+        disk["app_version"] = APP_VERSION
+        save_json(SETTINGS_FILE, disk)
 
     def quit(self):
         self._save_position()

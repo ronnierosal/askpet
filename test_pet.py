@@ -51,6 +51,17 @@ pet.set_scale(2)  # leave settings at the medium default
 assert pet.sprites.w == 96
 print("pet resize OK")
 
+# Saving settings must derive scale from live state, not the launch dict
+pet.settings["pet_scale"] = 1  # simulate stale in-memory value
+pet._save_settings()
+saved = pm.load_json(pm.SETTINGS_FILE, {})
+assert saved["pet_scale"] == pet.scale == 2, saved.get("pet_scale")
+print("settings save uses live state OK")
+
+# Sleepy animation must crawl, not cycle (distinct poses, not a loop)
+assert pet.FRAME_HOLD.get("sleepy", 1) >= 10
+print("sleepy frame hold OK")
+
 # Nap when ignored, wake on interaction
 pet.chat and pet.chat.close()
 pet.idle_ticks = pet.NAP_AFTER_TICKS + 1
