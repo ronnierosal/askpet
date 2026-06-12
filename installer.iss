@@ -6,7 +6,7 @@
 ; is never touched (and is preserved on uninstall).
 
 #define AppName "PromptMate"
-#define AppVersion "0.17.2"
+#define AppVersion "0.17.3"
 #define AppPublisher "SLDD IT"
 #define AppExeName "PromptMate.exe"
 

@@ -30,7 +30,7 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 APP_NAME = "PromptMate"
-APP_VERSION = "0.17.2"
+APP_VERSION = "0.17.3"
 CONTENT_VERSION = "2026.06.16"
 
 # ---------------------------------------------------------------------------
@@ -5806,20 +5806,7 @@ class PetBrowser:
         self.status.config(text="Searching codex-pets.net…")
         self.win.update_idletasks()
         try:
-            hits = search_pets(query)
-            # Strict server search found nothing? Try each word and let the
-            # fuzzy local filter narrow the merged results ('blue godzila'
-            # -> word 'blue' finds 'Godzilla Blue').
-            words = query.split()
-            if not hits and len(words) > 1:
-                seen_ids = set()
-                for w in words:
-                    if len(w) < 3:
-                        continue
-                    for h in search_pets(w):
-                        if h["id"] not in seen_ids:
-                            seen_ids.add(h["id"])
-                            hits.append(h)
+            hits = self._server_search(query)
             known = {p["id"] for p in self.catalog}
             self.catalog.extend(h for h in hits if h["id"] not in known)
             self.status.config(text=f"{len(hits)} match(es) on codex-pets.net")
@@ -5828,6 +5815,36 @@ class PetBrowser:
             messagebox.showerror("Network error",
                                  f"Search failed:\n{e}", parent=self.win)
         self._refresh_list()
+
+    @staticmethod
+    def _server_search(query: str) -> list:
+        """Typo-tolerant site search on top of the API's exact substring q=.
+
+        Misspelled words usually share a prefix with the real name, so when
+        a word gets no hits we retry progressively shorter prefixes:
+        'godzila' -> 'godzi' matches 'Godzilla Blue'. Multi-word queries
+        fall back to searching each word; the fuzzy local filter narrows
+        whatever comes back.
+        """
+        def word_hits(w):
+            for cut in range(len(w), max(3, len(w) - 4), -1):
+                found = search_pets(w[:cut])
+                if found:
+                    return found
+            return []
+
+        hits = search_pets(query)
+        words = [w for w in query.split() if len(w) >= 3]
+        if not hits and len(words) == 1:
+            hits = word_hits(words[0])
+        elif not hits and words:
+            seen_ids = set()
+            for w in words:
+                for h in word_hits(w):
+                    if h["id"] not in seen_ids:
+                        seen_ids.add(h["id"])
+                        hits.append(h)
+        return hits
 
     @staticmethod
     def _matches(p: dict, query: str) -> bool:

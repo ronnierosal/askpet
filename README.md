@@ -41,6 +41,12 @@ still fully local.
 
 ## What's new
 
+**0.17.3** (2026-06-12)
+- Pet search survives typos online too: when codex-pets.net's exact
+  search returns nothing, PromptMate retries progressively shorter
+  prefixes per word — "godzila" finds "Godzilla Blue" site-wide now,
+  not just among already-loaded pets.
+
 **0.17.2** (2026-06-11)
 - Spell check actually works now: a bundled 370k-word English dictionary
   (public domain, dwyl/english-words) replaces the ~250-word IT seed
