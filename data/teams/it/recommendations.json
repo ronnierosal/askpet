@@ -25,6 +25,8 @@
     "yaml": 2,
     "json": 1,
     "api": 2,
+    "csv": 2,
+    "bulk": 1,
     "install": 2,
     "refactor": 3,
     "migration": 2,
@@ -85,7 +87,9 @@
       "intune",
       "autopilot",
       "enrollment",
-      "device compliance"
+      "device compliance",
+      "compliance policy",
+      "configuration profile"
     ],
     "m365": [
       "microsoft 365",
@@ -134,7 +138,11 @@
       "audit",
       "evidence",
       "access review",
-      "compliance"
+      "compliance evidence",
+      "compliance report",
+      "soc 2",
+      "soc2",
+      "iso 27001"
     ],
     "workspace_agent": [
       "workspace agent",
@@ -202,7 +210,12 @@
       "wifi",
       "wi-fi",
       "switch port",
-      "certificate expired",
+      "certificate",
+      "cert expir",
+      "cert renew",
+      "wildcard cert",
+      "ssl",
+      "tls",
       "latency"
     ],
     "monitoring": [
@@ -216,16 +229,29 @@
       "dashboard"
     ],
     "reporting": [
-      "report",
       "reporting",
+      "report on",
+      "report of",
+      "report for",
+      "a report",
+      "usage report",
+      "weekly report",
+      "monthly report",
       "metrics",
       "kpi",
       "export",
       "spreadsheet",
       "license count",
-      "licenses",
+      "licenses"
+    ],
+    "bulk_data": [
       "csv",
-      "bulk"
+      "bulk",
+      "in bulk",
+      "mass update",
+      "import a list",
+      "from a list",
+      "batch update"
     ],
     "backup": [
       "backup",
@@ -278,7 +304,11 @@
       "won't print",
       "stuck on",
       "no sound",
-      "blank screen"
+      "blank screen",
+      "fail every",
+      "fail after",
+      "fail when",
+      "disappeared"
     ],
     "notion": [
       "notion"
@@ -821,6 +851,11 @@
       "Data source and time range",
       "Who consumes the report",
       "A known reference number to validate against"
+    ],
+    "bulk_data": [
+      "Sample of the CSV/export with headers (sanitized)",
+      "Target system and field mapping",
+      "Expected row count and how to verify after"
     ],
     "backup": [
       "Backup product and scope",

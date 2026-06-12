@@ -1,4 +1,4 @@
-; PromptMate Windows installer (Inno Setup)
+﻿; PromptMate Windows installer (Inno Setup)
 ;
 ; Per-user install: no admin rights needed, deployable via Intune in user
 ; context. Supports silent install:  PromptMate-Setup.exe /VERYSILENT /NORESTART
@@ -6,7 +6,7 @@
 ; is never touched (and is preserved on uninstall).
 
 #define AppName "PromptMate"
-#define AppVersion "0.13.2"
+#define AppVersion "0.14.0"
 #define AppPublisher "SLDD IT"
 #define AppExeName "PromptMate.exe"
 
@@ -45,5 +45,5 @@ Name: "{userstartup}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Tasks: startu
 [Run]
 Filename: "{app}\{#AppExeName}"; Description: "Launch {#AppName}"; Flags: nowait postinstall skipifsilent
 ; Tkinter apps don't register with Restart Manager, so RestartApplications
-; can't bring the pet back after a silent upgrade — relaunch it explicitly.
+; can't bring the pet back after a silent upgrade â€” relaunch it explicitly.
 Filename: "{app}\{#AppExeName}"; Flags: nowait; Check: WizardSilent

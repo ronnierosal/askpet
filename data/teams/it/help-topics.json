@@ -26,7 +26,11 @@
       "reset the chat",
       "clear the chat",
       "new conversation",
-      "stale context"
+      "stale context",
+      "fresh chat",
+      "fresh conversation",
+      "start over",
+      "start a new chat"
     ],
     "answer": [
       "Start a fresh chat when the old context starts hurting more than helping. Signs it's time:\n• The assistant keeps referring back to abandoned approaches\n• You're correcting the same misunderstanding repeatedly\n• The topic has genuinely changed\n• Responses get slower, vaguer, or contradict earlier answers",
@@ -99,11 +103,39 @@
       "double check the ai",
       "ai is wrong",
       "made up",
-      "check its work"
+      "check its work",
+      "can i trust",
+      "trust the ai",
+      "trust what",
+      "is the ai right"
     ],
     "answer": [
       "Treat AI output like work from a fast, confident junior: usually right, occasionally confidently wrong.\n• Numbers, names, links, commands — verify against the source before acting\n• Code/scripts — run on ONE test target before wide use\n• Claims about your environment — the AI can't see it; it's pattern-matching\n• Ask “what are you least sure about in that answer?” — surprisingly effective",
       "My prompts bake in a Validation module for exactly this: the AI has to state what it checked before claiming done."
+    ]
+  },
+  "privacy_local": {
+    "keywords": [
+      "send my data",
+      "my data go",
+      "data leave",
+      "telemetry",
+      "privacy",
+      "phone home",
+      "track me",
+      "tracking",
+      "is this local",
+      "run locally",
+      "work offline",
+      "need internet",
+      "cloud ai",
+      "which ai do you use",
+      "what ai do you use",
+      "use chatgpt yourself"
+    ],
+    "answer": [
+      "Everything I do runs 100% locally on this machine — no cloud AI, no API calls, no telemetry, no account. I build prompts with local keyword matching, not by sending your text anywhere.",
+      "The only time I touch the network is when YOU ask me to: downloading a new pet look from codex-pets.net. Your prompts, history, and settings live in %LOCALAPPDATA%\\PromptMate (Windows) and never leave the machine. 🐾"
     ]
   },
   "promptmate_help": {

@@ -450,7 +450,7 @@
   "csv_bulk_ops": {
     "name": "Bulk operations skill",
     "topics": [
-      "reporting",
+      "bulk_data",
       "powershell"
     ],
     "body": "Run bulk changes from a CSV without disasters: validate, dry-run, batch, log.",

@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "promptmate": {
+      "command": "python",
+      "args": ["promptmate.py", "--mcp"]
+    }
+  }
+}

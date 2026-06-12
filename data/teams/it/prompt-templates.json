@@ -16,6 +16,14 @@
     "topics": [],
     "body": "## Context\nI work in IT backend/system administration. {TASK}\n\n## What I need from you\n- Recommend an approach with trade-offs.\n- List risks, prerequisites, and open questions.\n- Produce a step-by-step plan I can hand to an execution agent.\n\n## Constraints\n{CONSTRAINTS}\n\n## Output format\n1. Recommended approach (short)\n2. Plan (numbered steps)\n3. Risks and rollback considerations\n4. Verification checklist"
   },
+  "explain_concept": {
+    "name": "Explain a concept",
+    "destination": "ChatGPT web",
+    "topics": [
+      "learning"
+    ],
+    "body": "Explain the following to an IT professional who is hands-on but new to this specific area. {TASK}\n\nStructure the explanation as:\n1. One-paragraph plain-English answer first\n2. How it actually works (the mental model, with an analogy)\n3. If I'm comparing things: a side-by-side table of when to use which\n4. Common misconceptions and gotchas practitioners hit\n5. How to verify or explore this hands-on in a lab\n\nContext about my level: {INPUTS}\nKeep it concrete — real commands, real settings, real examples over abstract theory. Constraints: {CONSTRAINTS}"
+  },
   "jira_ticket": {
     "name": "Jira ticket drafting",
     "destination": "ChatGPT web",
@@ -60,9 +68,7 @@
     "name": "Audit evidence workflow",
     "destination": "ChatGPT web",
     "topics": [
-      "audit",
-      "entra",
-      "okta"
+      "audit"
     ],
     "body": "Help me prepare audit/access evidence. {TASK}\n\nProduce:\n- Evidence checklist (what to collect, from where)\n- Naming/storage convention for artifacts\n- Screenshot/export guidance for each system\n- A summary table mapping each control to its evidence\n\nSystems in scope: {INPUTS}\nConstraints: {CONSTRAINTS}"
   },
@@ -237,7 +243,7 @@
     "name": "Bulk data operation (CSV)",
     "destination": "Codex",
     "topics": [
-      "reporting",
+      "bulk_data",
       "powershell"
     ],
     "body": "Bulk operation driven by a CSV/export. {TASK}\n\nRequirements:\n- Validate the input file first: required columns, duplicates, empty values; reject bad rows to an errors file\n- Dry-run mode that reports what WOULD change\n- Process in batches with progress output and a results log\n- Inputs: {INPUTS}\n- Constraints: {CONSTRAINTS}\n\nVerification: {VERIFICATION}"

@@ -27,8 +27,8 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 APP_NAME = "PromptMate"
-APP_VERSION = "0.13.2"
-CONTENT_VERSION = "2026.06.12"
+APP_VERSION = "0.14.0"
+CONTENT_VERSION = "2026.06.13"
 
 # ---------------------------------------------------------------------------
 # User data locations (never inside the install folder)
@@ -124,6 +124,8 @@ CORRECTIONS = {
     "packge": "package",
     "evidnce": "evidence",
     "valdiate": "validate",
+    "complaince": "compliance",
+    "complience": "compliance",
 }
 
 # Vocabulary used for fuzzy "did you mean" suggestions and spell checking.
@@ -250,6 +252,7 @@ CODEX_SIGNALS = {
     "implement": 3, "implementation": 3, "test": 2, "testing": 2, "tests": 2,
     "debug": 3, "fix": 2, "deploy": 2, "deployment": 2, "powershell": 3,
     "pipeline": 2, "automation": 2, "yaml": 2, "json": 1, "api": 2,
+    "csv": 2, "bulk": 1,
     "install": 2, "refactor": 3, "migration": 2, "local": 1, "run": 1,
     "query": 2, "kql": 2, "sql": 2, "automate": 3, "scaffold": 2,
 }
@@ -267,7 +270,8 @@ CHATGPT_SIGNALS = {
 
 KEYWORD_TOPICS = {
     "azure_function": ["azure function", "azure functions", "function app"],
-    "intune": ["intune", "autopilot", "enrollment", "device compliance"],
+    "intune": ["intune", "autopilot", "enrollment", "device compliance",
+               "compliance policy", "configuration profile"],
     "m365": ["microsoft 365", "office 365", "exchange", "sharepoint",
              "onedrive", "mailbox", "teams", "outlook"],
     "entra": ["entra", "azure ad", "active directory", "conditional access", "mfa", "sso"],
@@ -276,7 +280,8 @@ KEYWORD_TOPICS = {
     "jira": ["jira", "ticket"],
     "confluence": ["confluence", "documentation", "knowledge base", "runbook", "how-to"],
     "iac": ["infrastructure as code", "terraform", "bicep", "arm template"],
-    "audit": ["audit", "evidence", "access review", "compliance"],
+    "audit": ["audit", "evidence", "access review", "compliance evidence",
+              "compliance report", "soc 2", "soc2", "iso 27001"],
     "workspace_agent": ["workspace agent", "chatgpt agent", "custom gpt"],
     "harness": ["harness", "task contract", "agents.md"],
     "skill": ["skill", "reusable workflow"],
@@ -289,11 +294,17 @@ KEYWORD_TOPICS = {
     "change": ["change request", "change window", "cab", "maintenance window",
                "communication", "announce to", "announcement to", "notify users"],
     "network": ["network", "vpn", "dns", "firewall", "dhcp", "wifi", "wi-fi",
-                "switch port", "certificate expired", "latency"],
+                "switch port", "certificate", "cert expir", "cert renew",
+                "wildcard cert", "ssl", "tls", "latency"],
     "monitoring": ["monitoring", "alert", "alerts", "log analytics", "kql",
                    "sentinel", "splunk", "dashboard"],
-    "reporting": ["report", "reporting", "metrics", "kpi", "export",
-                  "spreadsheet", "license count", "licenses", "csv", "bulk"],
+    # "report" must be word-anchored: bare substring matches "reported".
+    "reporting": ["reporting", "report on", "report of", "report for",
+                  "a report", "usage report", "weekly report", "monthly report",
+                  "metrics", "kpi", "export", "spreadsheet", "license count",
+                  "licenses"],
+    "bulk_data": ["csv", "bulk", "in bulk", "mass update", "import a list",
+                  "from a list", "batch update"],
     "backup": ["backup", "backups", "restore", "disaster recovery",
                "recovery point", "snapshot"],
     "vendor": ["vendor support", "vendor case", "support case", "open a case",
@@ -306,7 +317,8 @@ KEYWORD_TOPICS = {
               "freezes", "frozen", "keep dropping", "keep disconnecting",
               "keeps disconnecting", "very slow", "wont boot", "won't boot",
               "wont print", "won't print", "stuck on", "no sound",
-              "blank screen"],
+              "blank screen", "fail every", "fail after", "fail when",
+              "disappeared"],
     "notion": ["notion"],
     "zoom": ["zoom", "webinar", "meeting recording", "transcript"],
     "google": ["google workspace", "gmail", "google drive", "google admin",
@@ -419,7 +431,11 @@ def score_destination(text: str) -> dict:
     codex = sum(CODEX_SIGNALS.get(w, 0) for w in words)
     chatgpt = sum(CHATGPT_SIGNALS.get(w, 0) for w in words)
 
-    topics = [t for t, keys in KEYWORD_TOPICS.items() if any(k in lw for k in keys)]
+    # Keywords are start-anchored at a word boundary so "edr" can't match
+    # "onedrive" or "api" match "rapid"; open-ended tails keep prefix
+    # matching ("crash" -> "crashing", "cert expir" -> "cert expires").
+    topics = [t for t, keys in KEYWORD_TOPICS.items()
+              if any(re.search(r"\b" + re.escape(k), lw) for k in keys)]
 
     if codex >= 2 and chatgpt >= 2 and abs(codex - chatgpt) <= 3:
         dest = "Both"
@@ -485,6 +501,25 @@ PROMPT_TEMPLATES = {
             "## Output format\n"
             "1. Recommended approach (short)\n2. Plan (numbered steps)\n"
             "3. Risks and rollback considerations\n4. Verification checklist"
+        ),
+    },
+    "explain_concept": {
+        "name": "Explain a concept",
+        "destination": "ChatGPT web",
+        "topics": ["learning"],
+        "body": (
+            "Explain the following to an IT professional who is hands-on "
+            "but new to this specific area. {TASK}\n\n"
+            "Structure the explanation as:\n"
+            "1. One-paragraph plain-English answer first\n"
+            "2. How it actually works (the mental model, with an analogy)\n"
+            "3. If I'm comparing things: a side-by-side table of when to "
+            "use which\n"
+            "4. Common misconceptions and gotchas practitioners hit\n"
+            "5. How to verify or explore this hands-on in a lab\n\n"
+            "Context about my level: {INPUTS}\n"
+            "Keep it concrete — real commands, real settings, real "
+            "examples over abstract theory. Constraints: {CONSTRAINTS}"
         ),
     },
     "jira_ticket": {
@@ -556,7 +591,7 @@ PROMPT_TEMPLATES = {
     "audit_evidence": {
         "name": "Audit evidence workflow",
         "destination": "ChatGPT web",
-        "topics": ["audit", "entra", "okta"],
+        "topics": ["audit"],
         "body": (
             "Help me prepare audit/access evidence. {TASK}\n\n"
             "Produce:\n- Evidence checklist (what to collect, from where)\n"
@@ -877,7 +912,7 @@ PROMPT_TEMPLATES = {
     "bulk_data": {
         "name": "Bulk data operation (CSV)",
         "destination": "Codex",
-        "topics": ["reporting", "powershell"],
+        "topics": ["bulk_data", "powershell"],
         "body": (
             "Bulk operation driven by a CSV/export. {TASK}\n\n"
             "Requirements:\n- Validate the input file first: required columns, "
@@ -2273,7 +2308,7 @@ SKILL_TEMPLATES = {
     },
     "csv_bulk_ops": {
         "name": "Bulk operations skill",
-        "topics": ["reporting", "powershell"],
+        "topics": ["bulk_data", "powershell"],
         "body": "Run bulk changes from a CSV without disasters: validate, dry-run, batch, log.",
         "steps": [
             "Validate the input: required columns, duplicates, empties; reject bad rows.",
@@ -2906,6 +2941,7 @@ CONTEXT_CHECKLIST_BY_TOPIC = {
     "network": ["Source/destination/port of failing path", "Error messages or timeouts seen", "A working comparison (user/site that works)"],
     "monitoring": ["Data source / workspace name", "The condition worth alerting on", "Who should receive alerts"],
     "reporting": ["Data source and time range", "Who consumes the report", "A known reference number to validate against"],
+    "bulk_data": ["Sample of the CSV/export with headers (sanitized)", "Target system and field mapping", "Expected row count and how to verify after"],
     "backup": ["Backup product and scope", "RTO/RPO targets", "Last successful restore test date"],
     "vendor": ["Product name and version", "Case number (if existing)", "Logs/diagnostics already collected"],
     "fixit": ["Exact error message or screenshot text", "Who is affected and since when", "What changed recently (updates, policy, password)"],
@@ -3047,7 +3083,8 @@ HELP_TOPICS = {
         "keywords": ["clear context", "clearing context", "start fresh",
                      "when should i start a new", "chat too long",
                      "chat is too long", "reset the chat", "clear the chat",
-                     "new conversation", "stale context"],
+                     "new conversation", "stale context", "fresh chat",
+                     "fresh conversation", "start over", "start a new chat"],
         "answer": [
             "Start a fresh chat when the old context starts hurting more "
             "than helping. Signs it's time:\n"
@@ -3132,7 +3169,8 @@ HELP_TOPICS = {
     "verify_output": {
         "keywords": ["trust the answer", "hallucinat", "verify the answer",
                      "double check the ai", "ai is wrong", "made up",
-                     "check its work"],
+                     "check its work", "can i trust", "trust the ai",
+                     "trust what", "is the ai right"],
         "answer": [
             "Treat AI output like work from a fast, confident junior: "
             "usually right, occasionally confidently wrong.\n"
@@ -3145,6 +3183,23 @@ HELP_TOPICS = {
             "surprisingly effective",
             "My prompts bake in a Validation module for exactly this: the "
             "AI has to state what it checked before claiming done.",
+        ],
+    },
+    "privacy_local": {
+        "keywords": ["send my data", "my data go", "data leave", "telemetry",
+                     "privacy", "phone home", "track me", "tracking",
+                     "is this local", "run locally", "work offline",
+                     "need internet", "cloud ai", "which ai do you use",
+                     "what ai do you use", "use chatgpt yourself"],
+        "answer": [
+            "Everything I do runs 100% locally on this machine — no cloud "
+            "AI, no API calls, no telemetry, no account. I build prompts "
+            "with local keyword matching, not by sending your text "
+            "anywhere.",
+            "The only time I touch the network is when YOU ask me to: "
+            "downloading a new pet look from codex-pets.net. Your prompts, "
+            "history, and settings live in %LOCALAPPDATA%\\PromptMate "
+            "(Windows) and never leave the machine. 🐾",
         ],
     },
     "promptmate_help": {
@@ -3172,6 +3227,7 @@ HELP_TOPICS = {
 
 QUESTION_STARTERS = ("how ", "what ", "whats ", "what's ", "when ", "why ",
                      "should ", "can you explain", "do i ", "does ", "is it ",
+                     "do you ", "are you ", "can i ",
                      "any tips", "tips on", "tell me about", "help me understand")
 
 
@@ -4791,7 +4847,294 @@ class ChatWindow:
             self.pet.open_editor(prefill=self.last[0])
 
 
+# ---------------------------------------------------------------------------
+# MCP server (--mcp): exposes the prompt-building brain over the Model
+# Context Protocol (stdio, JSON-RPC 2.0, newline-delimited) so coding agents
+# like Claude Code can use PromptMate as a tool. Stateless and read-only:
+# nothing here writes to user data. Stdlib only, same as the rest of the app.
+# ---------------------------------------------------------------------------
+
+MCP_PROTOCOL_VERSION = "2025-06-18"
+
+MCP_TOOLS = [
+    {
+        "name": "ask",
+        "description": (
+            "Send PromptMate a message exactly like chatting with the pet. "
+            "Question-shaped messages about prompting best practices, context, "
+            "handoffs, or PromptMate itself get a knowledge-base answer. Task "
+            "descriptions get a full recommendation: destination assistant, "
+            "template, agent modules, skills, context checklist, clarifying "
+            "questions, and a copy-ready prompt. Typos and shorthand are fine."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string",
+                    "description": "The chat message: a task to build a prompt for, or a question about prompting best practices.",
+                },
+            },
+            "required": ["message"],
+        },
+    },
+    {
+        "name": "build_prompt",
+        "description": (
+            "Build the final copy-ready prompt for a task. Pass the answers "
+            "to any clarifying questions from a previous ask call in "
+            "'answers' — they sharpen routing and are listed as provided "
+            "context in the prompt."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "task": {
+                    "type": "string",
+                    "description": "The task to build a prompt for.",
+                },
+                "answers": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Answers to clarifying questions (optional).",
+                },
+            },
+            "required": ["task"],
+        },
+    },
+    {
+        "name": "list_library",
+        "description": (
+            "List PromptMate's content library: prompt templates, agent "
+            "modules (expert operating instructions), and skills "
+            "(step-by-step workflows). Returns keys, names, and topics; use "
+            "get_item for full bodies."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "kind": {
+                    "type": "string",
+                    "enum": ["template", "module", "skill"],
+                    "description": "Limit to one kind (optional; default all).",
+                },
+            },
+        },
+    },
+    {
+        "name": "search_library",
+        "description": (
+            "Keyword-search templates, agent modules, and skills by name, "
+            "key, topic, and body text. Returns the best matches with keys "
+            "for get_item."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Search words, e.g. 'intune compliance' or 'handoff'.",
+                },
+            },
+            "required": ["query"],
+        },
+    },
+    {
+        "name": "get_item",
+        "description": "Fetch the full body of one template, agent module, or skill by key.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "kind": {
+                    "type": "string",
+                    "enum": ["template", "module", "skill"],
+                },
+                "key": {
+                    "type": "string",
+                    "description": "The item key, e.g. 'codex_execution' or 'plan_first'.",
+                },
+            },
+            "required": ["kind", "key"],
+        },
+    },
+]
+
+_MCP_LIBRARIES = {
+    "template": ("PROMPT_TEMPLATES", lambda: PROMPT_TEMPLATES),
+    "module": ("AGENT_MODULES", lambda: AGENT_MODULES),
+    "skill": ("SKILL_TEMPLATES", lambda: SKILL_TEMPLATES),
+}
+
+
+def _mcp_recommendation(cleaned: str, rec: dict, prompt: str) -> dict:
+    return {
+        "interpreted_as": cleaned,
+        "destination": DEST_LABELS[rec["destination"]],
+        "destination_reason": rec["reason"],
+        "template": rec["template"],
+        "template_name": PROMPT_TEMPLATES[rec["template"]]["name"],
+        "modules": {k: AGENT_MODULES[k]["name"] for k in rec["modules"]},
+        "skills": {k: SKILL_TEMPLATES[k]["name"] for k in rec["skills"]},
+        "context_checklist": rec["checklist"][:5],
+        "prompt": prompt,
+    }
+
+
+def _mcp_ask(spell: SpellHelper, message: str) -> dict:
+    help_answer = answer_help_question(message)
+    if help_answer:
+        return {"type": "help_answer", "answer": "\n\n".join(help_answer)}
+    cleaned = clean_text(message, spell)
+    rec = recommend(cleaned)
+    questions = clarifying_questions(cleaned, rec)
+    prompt = build_prompt(cleaned, rec, rec["modules"], rec["skills"], [])
+    result = {"type": "prompt", **_mcp_recommendation(cleaned, rec, prompt)}
+    if questions:
+        result["clarifying_questions"] = questions
+        result["hint"] = ("The prompt below is usable as-is, but answering "
+                          "the clarifying questions and calling build_prompt "
+                          "with the answers gives a sharper prompt.")
+    return result
+
+
+def _mcp_build_prompt(spell: SpellHelper, task: str, answers: list) -> dict:
+    answers = [a for a in (answers or []) if str(a).strip()]
+    combined = task + ". " + " ".join(answers) if answers else task
+    cleaned = clean_text(combined, spell)
+    rec = recommend(cleaned)
+    context = [clean_text(a, spell) for a in answers]
+    prompt = build_prompt(cleaned, rec, rec["modules"], rec["skills"], context)
+    return {"type": "prompt", **_mcp_recommendation(cleaned, rec, prompt)}
+
+
+def _mcp_list_library(kind: str = None) -> dict:
+    kinds = [kind] if kind else list(_MCP_LIBRARIES)
+    out = {}
+    for k in kinds:
+        if k not in _MCP_LIBRARIES:
+            raise ValueError(f"unknown kind {k!r}; expected one of {list(_MCP_LIBRARIES)}")
+        lib = _MCP_LIBRARIES[k][1]()
+        out[k + "s"] = [{"key": key, "name": item["name"], "topics": item["topics"]}
+                        for key, item in lib.items()]
+    return out
+
+
+def _mcp_search_library(query: str) -> dict:
+    words = [w for w in re.findall(r"[a-z0-9]+", query.lower()) if len(w) > 1]
+    if not words:
+        return {"results": []}
+    results = []
+    for kind, (_, getter) in _MCP_LIBRARIES.items():
+        for key, item in getter().items():
+            score = 0
+            name = item["name"].lower()
+            topics = " ".join(item["topics"]).lower()
+            body = item["body"].lower()
+            for w in words:
+                if w in key or w in name:
+                    score += 3
+                if w in topics:
+                    score += 2
+                if w in body:
+                    score += 1
+            if score > 0:
+                results.append({"kind": kind, "key": key, "name": item["name"],
+                                "topics": item["topics"], "score": score})
+    results.sort(key=lambda r: -r["score"])
+    return {"results": results[:10]}
+
+
+def _mcp_get_item(kind: str, key: str) -> dict:
+    if kind not in _MCP_LIBRARIES:
+        raise ValueError(f"unknown kind {kind!r}; expected one of {list(_MCP_LIBRARIES)}")
+    lib = _MCP_LIBRARIES[kind][1]()
+    if key not in lib:
+        close = difflib.get_close_matches(key, lib.keys(), n=3)
+        hint = f" Close matches: {', '.join(close)}." if close else ""
+        raise ValueError(f"no {kind} named {key!r}.{hint}")
+    item = lib[key]
+    out = {"kind": kind, "key": key, "name": item["name"],
+           "topics": item["topics"], "body": item["body"]}
+    if item.get("steps"):
+        out["steps"] = item["steps"]
+    if item.get("destination"):
+        out["destination"] = item["destination"]
+    return out
+
+
+def run_mcp_server():
+    """Serve MCP over stdio until stdin closes."""
+    sys.stdin.reconfigure(encoding="utf-8")
+    sys.stdout.reconfigure(encoding="utf-8", newline="\n")
+    spell = SpellHelper()
+
+    handlers = {
+        "ask": lambda a: _mcp_ask(spell, a["message"]),
+        "build_prompt": lambda a: _mcp_build_prompt(spell, a["task"], a.get("answers")),
+        "list_library": lambda a: _mcp_list_library(a.get("kind")),
+        "search_library": lambda a: _mcp_search_library(a["query"]),
+        "get_item": lambda a: _mcp_get_item(a["kind"], a["key"]),
+    }
+
+    def send(payload: dict):
+        sys.stdout.write(json.dumps(payload, ensure_ascii=True) + "\n")
+        sys.stdout.flush()
+
+    for line in sys.stdin:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            msg = json.loads(line)
+        except ValueError:
+            continue
+        method = msg.get("method", "")
+        msg_id = msg.get("id")
+        is_notification = msg_id is None
+
+        if method == "initialize":
+            client_version = (msg.get("params") or {}).get("protocolVersion")
+            send({"jsonrpc": "2.0", "id": msg_id, "result": {
+                "protocolVersion": client_version if isinstance(client_version, str)
+                                   else MCP_PROTOCOL_VERSION,
+                "capabilities": {"tools": {}},
+                "serverInfo": {"name": APP_NAME, "version": APP_VERSION},
+                "instructions": (
+                    "PromptMate builds copy-ready, best-practice prompts for "
+                    "IT tasks and answers prompting how-to questions. Start "
+                    "with the ask tool; everything runs locally."
+                ),
+            }})
+        elif method == "ping":
+            send({"jsonrpc": "2.0", "id": msg_id, "result": {}})
+        elif method == "tools/list":
+            send({"jsonrpc": "2.0", "id": msg_id, "result": {"tools": MCP_TOOLS}})
+        elif method == "tools/call":
+            params = msg.get("params") or {}
+            name = params.get("name")
+            args = params.get("arguments") or {}
+            try:
+                if name not in handlers:
+                    raise ValueError(f"unknown tool {name!r}")
+                result = handlers[name](args)
+                content = {"content": [{"type": "text",
+                                        "text": json.dumps(result, indent=2,
+                                                           ensure_ascii=False)}]}
+            except Exception as exc:  # tool errors go in-band per MCP spec
+                content = {"content": [{"type": "text", "text": f"Error: {exc}"}],
+                           "isError": True}
+            send({"jsonrpc": "2.0", "id": msg_id, "result": content})
+        elif is_notification or method.startswith("notifications/"):
+            continue
+        else:
+            send({"jsonrpc": "2.0", "id": msg_id,
+                  "error": {"code": -32601, "message": f"method not found: {method}"}})
+
+
 def main():
+    if "--mcp" in sys.argv:
+        run_mcp_server()
+        return
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     root = tk.Tk()
     try:

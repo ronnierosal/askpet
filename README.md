@@ -22,7 +22,40 @@ ask for one.
 
 ![PromptMate chat](docs/chat-screenshot.png)
 
+## MCP server
+
+PromptMate doubles as a local MCP server, so coding agents (Claude Code,
+Claude Desktop, anything MCP-capable) can use it as a tool:
+
+```
+python promptmate.py --mcp
+```
+
+The repo ships a `.mcp.json`, so Claude Code sessions opened in this folder
+get the `promptmate` server automatically. Five tools: `ask` (chat with the
+brain — prompts for tasks, knowledge-base answers for questions),
+`build_prompt` (task + clarification answers → final prompt),
+`list_library`, `search_library`, and `get_item` (browse the
+template/module/skill content). Stateless, read-only, stdlib-only — and
+still fully local.
+
 ## What's new
+
+**0.14.0** (2026-06-11)
+- MCP server mode (`--mcp`): use PromptMate's prompt-building brain from
+  Claude Code or any MCP client — see the MCP server section above.
+- Battery-tested routing round: word-anchored topic keywords ("edr" no
+  longer matches "onedrive"), bulk/CSV ops get their own topic and Codex
+  routing, conditional access/MFA asks reach the Entra template instead of
+  audit evidence, "compliance policy" reads as Intune config not audit,
+  certificate renewals hit the network topic, backup-failure
+  investigations get the troubleshoot shape.
+- New "Explain a concept" template — "explain X vs Y" asks now get a
+  learning-shaped prompt instead of a product template.
+- Knowledge base: answers about privacy/local-only operation ("do you
+  send my data anywhere?"), plus better matching for "can I trust the
+  AI" and "start a fresh chat" phrasings.
+- 46 templates / 64 modules / 82 skills + 9 help topics.
 
 **0.13.0** (2026-06-11)
 - Ask the pet questions: a built-in best-practices knowledge base answers
