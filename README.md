@@ -48,6 +48,9 @@ still fully local.
   or clear everything immediately. Pruning runs at startup and on
   every save; history stays local in %LOCALAPPDATA%\PromptMate as
   always.
+- About PromptMate (right-click the pet): app and content-library
+  versions, library counts, a word from the creator, and a link to the
+  GitHub repo.
 
 **0.17.4** (2026-06-12)
 - Typos now show as a thin red underline under normal-colored text

@@ -5642,6 +5642,7 @@ class PetOverlay:
         menu.add_separator()
         menu.add_command(label="🔄 Change pet…", command=self.open_pet_browser)
         menu.add_command(label=f"ℹ About {self.pet_name()}", command=self.show_pet_credit)
+        menu.add_command(label="🐾 About PromptMate", command=self.show_about)
         size_menu = tk.Menu(menu, tearoff=0)
         for label, scale in (("Large", 1), ("Medium", 2), ("Small", 3)):
             check = " ✓" if scale == self.scale else ""
@@ -5681,6 +5682,50 @@ class PetOverlay:
 
     def open_pet_browser(self):
         PetBrowser(self)
+
+    def show_about(self):
+        win = tk.Toplevel(self.root)
+        win.title("About PromptMate")
+        win.wm_attributes("-topmost", True)
+        win.resizable(False, False)
+        frame = ttk.Frame(win, padding=16)
+        frame.pack(fill="both", expand=True)
+
+        ttk.Label(frame, text=f"{APP_NAME} v{APP_VERSION}",
+                  font=("Segoe UI", 14, "bold")).pack(anchor="w")
+        ttk.Label(frame,
+                  text=f"Content library {CONTENT_VERSION} — "
+                       f"{len(PROMPT_TEMPLATES)} templates · "
+                       f"{len(AGENT_MODULES)} agent modules · "
+                       f"{len(SKILL_TEMPLATES)} skills",
+                  foreground="#666666").pack(anchor="w", pady=(2, 10))
+        ttk.Label(frame, wraplength=400, justify="left", text=(
+            "A desktop companion that turns plain-English asks into "
+            "best-practice prompts for Codex, Claude Code, ChatGPT, and "
+            "Claude. Everything runs locally — no cloud AI, no accounts, "
+            "no telemetry.")).pack(anchor="w")
+
+        ttk.Separator(frame).pack(fill="x", pady=10)
+        ttk.Label(frame, text="Created by Ronnie Rosal",
+                  font=("Segoe UI", 10, "bold")).pack(anchor="w")
+        ttk.Label(frame, wraplength=400, justify="left", text=(
+            "IT backend / systems administrator who builds practical tools "
+            "for everyday work. PromptMate is developed in the open with "
+            "AI pair-programming, one user request at a time.")).pack(anchor="w")
+
+        def link(text, url):
+            lbl = ttk.Label(frame, text=text, foreground="#0b93f6",
+                            cursor="hand2")
+            lbl.pack(anchor="w", pady=(4, 0))
+            lbl.bind("<Button-1>", lambda e: webbrowser.open(url))
+
+        link("github.com/ronnierosal/promptmate",
+             "https://github.com/ronnierosal/promptmate")
+        ttk.Label(frame, wraplength=400, justify="left", foreground="#666666",
+                  text="Pet art from codex-pets.net — every artist is "
+                       "credited on their pet.").pack(anchor="w", pady=(8, 0))
+        ttk.Button(frame, text="Close",
+                   command=win.destroy).pack(anchor="e", pady=(12, 0))
 
     def set_history_retention(self, hours: int):
         self.settings["history_retention_hours"] = hours
