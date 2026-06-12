@@ -30,7 +30,7 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 APP_NAME = "PromptMate"
-APP_VERSION = "0.17.3"
+APP_VERSION = "0.17.4"
 CONTENT_VERSION = "2026.06.16"
 
 # ---------------------------------------------------------------------------
@@ -4847,7 +4847,7 @@ class PromptMateApp:
         self.input_text = tk.Text(chat_frame, height=5, wrap="word", undo=True,
                                   font=("Segoe UI", 10))
         self.input_text.pack(fill="x", pady=4)
-        self.input_text.tag_configure("misspelled", underline=True, foreground="red")
+        configure_misspell_tag(self.input_text)
         self.input_text.bind("<KeyRelease>", self._on_key_release)
         self.input_text.bind("<Button-3>", self._on_right_click)
         self.input_text.bind("<Control-Return>", lambda e: (self._ask(), "break")[1])
@@ -4955,7 +4955,7 @@ class PromptMateApp:
     def _recheck_spelling(self):
         text = self.input_text.get("1.0", "end-1c")
         self.input_text.tag_remove("misspelled", "1.0", "end")
-        for m in re.finditer(r"[A-Za-z]+", text):
+        for m in re.finditer(r"[A-Za-z]+(?:'[A-Za-z]+)*", text):
             word = m.group(0)
             if not self.spell.known(word):
                 start = f"1.0+{m.start()}c"
@@ -5264,13 +5264,23 @@ def local_pet_dir(pet_id: str) -> Path:
     return ASSETS_DIR
 
 
+def configure_misspell_tag(widget: tk.Text):
+    """Typos get a red underline under normal-colored text (Tk has no wavy
+    underline). Red TEXT is reserved for keyword highlights, so the two
+    can't be confused."""
+    try:
+        widget.tag_configure("misspelled", underline=True, underlinefg="#d93025")
+    except tk.TclError:  # Tk older than 8.6.6: fall back to red text
+        widget.tag_configure("misspelled", underline=True, foreground="#d93025")
+
+
 class SpellSupport:
     """Attach red-underline spellcheck + right-click suggestions to a tk.Text."""
 
     def __init__(self, text_widget: tk.Text, spell: SpellHelper):
         self.text = text_widget
         self.spell = spell
-        text_widget.tag_configure("misspelled", underline=True, foreground="red")
+        configure_misspell_tag(text_widget)
         text_widget.bind("<KeyRelease>", self._on_key_release, add="+")
         text_widget.bind("<Button-3>", self._on_right_click, add="+")
 

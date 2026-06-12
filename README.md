@@ -41,6 +41,14 @@ still fully local.
 
 ## What's new
 
+**0.17.4** (2026-06-12)
+- Typos now show as a thin red underline under normal-colored text
+  instead of solid red words — red text stays reserved for keyword
+  highlighting, so the two can't be confused. Right-click a flagged
+  word for corrections, as before.
+- The editor's spell pass also handles contractions now ("doesn't" no
+  longer flags), matching the chat window.
+
 **0.17.3** (2026-06-12)
 - Pet search survives typos online too: when codex-pets.net's exact
   search returns nothing, PromptMate retries progressively shorter
