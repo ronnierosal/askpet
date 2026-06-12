@@ -27,8 +27,8 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 APP_NAME = "PromptMate"
-APP_VERSION = "0.6.0"
-CONTENT_VERSION = "2026.06.6"
+APP_VERSION = "0.7.0"
+CONTENT_VERSION = "2026.06.7"
 
 # ---------------------------------------------------------------------------
 # User data locations (never inside the install folder)
@@ -333,6 +333,25 @@ KEYWORD_TOPICS = {
                  "eli5", "in simple terms"],
     "summarize": ["summarize", "summarise", "tldr", "tl;dr", "key points",
                   "summary of", "condense"],
+    "api": ["api", "rest api", "webhook", "endpoint", "oauth", "api key",
+            "swagger", "openapi", "postman", "graphql", "rate limit"],
+    "mcp": ["mcp", "model context protocol", "mcp server", "claude desktop",
+            "tool use", "function calling", "connect claude to",
+            "connect chatgpt to"],
+    "local_llm": ["ollama", "gemma", "local llm", "local ai", "llama",
+                  "mistral", "local model", "offline ai", "on-prem ai",
+                  "private chatbot", "local chatbot"],
+    "rmm": ["ninjaone", "ninja one", "ninjarmm", "ninja rmm", "connectwise",
+            "screenconnect", "rmm", "remote monitoring"],
+    "siem": ["sumo logic", "sumologic", "siem", "log source",
+             "correlation rule", "search query", "ingest"],
+    "edr": ["sentinelone", "sentinel one", "edr", "crowdstrike",
+            "defender for endpoint", "quarantine", "threat hunt",
+            "malware alert", "endpoint detection"],
+    "browser": ["chrome", "microsoft edge", "edge browser", "firefox",
+                "island browser", "browser extension", "browser policy",
+                "bookmarks", "homepage", "popup blocker", "cache and cookies",
+                "browser profile"],
 }
 
 
@@ -679,7 +698,7 @@ PROMPT_TEMPLATES = {
     "log_query": {
         "name": "Log/data query (KQL or SQL)",
         "destination": "Codex",
-        "topics": ["monitoring", "reporting"],
+        "topics": ["monitoring", "reporting", "siem"],
         "body": (
             "Write a query for me. {TASK}\n\n"
             "- Source/tables: {INPUTS}\n- Constraints: {CONSTRAINTS}\n\n"
@@ -865,6 +884,75 @@ PROMPT_TEMPLATES = {
             "- Next step and who owns it (them or us), with timing\n"
             "- Professional, warm, no blame, no jargon\n\n"
             "Ticket context: {INPUTS}\nConstraints: {CONSTRAINTS}"
+        ),
+    },
+    "api_integration": {
+        "name": "API integration build",
+        "destination": "Codex",
+        "topics": ["api"],
+        "body": (
+            "Build an API integration. {TASK}\n\n"
+            "API context: {INPUTS}\n\n"
+            "Requirements:\n"
+            "- Start by reading/confirming the auth model; use least-privilege "
+            "scopes and keep secrets in environment/vault, never in code\n"
+            "- Prove one call works (show me the curl equivalent) before "
+            "building the full integration\n"
+            "- Handle paging, rate limits (429 with Retry-After), and "
+            "timeouts; make writes idempotent\n"
+            "- Log requests/responses (sanitized) for debugging\n"
+            "- Include tests for the failure paths: expired token, empty "
+            "result, throttling\n\n"
+            "Constraints: {CONSTRAINTS}\nVerification: {VERIFICATION}"
+        ),
+    },
+    "mcp_integration": {
+        "name": "MCP integration (connect tools to AI)",
+        "destination": "Both",
+        "topics": ["mcp"],
+        "body": (
+            "Help me connect tools/data to an AI client using the Model "
+            "Context Protocol (MCP). {TASK}\n\n"
+            "Setup context: {INPUTS}\n\n"
+            "Walk me through:\n"
+            "1. Whether an existing MCP server covers this (prefer that) or "
+            "we should build one\n"
+            "2. Credential setup with the narrowest scopes the tasks need — "
+            "prefer read-only unless writes are required\n"
+            "3. Client configuration (e.g. claude_desktop_config.json) and "
+            "how to verify the tools actually appear\n"
+            "4. If building a server: tool definitions with precise "
+            "descriptions (the AI's only manual), input validation, and "
+            "safe error messages\n"
+            "5. A test plan: one harmless read-only call first, then each "
+            "tool with real-shaped data\n\n"
+            "Security review: list what the AI will be able to do after "
+            "this, and what limits it.\n\nConstraints: {CONSTRAINTS}"
+        ),
+    },
+    "local_chatbot": {
+        "name": "Local AI chatbot (Ollama)",
+        "destination": "Both",
+        "topics": ["local_llm"],
+        "body": (
+            "Help me build a local, private AI chatbot using Ollama. {TASK}\n\n"
+            "Environment: {INPUTS}\n\n"
+            "Cover, in order:\n"
+            "1. Model choice for my hardware — e.g. Gemma at the size/"
+            "quantization my RAM/VRAM supports — with honest expectations "
+            "vs cloud models\n"
+            "2. Install and pull commands, and a first smoke test\n"
+            "3. A system prompt for my use case: role, tone, what to refuse, "
+            "knowledge limits (small local models need explicit guidance)\n"
+            "4. Front end options: terminal, Open WebUI, or a small script "
+            "against the localhost API — recommend one for my needs\n"
+            "5. If my own documents/data should inform answers: the simplest "
+            "approach that works (paste-in context first, RAG only if "
+            "needed)\n"
+            "6. A test script of 5-10 representative questions and what "
+            "good answers look like\n\n"
+            "Everything must run fully local — no cloud calls, no data "
+            "leaving the machine.\n\nConstraints: {CONSTRAINTS}"
         ),
     },
     "rewrite_text": {
@@ -1316,6 +1404,90 @@ AGENT_MODULES = {
             "write user-facing replies in plain language, capture what was "
             "done in the ticket, and spot repeat issues that deserve a KB "
             "article or automation instead of another one-off fix."
+        ),
+    },
+    "api_integration": {
+        "name": "API Integration Agent",
+        "topics": ["api"],
+        "body": (
+            "Act as an API integration specialist: read the auth model first "
+            "(OAuth vs key vs token) and use least-privilege scopes; prove "
+            "one call works (curl/Postman) before writing the integration; "
+            "handle paging, rate limits (429/Retry-After), and timeouts from "
+            "day one; make writes idempotent; keep secrets in a vault or "
+            "environment, never in code."
+        ),
+    },
+    "mcp": {
+        "name": "MCP Agent",
+        "topics": ["mcp"],
+        "body": (
+            "Act as a Model Context Protocol specialist. MCP servers expose "
+            "tools/resources to AI clients (Claude Desktop, Claude Code, "
+            "etc.): grant the narrowest scopes the task needs, treat tool "
+            "descriptions as the AI's only manual (write them precisely), "
+            "prefer read-only tools unless writes are required, and verify "
+            "the client actually lists the tools after config changes."
+        ),
+    },
+    "local_llm": {
+        "name": "Local AI Agent",
+        "topics": ["local_llm"],
+        "body": (
+            "Act as a local-LLM specialist (Ollama, Gemma, Llama, Mistral): "
+            "match model size and quantization to the actual hardware "
+            "(VRAM/RAM) before promising performance, design a tight system "
+            "prompt because small models need more guidance, set "
+            "expectations honestly vs cloud models, and lean into the "
+            "advantages — privacy, no per-token cost, offline operation."
+        ),
+    },
+    "rmm": {
+        "name": "RMM Agent",
+        "topics": ["rmm"],
+        "body": (
+            "Act as an RMM specialist (NinjaOne, ConnectWise): scripts "
+            "deployed via RMM usually run as SYSTEM — write and test for "
+            "that context; always pilot on a small device group with exit "
+            "codes the platform can read; scope policies by org/site/group "
+            "deliberately; and remember every action leaves an audit trail "
+            "a customer may read."
+        ),
+    },
+    "siem": {
+        "name": "SIEM Agent",
+        "topics": ["siem", "monitoring"],
+        "body": (
+            "Act as a SIEM specialist (Sumo Logic and similar): anchor every "
+            "search to a source category and a bounded time range, build "
+            "queries incrementally (filter, parse, aggregate), validate "
+            "against a known event before trusting results, and mind ingest "
+            "and scan costs — a scheduled search that scans everything "
+            "hourly is a bill, not a control."
+        ),
+    },
+    "edr": {
+        "name": "EDR Agent",
+        "topics": ["edr", "security"],
+        "body": (
+            "Act as an EDR specialist (SentinelOne and similar): triage "
+            "before acting — what fired, on which endpoint, run by which "
+            "user; contain (network isolate/quarantine) when in doubt, "
+            "investigate after; treat every exclusion as a permanent risk "
+            "decision needing justification; capture evidence before "
+            "remediation erases it."
+        ),
+    },
+    "browser_admin": {
+        "name": "Browser Management Agent",
+        "topics": ["browser"],
+        "body": (
+            "Act as an enterprise browser specialist (Chrome, Edge, Firefox, "
+            "Island): manage via policy (Intune/GPO/ADMX) not per-device "
+            "tweaks, control extensions with allowlists rather than chasing "
+            "bad installs, know the profile/sync implications of policy "
+            "changes, and for troubleshooting isolate variables: new "
+            "profile, extensions off, then cache."
         ),
     },
 }
@@ -1909,6 +2081,90 @@ SKILL_TEMPLATES = {
             "Ask the assistant to plan first and confirm before executing.",
         ],
     },
+    "api_script": {
+        "name": "API integration skill",
+        "topics": ["api"],
+        "body": "Integrate with an API safely: auth first, prove one call, then paging/limits/errors.",
+        "steps": [
+            "Read the docs for auth, rate limits, and paging before any code.",
+            "Get credentials with least-privilege scopes; store them outside code.",
+            "Prove ONE call works via curl/Postman and save the working example.",
+            "Build the integration: paging, 429/Retry-After handling, timeouts, idempotent writes.",
+            "Test failure paths (expired token, empty result, throttle) and log requests for debugging.",
+        ],
+    },
+    "mcp_setup": {
+        "name": "MCP server setup skill",
+        "topics": ["mcp"],
+        "body": "Connect tools to an AI client via MCP: pick, configure, verify, scope down.",
+        "steps": [
+            "Pick the MCP server (existing one before building your own).",
+            "Create credentials scoped to only what the AI should touch.",
+            "Add the server to the client config (e.g. claude_desktop_config.json) and restart the client.",
+            "Verify the tools appear and run one harmless read-only call.",
+            "Review what the AI can now do; remove scopes you don't need and document the setup.",
+        ],
+    },
+    "ollama_chatbot": {
+        "name": "Local AI chatbot skill",
+        "topics": ["local_llm"],
+        "body": "Stand up a private chatbot with Ollama: hardware check, model pull, system prompt, test.",
+        "steps": [
+            "Check hardware: 8GB RAM runs small models (gemma3:4b); a GPU with 8GB+ VRAM runs mid-size well.",
+            "Install Ollama, then `ollama pull gemma3` (or the size that fits).",
+            "Test in terminal with `ollama run` and your 5 most typical questions.",
+            "Write a system prompt: role, tone, what it must refuse, knowledge limits — small models need explicit guidance.",
+            "Add a front end (Open WebUI or a simple script via the localhost API) and re-test the same questions.",
+        ],
+    },
+    "rmm_deploy": {
+        "name": "RMM script deployment skill",
+        "topics": ["rmm", "powershell"],
+        "body": "Deploy a script via NinjaOne/ConnectWise: SYSTEM context, exit codes, pilot ring.",
+        "steps": [
+            "Write the script for the run context (usually SYSTEM — no user profile, no mapped drives).",
+            "Return meaningful exit codes and output the RMM can capture.",
+            "Test on one device manually, then a pilot device group.",
+            "Review pilot results in the RMM before widening scope.",
+            "Roll out by group, monitor failures, document in the runbook.",
+        ],
+    },
+    "siem_query": {
+        "name": "SIEM search/alert skill",
+        "topics": ["siem"],
+        "body": "Build a Sumo Logic search or alert that's trusted: scope, validate, schedule, runbook.",
+        "steps": [
+            "Write the question first: what event, which systems, what time range.",
+            "Anchor to the right source category; confirm logs are actually arriving.",
+            "Build incrementally: filter, then parse fields, then aggregate.",
+            "Validate against a known event (a login you just did, a test alert).",
+            "If scheduling as an alert: set a threshold that means action, link a runbook, review noise in 2 weeks.",
+        ],
+    },
+    "edr_triage": {
+        "name": "EDR alert triage skill",
+        "topics": ["edr"],
+        "body": "Work a SentinelOne/EDR alert: triage, contain, evidence, remediate, tune carefully.",
+        "steps": [
+            "Read the full detection: process tree, file path, user, machine role.",
+            "Decide fast: likely true positive -> isolate the endpoint now, investigate after.",
+            "Capture evidence (hashes, timeline, affected files) before remediation erases it.",
+            "Remediate: kill/quarantine/rollback, then verify the endpoint is clean.",
+            "Classify the alert honestly; only add exclusions with written justification and an owner.",
+        ],
+    },
+    "browser_policy": {
+        "name": "Browser policy/troubleshooting skill",
+        "topics": ["browser"],
+        "body": "Manage or fix browsers properly: policy over tweaks, isolate variables when debugging.",
+        "steps": [
+            "For management: define the setting, find its policy (ADMX/Intune profile), don't hand-edit devices.",
+            "Pilot the policy on a test group; verify via the browser's policy page (chrome://policy, edge://policy).",
+            "For troubleshooting: reproduce in a fresh profile first — that splits profile vs install issues.",
+            "Disable extensions, retest; re-enable one at a time to find the culprit.",
+            "Clear cache/cookies only after the above — it's the last variable, not the first.",
+        ],
+    },
 }
 
 CONTEXT_CHECKLIST_BY_TOPIC = {
@@ -1948,6 +2204,13 @@ CONTEXT_CHECKLIST_BY_TOPIC = {
     "helpdesk": ["User identity already verified?", "Asset/account details", "Ticket number"],
     "learning": ["Your current familiarity level", "Why you need to know (context)", "Preferred depth: overview vs deep dive"],
     "summarize": ["The document/text to summarize (paste or attach)", "Who the summary is for", "Target length"],
+    "api": ["API docs link or endpoint list", "Auth method (OAuth/key/token)", "Rate limits and paging details"],
+    "mcp": ["Which AI client (Claude Desktop/Code, etc.)", "What data/tools to expose", "Where credentials live"],
+    "local_llm": ["Hardware specs (RAM/GPU/VRAM)", "What the bot must know/do", "Privacy requirements"],
+    "rmm": ["Device groups/organizations in scope", "Script run context (SYSTEM vs user)", "Maintenance window"],
+    "siem": ["Source category / log source names", "Time range of interest", "A known event to validate against"],
+    "edr": ["Alert ID and detection details", "Affected endpoint(s)", "Whether containment already happened"],
+    "browser": ["Browser and version", "Managed via Intune/GPO or unmanaged", "Extensions involved"],
 }
 
 GENERIC_CHECKLIST = [
@@ -1964,20 +2227,24 @@ def recommend(text: str) -> dict:
 
     def topic_score(item):
         overlap = set(item["topics"]) & set(topics)
-        # A break/fix signal outweighs the product area: "outlook crashing"
-        # should get the troubleshooting shape, not the admin-task shape.
-        return len(overlap) + (0.5 if "fixit" in overlap else 0)
+        # Urgent-signal topics outweigh the product area: "outlook crashing"
+        # gets the troubleshooting shape, an EDR alert gets the EDR shape.
+        return len(overlap) + (0.5 if overlap & {"fixit", "edr"} else 0)
 
-    # Template: best topic overlap, fall back by destination.
-    best_key, best_score = None, -1
+    # Template: best topic overlap, fall back by destination. Without any
+    # topic overlap the tie-break math is meaningless — go straight to the
+    # generic template for the destination.
+    best_key, best_overlap = None, 0
+    best_score = -1
     for key, t in PROMPT_TEMPLATES.items():
+        overlap = topic_score(t)
         # Specific templates (fewer topics) win ties over broad ones.
-        s = topic_score(t) * 2 - 0.01 * len(t["topics"])
+        s = overlap * 2 - 0.01 * len(t["topics"])
         if t["destination"] == dest_info["destination"]:
             s += 0.5
         if s > best_score:
-            best_key, best_score = key, s
-    if best_score <= 0:
+            best_key, best_score, best_overlap = key, s, overlap
+    if best_overlap <= 0:
         best_key = "codex_execution" if dest_info["destination"] == "Codex" else "chatgpt_planning"
 
     modules = sorted((k for k, m in AGENT_MODULES.items() if topic_score(m) > 0),

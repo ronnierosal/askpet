@@ -26,6 +26,13 @@ cases = [
     "user is locked out of their account again, third time this week",
     "excel formula to find duplicates across two sheets",
     "explain how conditional access works in simple terms",
+    "build an integration with the ninjaone api to pull device inventory",
+    "set up an mcp server so claude can read our confluence",
+    "i want a local ai chatbot like promptmate using ollama with gemma",
+    "deploy a cleanup script to all servers through ninjaone",
+    "sumo logic query for failed vpn logins last 24 hours",
+    "sentinelone flagged a powershell script on the cfo laptop",
+    "force install an extension in chrome and edge for everyone",
 ]
 for raw in cases:
     cleaned = pm.clean_text(raw, spell)

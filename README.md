@@ -24,6 +24,18 @@ ask for one.
 
 ## What's new
 
+**0.7.0** (2026-06-11)
+- API & MCP integration support: templates, agents, and skills for building
+  API integrations (auth, paging, rate limits, idempotency) and connecting
+  tools to AI clients via Model Context Protocol.
+- Local AI chatbot template: walks you through building a fully-local
+  Ollama + Gemma chatbot (hardware fit, system prompt, front end, testing).
+- New tool coverage: NinjaOne/ConnectWise (RMM), Sumo Logic (SIEM),
+  SentinelOne (EDR), and browser management (Chrome, Edge, Firefox, Island).
+- Routing fixes: no-topic-match asks now fall back to the right generic
+  template; EDR alerts rank their specialist module first.
+- 39 templates / 45 modules / 56 skills.
+
 **0.6.0** (2026-06-11)
 - Chat replies now show clickable module/skill chips — tap one to read
   exactly what it adds to your prompt.

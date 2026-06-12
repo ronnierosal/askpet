@@ -702,5 +702,104 @@
       "Define what done looks like — measurable if possible.",
       "Ask the assistant to plan first and confirm before executing."
     ]
+  },
+  "api_script": {
+    "name": "API integration skill",
+    "topics": [
+      "api"
+    ],
+    "body": "Integrate with an API safely: auth first, prove one call, then paging/limits/errors.",
+    "steps": [
+      "Read the docs for auth, rate limits, and paging before any code.",
+      "Get credentials with least-privilege scopes; store them outside code.",
+      "Prove ONE call works via curl/Postman and save the working example.",
+      "Build the integration: paging, 429/Retry-After handling, timeouts, idempotent writes.",
+      "Test failure paths (expired token, empty result, throttle) and log requests for debugging."
+    ]
+  },
+  "mcp_setup": {
+    "name": "MCP server setup skill",
+    "topics": [
+      "mcp"
+    ],
+    "body": "Connect tools to an AI client via MCP: pick, configure, verify, scope down.",
+    "steps": [
+      "Pick the MCP server (existing one before building your own).",
+      "Create credentials scoped to only what the AI should touch.",
+      "Add the server to the client config (e.g. claude_desktop_config.json) and restart the client.",
+      "Verify the tools appear and run one harmless read-only call.",
+      "Review what the AI can now do; remove scopes you don't need and document the setup."
+    ]
+  },
+  "ollama_chatbot": {
+    "name": "Local AI chatbot skill",
+    "topics": [
+      "local_llm"
+    ],
+    "body": "Stand up a private chatbot with Ollama: hardware check, model pull, system prompt, test.",
+    "steps": [
+      "Check hardware: 8GB RAM runs small models (gemma3:4b); a GPU with 8GB+ VRAM runs mid-size well.",
+      "Install Ollama, then `ollama pull gemma3` (or the size that fits).",
+      "Test in terminal with `ollama run` and your 5 most typical questions.",
+      "Write a system prompt: role, tone, what it must refuse, knowledge limits — small models need explicit guidance.",
+      "Add a front end (Open WebUI or a simple script via the localhost API) and re-test the same questions."
+    ]
+  },
+  "rmm_deploy": {
+    "name": "RMM script deployment skill",
+    "topics": [
+      "rmm",
+      "powershell"
+    ],
+    "body": "Deploy a script via NinjaOne/ConnectWise: SYSTEM context, exit codes, pilot ring.",
+    "steps": [
+      "Write the script for the run context (usually SYSTEM — no user profile, no mapped drives).",
+      "Return meaningful exit codes and output the RMM can capture.",
+      "Test on one device manually, then a pilot device group.",
+      "Review pilot results in the RMM before widening scope.",
+      "Roll out by group, monitor failures, document in the runbook."
+    ]
+  },
+  "siem_query": {
+    "name": "SIEM search/alert skill",
+    "topics": [
+      "siem"
+    ],
+    "body": "Build a Sumo Logic search or alert that's trusted: scope, validate, schedule, runbook.",
+    "steps": [
+      "Write the question first: what event, which systems, what time range.",
+      "Anchor to the right source category; confirm logs are actually arriving.",
+      "Build incrementally: filter, then parse fields, then aggregate.",
+      "Validate against a known event (a login you just did, a test alert).",
+      "If scheduling as an alert: set a threshold that means action, link a runbook, review noise in 2 weeks."
+    ]
+  },
+  "edr_triage": {
+    "name": "EDR alert triage skill",
+    "topics": [
+      "edr"
+    ],
+    "body": "Work a SentinelOne/EDR alert: triage, contain, evidence, remediate, tune carefully.",
+    "steps": [
+      "Read the full detection: process tree, file path, user, machine role.",
+      "Decide fast: likely true positive -> isolate the endpoint now, investigate after.",
+      "Capture evidence (hashes, timeline, affected files) before remediation erases it.",
+      "Remediate: kill/quarantine/rollback, then verify the endpoint is clean.",
+      "Classify the alert honestly; only add exclusions with written justification and an owner."
+    ]
+  },
+  "browser_policy": {
+    "name": "Browser policy/troubleshooting skill",
+    "topics": [
+      "browser"
+    ],
+    "body": "Manage or fix browsers properly: policy over tweaks, isolate variables when debugging.",
+    "steps": [
+      "For management: define the setting, find its policy (ADMX/Intune profile), don't hand-edit devices.",
+      "Pilot the policy on a test group; verify via the browser's policy page (chrome://policy, edge://policy).",
+      "For troubleshooting: reproduce in a fresh profile first — that splits profile vs install issues.",
+      "Disable extensions, retest; re-enable one at a time to find the culprit.",
+      "Clear cache/cookies only after the above — it's the last variable, not the first."
+    ]
   }
 }

@@ -388,6 +388,86 @@
       "key points",
       "summary of",
       "condense"
+    ],
+    "api": [
+      "api",
+      "rest api",
+      "webhook",
+      "endpoint",
+      "oauth",
+      "api key",
+      "swagger",
+      "openapi",
+      "postman",
+      "graphql",
+      "rate limit"
+    ],
+    "mcp": [
+      "mcp",
+      "model context protocol",
+      "mcp server",
+      "claude desktop",
+      "tool use",
+      "function calling",
+      "connect claude to",
+      "connect chatgpt to"
+    ],
+    "local_llm": [
+      "ollama",
+      "gemma",
+      "local llm",
+      "local ai",
+      "llama",
+      "mistral",
+      "local model",
+      "offline ai",
+      "on-prem ai",
+      "private chatbot",
+      "local chatbot"
+    ],
+    "rmm": [
+      "ninjaone",
+      "ninja one",
+      "ninjarmm",
+      "ninja rmm",
+      "connectwise",
+      "screenconnect",
+      "rmm",
+      "remote monitoring"
+    ],
+    "siem": [
+      "sumo logic",
+      "sumologic",
+      "siem",
+      "log source",
+      "correlation rule",
+      "search query",
+      "ingest"
+    ],
+    "edr": [
+      "sentinelone",
+      "sentinel one",
+      "edr",
+      "crowdstrike",
+      "defender for endpoint",
+      "quarantine",
+      "threat hunt",
+      "malware alert",
+      "endpoint detection"
+    ],
+    "browser": [
+      "chrome",
+      "microsoft edge",
+      "edge browser",
+      "firefox",
+      "island browser",
+      "browser extension",
+      "browser policy",
+      "bookmarks",
+      "homepage",
+      "popup blocker",
+      "cache and cookies",
+      "browser profile"
     ]
   },
   "context_checklist_by_topic": {
@@ -570,6 +650,41 @@
       "The document/text to summarize (paste or attach)",
       "Who the summary is for",
       "Target length"
+    ],
+    "api": [
+      "API docs link or endpoint list",
+      "Auth method (OAuth/key/token)",
+      "Rate limits and paging details"
+    ],
+    "mcp": [
+      "Which AI client (Claude Desktop/Code, etc.)",
+      "What data/tools to expose",
+      "Where credentials live"
+    ],
+    "local_llm": [
+      "Hardware specs (RAM/GPU/VRAM)",
+      "What the bot must know/do",
+      "Privacy requirements"
+    ],
+    "rmm": [
+      "Device groups/organizations in scope",
+      "Script run context (SYSTEM vs user)",
+      "Maintenance window"
+    ],
+    "siem": [
+      "Source category / log source names",
+      "Time range of interest",
+      "A known event to validate against"
+    ],
+    "edr": [
+      "Alert ID and detection details",
+      "Affected endpoint(s)",
+      "Whether containment already happened"
+    ],
+    "browser": [
+      "Browser and version",
+      "Managed via Intune/GPO or unmanaged",
+      "Extensions involved"
     ]
   },
   "generic_checklist": [

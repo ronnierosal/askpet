@@ -160,7 +160,8 @@
     "destination": "Codex",
     "topics": [
       "monitoring",
-      "reporting"
+      "reporting",
+      "siem"
     ],
     "body": "Write a query for me. {TASK}\n\n- Source/tables: {INPUTS}\n- Constraints: {CONSTRAINTS}\n\nBuild it incrementally (filter → aggregate → format), explain each clause, and include a sanity check I can run to validate the numbers against a known reference.\n\nVerification: {VERIFICATION}"
   },
@@ -272,6 +273,30 @@
       "jira"
     ],
     "body": "Draft a reply to a support ticket. {TASK}\n\nRequirements:\n- Acknowledge the actual problem in the user's terms\n- What was found/done, in plain language\n- Next step and who owns it (them or us), with timing\n- Professional, warm, no blame, no jargon\n\nTicket context: {INPUTS}\nConstraints: {CONSTRAINTS}"
+  },
+  "api_integration": {
+    "name": "API integration build",
+    "destination": "Codex",
+    "topics": [
+      "api"
+    ],
+    "body": "Build an API integration. {TASK}\n\nAPI context: {INPUTS}\n\nRequirements:\n- Start by reading/confirming the auth model; use least-privilege scopes and keep secrets in environment/vault, never in code\n- Prove one call works (show me the curl equivalent) before building the full integration\n- Handle paging, rate limits (429 with Retry-After), and timeouts; make writes idempotent\n- Log requests/responses (sanitized) for debugging\n- Include tests for the failure paths: expired token, empty result, throttling\n\nConstraints: {CONSTRAINTS}\nVerification: {VERIFICATION}"
+  },
+  "mcp_integration": {
+    "name": "MCP integration (connect tools to AI)",
+    "destination": "Both",
+    "topics": [
+      "mcp"
+    ],
+    "body": "Help me connect tools/data to an AI client using the Model Context Protocol (MCP). {TASK}\n\nSetup context: {INPUTS}\n\nWalk me through:\n1. Whether an existing MCP server covers this (prefer that) or we should build one\n2. Credential setup with the narrowest scopes the tasks need — prefer read-only unless writes are required\n3. Client configuration (e.g. claude_desktop_config.json) and how to verify the tools actually appear\n4. If building a server: tool definitions with precise descriptions (the AI's only manual), input validation, and safe error messages\n5. A test plan: one harmless read-only call first, then each tool with real-shaped data\n\nSecurity review: list what the AI will be able to do after this, and what limits it.\n\nConstraints: {CONSTRAINTS}"
+  },
+  "local_chatbot": {
+    "name": "Local AI chatbot (Ollama)",
+    "destination": "Both",
+    "topics": [
+      "local_llm"
+    ],
+    "body": "Help me build a local, private AI chatbot using Ollama. {TASK}\n\nEnvironment: {INPUTS}\n\nCover, in order:\n1. Model choice for my hardware — e.g. Gemma at the size/quantization my RAM/VRAM supports — with honest expectations vs cloud models\n2. Install and pull commands, and a first smoke test\n3. A system prompt for my use case: role, tone, what to refuse, knowledge limits (small local models need explicit guidance)\n4. Front end options: terminal, Open WebUI, or a small script against the localhost API — recommend one for my needs\n5. If my own documents/data should inform answers: the simplest approach that works (paste-in context first, RAG only if needed)\n6. A test script of 5-10 representative questions and what good answers look like\n\nEverything must run fully local — no cloud calls, no data leaving the machine.\n\nConstraints: {CONSTRAINTS}"
   },
   "rewrite_text": {
     "name": "Rewrite / edit text",
