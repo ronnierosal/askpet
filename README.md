@@ -41,6 +41,24 @@ still fully local.
 
 ## What's new
 
+**0.15.0** (2026-06-11)
+- Gap-probe content round: ran 36 chats about topics the library didn't
+  cover and filled what came back weak. New areas: telephony/Teams Phone
+  (call flows, number ports), email deliverability (SPF/DKIM/DMARC, own
+  template), firewall changes (FortiGate/Palo Alto/etc., rollback-first
+  skill), AWS (admin-task template mirroring the Azure one), virtual
+  desktops (Citrix/AVD/W365), password managers (1Password/Bitwarden
+  rollouts), file-transfer automation (SFTP done safely), licensing &
+  procurement (renewal prep with negotiation levers), privacy/DSAR
+  responses, facilities/server-room work, and disk-space recovery.
+- Keyword coverage: SCCM routes to Intune-shaped prompts, Copilot and
+  Teams Rooms to M365, NAS vendors to storage, Wi-Fi vendors
+  (UniFi/Meraki/Aruba) and domain registrars to network, Power BI to
+  reporting.
+- probe_gaps.py: reusable MCP-driven gap probe that flags topics getting
+  generic templates, default-only modules, or no skills.
+- 48 templates / 73 modules / 93 skills.
+
 **0.14.0** (2026-06-11)
 - MCP server mode (`--mcp`): use PromptMate's prompt-building brain from
   Claude Code or any MCP client — see the MCP server section above.

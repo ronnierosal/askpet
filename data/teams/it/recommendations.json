@@ -89,7 +89,12 @@
       "enrollment",
       "device compliance",
       "compliance policy",
-      "configuration profile"
+      "configuration profile",
+      "sccm",
+      "mecm",
+      "configmgr",
+      "config manager",
+      "configuration manager"
     ],
     "m365": [
       "microsoft 365",
@@ -99,7 +104,13 @@
       "onedrive",
       "mailbox",
       "teams",
-      "outlook"
+      "outlook",
+      "copilot",
+      "teams room",
+      "room booking",
+      "room mailbox",
+      "resource mailbox",
+      "booking calendar"
     ],
     "entra": [
       "entra",
@@ -216,7 +227,27 @@
       "wildcard cert",
       "ssl",
       "tls",
-      "latency"
+      "latency",
+      "unifi",
+      "ubiquiti",
+      "meraki",
+      "aruba",
+      "access point",
+      "ssid",
+      "guest network",
+      "wireless controller",
+      "nameserver",
+      "name server",
+      "registrar",
+      "godaddy",
+      "namecheap",
+      "cloudflare",
+      "dns record",
+      "cname",
+      "txt record",
+      "domain renewal",
+      "renew our domain",
+      "domain expir"
     ],
     "monitoring": [
       "monitoring",
@@ -242,7 +273,9 @@
       "export",
       "spreadsheet",
       "license count",
-      "licenses"
+      "licenses",
+      "power bi",
+      "powerbi"
     ],
     "bulk_data": [
       "csv",
@@ -308,7 +341,12 @@
       "fail every",
       "fail after",
       "fail when",
-      "disappeared"
+      "disappeared",
+      "freeze",
+      "wont register",
+      "won't register",
+      "keeps rebooting",
+      "keep rebooting"
     ],
     "notion": [
       "notion"
@@ -673,7 +711,16 @@
       "file server",
       "quota",
       "dfs",
-      "folder permission"
+      "folder permission",
+      "nas",
+      "synology",
+      "qnap",
+      "truenas",
+      "raid",
+      "disk space",
+      "out of space",
+      "disk full",
+      "running out of disk"
     ],
     "database": [
       "sql server",
@@ -749,6 +796,147 @@
       "start a new conversation",
       "running out of context",
       "chat is getting long"
+    ],
+    "voip": [
+      "teams phone",
+      "auto attendant",
+      "call queue",
+      "voip",
+      "pbx",
+      "desk phone",
+      "phone number",
+      "port number",
+      "porting numbers",
+      "sip trunk",
+      "dial plan",
+      "calling plan",
+      "e911",
+      "voicemail",
+      "caller id",
+      "hunt group"
+    ],
+    "email_auth": [
+      "spf",
+      "dkim",
+      "dmarc",
+      "deliverability",
+      "landing in spam",
+      "going to spam",
+      "marked as spam",
+      "flagged as spam",
+      "blocklist",
+      "blacklist",
+      "mx record",
+      "spoofed",
+      "spoofing our domain"
+    ],
+    "firewall": [
+      "fortigate",
+      "fortinet",
+      "palo alto",
+      "sonicwall",
+      "watchguard",
+      "pfsense",
+      "firewall rule",
+      "nat rule",
+      "port forward",
+      "vlan",
+      "site-to-site",
+      "ipsec tunnel"
+    ],
+    "aws": [
+      "aws",
+      "s3",
+      "ec2",
+      "lambda",
+      "cloudfront",
+      "route 53",
+      "route53",
+      "iam role",
+      "iam policy",
+      "cloudwatch",
+      "rds",
+      "dynamodb",
+      "elastic beanstalk",
+      "eks"
+    ],
+    "vdi": [
+      "citrix",
+      "azure virtual desktop",
+      "avd",
+      "windows 365",
+      "cloud pc",
+      "vdi",
+      "virtual desktop",
+      "session host",
+      "rdp",
+      "remote desktop",
+      "rds farm",
+      "horizon view"
+    ],
+    "passwords": [
+      "1password",
+      "bitwarden",
+      "lastpass",
+      "keeper",
+      "password manager",
+      "password vault",
+      "shared vault",
+      "passkey",
+      "passkeys",
+      "credential sharing"
+    ],
+    "file_transfer": [
+      "sftp",
+      "ftp",
+      "file transfer",
+      "winscp",
+      "filezilla",
+      "rsync",
+      "robocopy",
+      "managed file transfer",
+      "transfer files",
+      "moveit"
+    ],
+    "licensing": [
+      "license renewal",
+      "true up",
+      "true-up",
+      "enterprise agreement",
+      "ea renewal",
+      "renewal negotiation",
+      "procurement",
+      "purchase order",
+      "reseller",
+      "vendor quote",
+      "vendor contract",
+      "subscription cost",
+      "per-seat"
+    ],
+    "privacy_compliance": [
+      "gdpr",
+      "dsar",
+      "data subject",
+      "ccpa",
+      "right to be forgotten",
+      "privacy request",
+      "data retention",
+      "pii",
+      "personal data"
+    ],
+    "facilities": [
+      "ups battery",
+      "server room",
+      "badge access",
+      "door access",
+      "access card",
+      "hvac",
+      "generator",
+      "rack space",
+      "power outage",
+      "cabling",
+      "patch panel",
+      "comms room"
     ]
   },
   "context_checklist_by_topic": {
@@ -1072,6 +1260,57 @@
       "What the chat accomplished so far",
       "Work still in flight and the next step",
       "Decisions/constraints already settled (don't relitigate)"
+    ],
+    "voip": [
+      "Current call flow (numbers, attendants, queues)",
+      "Phone system/carrier and licensing",
+      "Business hours and after-hours behavior wanted"
+    ],
+    "email_auth": [
+      "Your sending domain(s)",
+      "Current SPF/DKIM/DMARC records",
+      "Headers from an affected message",
+      "All systems that send mail as you"
+    ],
+    "firewall": [
+      "Firewall make/model and management tool",
+      "Exact flow needed (source, destination, port)",
+      "Change window and rollback expectations"
+    ],
+    "aws": [
+      "Account/region and naming convention",
+      "What exists already (VPC, IAM setup)",
+      "Budget sensitivity for new resources"
+    ],
+    "vdi": [
+      "Platform (Citrix/AVD/W365) and gateway",
+      "Scope: which users/hosts, since when",
+      "Session host specs and profile solution"
+    ],
+    "passwords": [
+      "Product and license tier",
+      "Team/vault structure wanted",
+      "Where credentials live today"
+    ],
+    "file_transfer": [
+      "Endpoints (source/destination, protocol)",
+      "Schedule and file naming pattern",
+      "What must happen on failure/missed file"
+    ],
+    "licensing": [
+      "Current entitlement counts and cost",
+      "Actual usage numbers",
+      "Renewal date and who negotiates"
+    ],
+    "privacy_compliance": [
+      "Applicable regulation (GDPR/CCPA)",
+      "Request date and type",
+      "Systems holding personal data"
+    ],
+    "facilities": [
+      "Site/room and access constraints",
+      "Affected equipment and who depends on it",
+      "Maintenance window options"
     ]
   },
   "generic_checklist": [

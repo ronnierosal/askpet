@@ -1178,5 +1178,162 @@
       "Preview next period in 3 bullets max.",
       "Keep it under one screen; link detail instead of including it."
     ]
+  },
+  "voip_call_flow": {
+    "name": "Call flow change skill",
+    "topics": [
+      "voip"
+    ],
+    "body": "Change auto attendants/call queues without dropping live calls.",
+    "steps": [
+      "Diagram the current flow: numbers, attendants, queues, agents, hours, voicemail targets.",
+      "Write the target flow and walk it as a caller: every option, every timeout, after-hours.",
+      "Make the change in a test attendant/number first if one exists.",
+      "Apply during low call volume; licensing and resource accounts checked beforehand.",
+      "Verify with real calls from an outside line: business hours path, after-hours path, and the voicemail drop."
+    ]
+  },
+  "email_auth_fix": {
+    "name": "Email deliverability skill",
+    "topics": [
+      "email_auth"
+    ],
+    "body": "Fix SPF/DKIM/DMARC so legitimate mail lands and spoofing fails.",
+    "steps": [
+      "Inventory every legitimate sending source (app servers, marketing tools, printers, helpdesk).",
+      "Check SPF covers them all in under 10 DNS lookups; flatten includes if over.",
+      "Enable DKIM signing per source; verify with real message headers.",
+      "Set DMARC to p=none with rua reporting; watch reports for 2-4 weeks.",
+      "Tighten to quarantine then reject only after rua shows no legitimate failures."
+    ]
+  },
+  "firewall_change": {
+    "name": "Firewall change skill",
+    "topics": [
+      "firewall",
+      "network"
+    ],
+    "body": "Add/change firewall rules with evidence and a rollback path.",
+    "steps": [
+      "Define the exact flow: source, destination, port/protocol, direction, and why.",
+      "Export/backup the current config before touching anything.",
+      "Place the rule deliberately in the order; check nothing above shadows it.",
+      "Test the intended traffic passes AND a previously-blocked control still blocks.",
+      "Log the change (ticket, rule ID, date) and set a review date for temporary rules."
+    ]
+  },
+  "aws_change": {
+    "name": "AWS change skill",
+    "topics": [
+      "aws"
+    ],
+    "body": "Make AWS changes that are tagged, least-privilege, and reversible.",
+    "steps": [
+      "State region, account, and naming/tagging before creating anything.",
+      "Write the IAM policy scoped to the specific resources — no wildcards.",
+      "Estimate monthly cost; note the cheaper alternative considered.",
+      "Apply via CLI/IaC so the change is repeatable; save the commands.",
+      "Verify the resource works, then document teardown steps."
+    ]
+  },
+  "vdi_troubleshoot": {
+    "name": "VDI session triage skill",
+    "topics": [
+      "vdi"
+    ],
+    "body": "Isolate virtual desktop issues by layer instead of guessing.",
+    "steps": [
+      "Scope: one user, one session host, one site, or everyone? Since when?",
+      "Endpoint/network layer: client version, link quality, gateway reachable.",
+      "Session host layer: CPU/RAM/disk on the host, concurrent session count.",
+      "Profile layer: FSLogix/profile container size, load time, lock errors.",
+      "Fix at the failing layer, then confirm with the affected user's real workflow."
+    ]
+  },
+  "pw_manager_rollout": {
+    "name": "Password manager rollout skill",
+    "topics": [
+      "passwords"
+    ],
+    "body": "Roll out a password manager people actually adopt.",
+    "steps": [
+      "Structure: vaults/collections by team, least privilege, named owners.",
+      "Secure the manager itself: SSO, MFA enforced, break-glass admin access documented.",
+      "Pilot with one friendly team; collect what confused them.",
+      "Migrate: import from browsers/spreadsheets, then set a kill date for the old method.",
+      "Audit 30 days in: adoption rate, orphaned vaults, anything still in the old place."
+    ]
+  },
+  "disk_space_cleanup": {
+    "name": "Disk space recovery skill",
+    "topics": [
+      "storage"
+    ],
+    "body": "Recover disk space safely and stop the regrowth.",
+    "steps": [
+      "Measure first: what is actually consuming space (largest folders, growth rate).",
+      "Classify before deleting: logs, temp, snapshots, duplicates, orphaned user data.",
+      "Delete only what has an owner decision or a written retention rule behind it.",
+      "Verify the space came back and services still run.",
+      "Fix the cause: rotation, quota, lifecycle rule, or alert at 80% — not just the symptom."
+    ]
+  },
+  "sftp_automation": {
+    "name": "File transfer automation skill",
+    "topics": [
+      "file_transfer",
+      "powershell"
+    ],
+    "body": "Automate recurring file transfers that fail loudly, not silently.",
+    "steps": [
+      "Key-based auth with a service account; no credentials in the script.",
+      "Transfer to a temp name, verify completeness (size/hash/count), then rename atomically.",
+      "Make re-runs idempotent: already-transferred files are skipped, not duplicated.",
+      "Log every run with timestamps and outcomes to a file someone can read.",
+      "Alert on the MISSED window (no file by HH:MM), not just on errors."
+    ]
+  },
+  "license_renewal_prep": {
+    "name": "License renewal prep skill",
+    "topics": [
+      "licensing"
+    ],
+    "body": "Walk into a renewal with numbers instead of hope.",
+    "steps": [
+      "Pull entitlements vs actual usage; list shelfware and over-licensed tiers.",
+      "Model 3 scenarios: renew as-is, rightsized, and best alternative vendor.",
+      "Collect last year's pricing and any public/benchmark list pricing.",
+      "Set the walk-away position and who can approve it before the first call.",
+      "Get the final quote in writing with co-termination and true-down terms stated."
+    ]
+  },
+  "physical_change": {
+    "name": "Physical infrastructure change skill",
+    "topics": [
+      "facilities"
+    ],
+    "body": "Do server room / physical access work without surprises.",
+    "steps": [
+      "Schedule a window and state what loses power, network, or access during the work.",
+      "Photograph and label before touching: ports, cables, rack positions.",
+      "Make the change; one component at a time when anything is live.",
+      "Verify dependent systems came back (ping list, badge test, UPS self-test).",
+      "Update the rack/cable/access records and store the after photos with the ticket."
+    ]
+  },
+  "dsar_response": {
+    "name": "Privacy request (DSAR) skill",
+    "topics": [
+      "privacy_compliance",
+      "audit"
+    ],
+    "body": "Respond to a data subject request completely, on time, with evidence.",
+    "steps": [
+      "Log the request date — the statutory clock (e.g. 30 days GDPR) starts now.",
+      "Verify the requester's identity before disclosing anything.",
+      "Search every system holding personal data (mail, files, HR, CRM, backups policy).",
+      "Have legal/privacy review the export for third-party data before release.",
+      "Deliver securely, record what was provided and when, and note exemptions applied."
+    ]
   }
 }

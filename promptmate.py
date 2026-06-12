@@ -27,8 +27,8 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 APP_NAME = "PromptMate"
-APP_VERSION = "0.14.0"
-CONTENT_VERSION = "2026.06.13"
+APP_VERSION = "0.15.0"
+CONTENT_VERSION = "2026.06.14"
 
 # ---------------------------------------------------------------------------
 # User data locations (never inside the install folder)
@@ -271,9 +271,12 @@ CHATGPT_SIGNALS = {
 KEYWORD_TOPICS = {
     "azure_function": ["azure function", "azure functions", "function app"],
     "intune": ["intune", "autopilot", "enrollment", "device compliance",
-               "compliance policy", "configuration profile"],
+               "compliance policy", "configuration profile", "sccm", "mecm",
+               "configmgr", "config manager", "configuration manager"],
     "m365": ["microsoft 365", "office 365", "exchange", "sharepoint",
-             "onedrive", "mailbox", "teams", "outlook"],
+             "onedrive", "mailbox", "teams", "outlook", "copilot",
+             "teams room", "room booking", "room mailbox",
+             "resource mailbox", "booking calendar"],
     "entra": ["entra", "azure ad", "active directory", "conditional access", "mfa", "sso"],
     "okta": ["okta", "scim", "saml"],
     "powershell": ["powershell"],
@@ -295,14 +298,20 @@ KEYWORD_TOPICS = {
                "communication", "announce to", "announcement to", "notify users"],
     "network": ["network", "vpn", "dns", "firewall", "dhcp", "wifi", "wi-fi",
                 "switch port", "certificate", "cert expir", "cert renew",
-                "wildcard cert", "ssl", "tls", "latency"],
+                "wildcard cert", "ssl", "tls", "latency",
+                "unifi", "ubiquiti", "meraki", "aruba", "access point",
+                "ssid", "guest network", "wireless controller",
+                "nameserver", "name server", "registrar", "godaddy",
+                "namecheap", "cloudflare", "dns record", "cname",
+                "txt record", "domain renewal", "renew our domain",
+                "domain expir"],
     "monitoring": ["monitoring", "alert", "alerts", "log analytics", "kql",
                    "sentinel", "splunk", "dashboard"],
     # "report" must be word-anchored: bare substring matches "reported".
     "reporting": ["reporting", "report on", "report of", "report for",
                   "a report", "usage report", "weekly report", "monthly report",
                   "metrics", "kpi", "export", "spreadsheet", "license count",
-                  "licenses"],
+                  "licenses", "power bi", "powerbi"],
     "bulk_data": ["csv", "bulk", "in bulk", "mass update", "import a list",
                   "from a list", "batch update"],
     "backup": ["backup", "backups", "restore", "disaster recovery",
@@ -318,7 +327,8 @@ KEYWORD_TOPICS = {
               "keeps disconnecting", "very slow", "wont boot", "won't boot",
               "wont print", "won't print", "stuck on", "no sound",
               "blank screen", "fail every", "fail after", "fail when",
-              "disappeared"],
+              "disappeared", "freeze", "wont register", "won't register",
+              "keeps rebooting", "keep rebooting"],
     "notion": ["notion"],
     "zoom": ["zoom", "webinar", "meeting recording", "transcript"],
     "google": ["google workspace", "gmail", "google drive", "google admin",
@@ -403,7 +413,9 @@ KEYWORD_TOPICS = {
                        "virtual host"],
     "storage": ["file share", "network share", "ntfs", "share permission",
                 "mapped drive", "file server", "quota", "dfs",
-                "folder permission"],
+                "folder permission", "nas", "synology", "qnap", "truenas",
+                "raid", "disk space", "out of space", "disk full",
+                "running out of disk"],
     "database": ["sql server", "database", "stored procedure", "mysql",
                  "postgres", "postgresql", "db backup", "table", "index"],
     "migration": ["migrate", "migration", "cutover", "move to sharepoint",
@@ -421,6 +433,39 @@ KEYWORD_TOPICS = {
                 "context window", "summarize this chat", "summarize the chat",
                 "context dump", "continue in another", "start a new conversation",
                 "running out of context", "chat is getting long"],
+    "voip": ["teams phone", "auto attendant", "call queue", "voip", "pbx",
+             "desk phone", "phone number", "port number", "porting numbers",
+             "sip trunk", "dial plan", "calling plan", "e911", "voicemail",
+             "caller id", "hunt group"],
+    "email_auth": ["spf", "dkim", "dmarc", "deliverability", "landing in spam",
+                   "going to spam", "marked as spam", "flagged as spam",
+                   "blocklist", "blacklist", "mx record", "spoofed",
+                   "spoofing our domain"],
+    "firewall": ["fortigate", "fortinet", "palo alto", "sonicwall",
+                 "watchguard", "pfsense", "firewall rule", "nat rule",
+                 "port forward", "vlan", "site-to-site", "ipsec tunnel"],
+    "aws": ["aws", "s3", "ec2", "lambda", "cloudfront", "route 53", "route53",
+            "iam role", "iam policy", "cloudwatch", "rds", "dynamodb",
+            "elastic beanstalk", "eks"],
+    "vdi": ["citrix", "azure virtual desktop", "avd", "windows 365",
+            "cloud pc", "vdi", "virtual desktop", "session host", "rdp",
+            "remote desktop", "rds farm", "horizon view"],
+    "passwords": ["1password", "bitwarden", "lastpass", "keeper",
+                  "password manager", "password vault", "shared vault",
+                  "passkey", "passkeys", "credential sharing"],
+    "file_transfer": ["sftp", "ftp", "file transfer", "winscp", "filezilla",
+                      "rsync", "robocopy", "managed file transfer",
+                      "transfer files", "moveit"],
+    "licensing": ["license renewal", "true up", "true-up",
+                  "enterprise agreement", "ea renewal", "renewal negotiation",
+                  "procurement", "purchase order", "reseller", "vendor quote",
+                  "vendor contract", "subscription cost", "per-seat"],
+    "privacy_compliance": ["gdpr", "dsar", "data subject", "ccpa",
+                           "right to be forgotten", "privacy request",
+                           "data retention", "pii", "personal data"],
+    "facilities": ["ups battery", "server room", "badge access", "door access",
+                   "access card", "hvac", "generator", "rack space",
+                   "power outage", "cabling", "patch panel", "comms room"],
 }
 
 
@@ -471,7 +516,8 @@ PROMPT_TEMPLATES = {
     "codex_execution": {
         "name": "Codex technical execution",
         "destination": "Codex",
-        "topics": ["powershell", "azure_function", "iac", "intune"],
+        "topics": ["powershell", "azure_function", "iac", "intune",
+                   "file_transfer"],
         "body": (
             "## Task\n{TASK}\n\n"
             "## Task contract\n"
@@ -762,7 +808,7 @@ PROMPT_TEMPLATES = {
     "network_troubleshoot": {
         "name": "Network troubleshooting",
         "destination": "Both",
-        "topics": ["network"],
+        "topics": ["network", "firewall"],
         "body": (
             "Troubleshoot a network issue layer by layer. {TASK}\n\n"
             "Give me:\n- An isolation plan: DNS → reachability → port → application\n"
@@ -988,6 +1034,39 @@ PROMPT_TEMPLATES = {
             "Provide:\n- Portal steps AND the az CLI / PowerShell equivalent\n"
             "- Resource group, tagging, and naming that fits convention\n"
             "- Least-privilege RBAC at the narrowest scope that works\n"
+            "- Projected monthly cost of anything created, and the cheaper "
+            "alternative considered\n- Rollback/teardown steps\n\n"
+            "Constraints: {CONSTRAINTS}\nVerification: {VERIFICATION}"
+        ),
+    },
+    "email_deliverability": {
+        "name": "Email deliverability fix",
+        "destination": "Both",
+        "topics": ["email_auth"],
+        "body": (
+            "Diagnose and fix email deliverability/authentication. {TASK}\n\n"
+            "Context: {INPUTS}\n\n"
+            "Work in this order and show findings at each step:\n"
+            "1. Inventory every legitimate sending source for the domain\n"
+            "2. SPF: all sources covered, under 10 DNS lookups\n"
+            "3. DKIM: signing enabled and verified per source (real headers)\n"
+            "4. DMARC: policy, alignment, and rua reporting status\n"
+            "5. Reputation/content only after authentication is clean\n\n"
+            "Constraints: {CONSTRAINTS}\n"
+            "Never recommend jumping straight to p=reject — monitoring "
+            "comes first.\nVerification: {VERIFICATION}"
+        ),
+    },
+    "aws_task": {
+        "name": "AWS admin task",
+        "destination": "Both",
+        "topics": ["aws"],
+        "body": (
+            "AWS administration task. {TASK}\n\n"
+            "Context: {INPUTS}\n\n"
+            "Provide:\n- Console steps AND the aws CLI equivalent\n"
+            "- Region, tagging, and naming that fits convention\n"
+            "- Least-privilege IAM at the narrowest scope that works\n"
             "- Projected monthly cost of anything created, and the cheaper "
             "alternative considered\n- Rollback/teardown steps\n\n"
             "Constraints: {CONSTRAINTS}\nVerification: {VERIFICATION}"
@@ -1729,7 +1808,7 @@ AGENT_MODULES = {
     },
     "m365_security": {
         "name": "Microsoft Security Agent",
-        "topics": ["m365_security", "security"],
+        "topics": ["m365_security", "security", "privacy_compliance"],
         "body": (
             "Act as a Microsoft Defender/Purview specialist: check the "
             "license tier before recommending features (E3 vs E5 changes "
@@ -1929,6 +2008,117 @@ AGENT_MODULES = {
             "never sources of truth; ask for clarification rather than "
             "guess meet context; stay model-agnostic (Gemma first, app "
             "fully functional with no model installed)."
+        ),
+    },
+    "voip": {
+        "name": "Telephony Agent",
+        "topics": ["voip"],
+        "body": (
+            "Act as a telephony/Teams Phone specialist. Map the full call "
+            "flow before changing it (numbers, auto attendants, call queues, "
+            "agents, hours, voicemail). Mind the irreversible: number ports "
+            "and emergency (e911) addresses get triple-checked. Test every "
+            "change with a real inbound call from outside, after hours and "
+            "during, before calling it done."
+        ),
+    },
+    "deliverability": {
+        "name": "Email Deliverability Agent",
+        "topics": ["email_auth"],
+        "body": (
+            "Act as an email authentication specialist. Diagnose in order: "
+            "SPF (all sending sources included, under 10 DNS lookups), DKIM "
+            "(signing on every source), DMARC (policy and rua reporting), "
+            "then content/reputation. Never jump to p=reject without "
+            "monitoring rua reports first; legitimate senders you forgot "
+            "about will silently lose mail. Verify with real headers, not "
+            "assumptions."
+        ),
+    },
+    "firewall": {
+        "name": "Firewall Agent",
+        "topics": ["firewall", "network"],
+        "body": (
+            "Treat every firewall change as production change control: "
+            "state the exact rule (source, destination, port, direction), "
+            "where it sits in rule order, and what shadows or supersedes it. "
+            "Narrowest scope that works — no any/any, ever. Capture the "
+            "config before and after, test the intended traffic AND that "
+            "previously-blocked traffic still blocks, and schedule a "
+            "rollback window."
+        ),
+    },
+    "aws": {
+        "name": "AWS Agent",
+        "topics": ["aws"],
+        "body": (
+            "Apply AWS practice: least-privilege IAM scoped to the resource "
+            "(no *), tag everything (owner, purpose, environment), pick the "
+            "region deliberately, and state the monthly cost of anything "
+            "created. Prefer managed/serverless over self-run, S3 lifecycle "
+            "rules over manual cleanup, and always leave teardown steps."
+        ),
+    },
+    "vdi": {
+        "name": "VDI Agent",
+        "topics": ["vdi"],
+        "body": (
+            "Act as a virtual desktop specialist (Citrix/AVD/Windows 365). "
+            "Separate the layers before debugging: endpoint and network, "
+            "gateway/connector, session host resources, profile container "
+            "(FSLogix), and the app itself. One user or many? One session "
+            "host or all? Profile size and host CPU/RAM first for freezes; "
+            "check the licensing/connector services first for connection "
+            "failures."
+        ),
+    },
+    "password_mgmt": {
+        "name": "Password Manager Agent",
+        "topics": ["passwords"],
+        "body": (
+            "Act as a password manager rollout/admin specialist. Structure "
+            "vaults/collections by team and least privilege, enforce SSO + "
+            "MFA on the manager itself, plan break-glass access for admin "
+            "departure, and define what NEVER goes in personal vaults. "
+            "Migration needs a deprecation date for the old method "
+            "(spreadsheets, browser-saved) and an audit that it's gone."
+        ),
+    },
+    "procurement": {
+        "name": "Licensing & Procurement Agent",
+        "topics": ["licensing"],
+        "body": (
+            "Act as an IT procurement specialist. Before any renewal: pull "
+            "actual usage vs entitlements, identify shelfware to cut, and "
+            "model 3 scenarios (renew as-is, rightsized, alternative "
+            "vendor). Know the list price, last year's price, and the "
+            "walk-away position before talking to the rep. Get quotes in "
+            "writing; co-term where it simplifies, never auto-renew "
+            "blindly."
+        ),
+    },
+    "file_transfer": {
+        "name": "File Transfer Agent",
+        "topics": ["file_transfer"],
+        "body": (
+            "Treat automated file transfers as production data pipelines: "
+            "key-based auth (no passwords in scripts), verify transfer "
+            "completeness (size/hash/row count) before deleting or "
+            "processing, atomic moves (temp name then rename), idempotent "
+            "re-runs, logging with timestamps, and alerting on missed "
+            "windows — silence is the most common failure mode."
+        ),
+    },
+    "facilities": {
+        "name": "Facilities & Server Room Agent",
+        "topics": ["facilities"],
+        "body": (
+            "Act as a facilities/physical-infrastructure specialist. "
+            "Physical changes need: maintenance window, what loses power or "
+            "access during the work, labeled before/after photos, and an "
+            "updated rack/cable/access record. For UPS and battery work, "
+            "verify actual load and runtime, not nameplate. Badge/door "
+            "changes follow joiner-mover-leaver like any other access."
         ),
     },
 }
@@ -2918,6 +3108,138 @@ SKILL_TEMPLATES = {
             "Keep it under one screen; link detail instead of including it.",
         ],
     },
+    "voip_call_flow": {
+        "name": "Call flow change skill",
+        "topics": ["voip"],
+        "body": "Change auto attendants/call queues without dropping live calls.",
+        "steps": [
+            "Diagram the current flow: numbers, attendants, queues, agents, hours, voicemail targets.",
+            "Write the target flow and walk it as a caller: every option, every timeout, after-hours.",
+            "Make the change in a test attendant/number first if one exists.",
+            "Apply during low call volume; licensing and resource accounts checked beforehand.",
+            "Verify with real calls from an outside line: business hours path, after-hours path, and the voicemail drop.",
+        ],
+    },
+    "email_auth_fix": {
+        "name": "Email deliverability skill",
+        "topics": ["email_auth"],
+        "body": "Fix SPF/DKIM/DMARC so legitimate mail lands and spoofing fails.",
+        "steps": [
+            "Inventory every legitimate sending source (app servers, marketing tools, printers, helpdesk).",
+            "Check SPF covers them all in under 10 DNS lookups; flatten includes if over.",
+            "Enable DKIM signing per source; verify with real message headers.",
+            "Set DMARC to p=none with rua reporting; watch reports for 2-4 weeks.",
+            "Tighten to quarantine then reject only after rua shows no legitimate failures.",
+        ],
+    },
+    "firewall_change": {
+        "name": "Firewall change skill",
+        "topics": ["firewall", "network"],
+        "body": "Add/change firewall rules with evidence and a rollback path.",
+        "steps": [
+            "Define the exact flow: source, destination, port/protocol, direction, and why.",
+            "Export/backup the current config before touching anything.",
+            "Place the rule deliberately in the order; check nothing above shadows it.",
+            "Test the intended traffic passes AND a previously-blocked control still blocks.",
+            "Log the change (ticket, rule ID, date) and set a review date for temporary rules.",
+        ],
+    },
+    "aws_change": {
+        "name": "AWS change skill",
+        "topics": ["aws"],
+        "body": "Make AWS changes that are tagged, least-privilege, and reversible.",
+        "steps": [
+            "State region, account, and naming/tagging before creating anything.",
+            "Write the IAM policy scoped to the specific resources — no wildcards.",
+            "Estimate monthly cost; note the cheaper alternative considered.",
+            "Apply via CLI/IaC so the change is repeatable; save the commands.",
+            "Verify the resource works, then document teardown steps.",
+        ],
+    },
+    "vdi_troubleshoot": {
+        "name": "VDI session triage skill",
+        "topics": ["vdi"],
+        "body": "Isolate virtual desktop issues by layer instead of guessing.",
+        "steps": [
+            "Scope: one user, one session host, one site, or everyone? Since when?",
+            "Endpoint/network layer: client version, link quality, gateway reachable.",
+            "Session host layer: CPU/RAM/disk on the host, concurrent session count.",
+            "Profile layer: FSLogix/profile container size, load time, lock errors.",
+            "Fix at the failing layer, then confirm with the affected user's real workflow.",
+        ],
+    },
+    "pw_manager_rollout": {
+        "name": "Password manager rollout skill",
+        "topics": ["passwords"],
+        "body": "Roll out a password manager people actually adopt.",
+        "steps": [
+            "Structure: vaults/collections by team, least privilege, named owners.",
+            "Secure the manager itself: SSO, MFA enforced, break-glass admin access documented.",
+            "Pilot with one friendly team; collect what confused them.",
+            "Migrate: import from browsers/spreadsheets, then set a kill date for the old method.",
+            "Audit 30 days in: adoption rate, orphaned vaults, anything still in the old place.",
+        ],
+    },
+    "disk_space_cleanup": {
+        "name": "Disk space recovery skill",
+        "topics": ["storage"],
+        "body": "Recover disk space safely and stop the regrowth.",
+        "steps": [
+            "Measure first: what is actually consuming space (largest folders, growth rate).",
+            "Classify before deleting: logs, temp, snapshots, duplicates, orphaned user data.",
+            "Delete only what has an owner decision or a written retention rule behind it.",
+            "Verify the space came back and services still run.",
+            "Fix the cause: rotation, quota, lifecycle rule, or alert at 80% — not just the symptom.",
+        ],
+    },
+    "sftp_automation": {
+        "name": "File transfer automation skill",
+        "topics": ["file_transfer", "powershell"],
+        "body": "Automate recurring file transfers that fail loudly, not silently.",
+        "steps": [
+            "Key-based auth with a service account; no credentials in the script.",
+            "Transfer to a temp name, verify completeness (size/hash/count), then rename atomically.",
+            "Make re-runs idempotent: already-transferred files are skipped, not duplicated.",
+            "Log every run with timestamps and outcomes to a file someone can read.",
+            "Alert on the MISSED window (no file by HH:MM), not just on errors.",
+        ],
+    },
+    "license_renewal_prep": {
+        "name": "License renewal prep skill",
+        "topics": ["licensing"],
+        "body": "Walk into a renewal with numbers instead of hope.",
+        "steps": [
+            "Pull entitlements vs actual usage; list shelfware and over-licensed tiers.",
+            "Model 3 scenarios: renew as-is, rightsized, and best alternative vendor.",
+            "Collect last year's pricing and any public/benchmark list pricing.",
+            "Set the walk-away position and who can approve it before the first call.",
+            "Get the final quote in writing with co-termination and true-down terms stated.",
+        ],
+    },
+    "physical_change": {
+        "name": "Physical infrastructure change skill",
+        "topics": ["facilities"],
+        "body": "Do server room / physical access work without surprises.",
+        "steps": [
+            "Schedule a window and state what loses power, network, or access during the work.",
+            "Photograph and label before touching: ports, cables, rack positions.",
+            "Make the change; one component at a time when anything is live.",
+            "Verify dependent systems came back (ping list, badge test, UPS self-test).",
+            "Update the rack/cable/access records and store the after photos with the ticket.",
+        ],
+    },
+    "dsar_response": {
+        "name": "Privacy request (DSAR) skill",
+        "topics": ["privacy_compliance", "audit"],
+        "body": "Respond to a data subject request completely, on time, with evidence.",
+        "steps": [
+            "Log the request date — the statutory clock (e.g. 30 days GDPR) starts now.",
+            "Verify the requester's identity before disclosing anything.",
+            "Search every system holding personal data (mail, files, HR, CRM, backups policy).",
+            "Have legal/privacy review the export for third-party data before release.",
+            "Deliver securely, record what was provided and when, and note exemptions applied.",
+        ],
+    },
 }
 
 CONTEXT_CHECKLIST_BY_TOPIC = {
@@ -2985,6 +3307,16 @@ CONTEXT_CHECKLIST_BY_TOPIC = {
     "asset": ["Asset types in scope", "Source of truth today (sheet/RMM/Intune)", "What decision the data feeds"],
     "deckside": ["Which tab/feature (Announcer, Check-in, Dashboard, Lineup, Parent)", "Coach side or Parent side", "Sample PDF or data file involved", "Relevant AGENTS.md / BACKLOG.md entries"],
     "handoff": ["What the chat accomplished so far", "Work still in flight and the next step", "Decisions/constraints already settled (don't relitigate)"],
+    "voip": ["Current call flow (numbers, attendants, queues)", "Phone system/carrier and licensing", "Business hours and after-hours behavior wanted"],
+    "email_auth": ["Your sending domain(s)", "Current SPF/DKIM/DMARC records", "Headers from an affected message", "All systems that send mail as you"],
+    "firewall": ["Firewall make/model and management tool", "Exact flow needed (source, destination, port)", "Change window and rollback expectations"],
+    "aws": ["Account/region and naming convention", "What exists already (VPC, IAM setup)", "Budget sensitivity for new resources"],
+    "vdi": ["Platform (Citrix/AVD/W365) and gateway", "Scope: which users/hosts, since when", "Session host specs and profile solution"],
+    "passwords": ["Product and license tier", "Team/vault structure wanted", "Where credentials live today"],
+    "file_transfer": ["Endpoints (source/destination, protocol)", "Schedule and file naming pattern", "What must happen on failure/missed file"],
+    "licensing": ["Current entitlement counts and cost", "Actual usage numbers", "Renewal date and who negotiates"],
+    "privacy_compliance": ["Applicable regulation (GDPR/CCPA)", "Request date and type", "Systems holding personal data"],
+    "facilities": ["Site/room and access constraints", "Affected equipment and who depends on it", "Maintenance window options"],
 }
 
 GENERIC_CHECKLIST = [

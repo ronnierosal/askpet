@@ -6,7 +6,8 @@
       "powershell",
       "azure_function",
       "iac",
-      "intune"
+      "intune",
+      "file_transfer"
     ],
     "body": "## Task\n{TASK}\n\n## Task contract\n- Scope: {SCOPE}\n- Inputs: {INPUTS}\n- Tools allowed: {TOOLS}\n- Constraints: {CONSTRAINTS}\n- Expected outputs: {OUTPUTS}\n\n## Working rules\n1. Orient from the nearest AGENTS.md before changing anything.\n2. Load only the smallest relevant local files.\n3. Execute one coherent slice at a time.\n4. Capture evidence (commands run, output, test results).\n5. Verify before claiming completion.\n6. Leave a handoff note if work remains.\n\n## Verification\n{VERIFICATION}"
   },
@@ -149,7 +150,8 @@
     "name": "Network troubleshooting",
     "destination": "Both",
     "topics": [
-      "network"
+      "network",
+      "firewall"
     ],
     "body": "Troubleshoot a network issue layer by layer. {TASK}\n\nGive me:\n- An isolation plan: DNS → reachability → port → application\n- Exact commands to run at each layer and what good/bad output looks like\n- Likely causes ranked for these symptoms\n- What recent-change types to check (firewall, DNS, certs)\n\nFailing path and symptoms: {INPUTS}\nConstraints: {CONSTRAINTS}"
   },
@@ -287,6 +289,22 @@
       "azure"
     ],
     "body": "Azure administration task. {TASK}\n\nContext: {INPUTS}\n\nProvide:\n- Portal steps AND the az CLI / PowerShell equivalent\n- Resource group, tagging, and naming that fits convention\n- Least-privilege RBAC at the narrowest scope that works\n- Projected monthly cost of anything created, and the cheaper alternative considered\n- Rollback/teardown steps\n\nConstraints: {CONSTRAINTS}\nVerification: {VERIFICATION}"
+  },
+  "email_deliverability": {
+    "name": "Email deliverability fix",
+    "destination": "Both",
+    "topics": [
+      "email_auth"
+    ],
+    "body": "Diagnose and fix email deliverability/authentication. {TASK}\n\nContext: {INPUTS}\n\nWork in this order and show findings at each step:\n1. Inventory every legitimate sending source for the domain\n2. SPF: all sources covered, under 10 DNS lookups\n3. DKIM: signing enabled and verified per source (real headers)\n4. DMARC: policy, alignment, and rua reporting status\n5. Reputation/content only after authentication is clean\n\nConstraints: {CONSTRAINTS}\nNever recommend jumping straight to p=reject — monitoring comes first.\nVerification: {VERIFICATION}"
+  },
+  "aws_task": {
+    "name": "AWS admin task",
+    "destination": "Both",
+    "topics": [
+      "aws"
+    ],
+    "body": "AWS administration task. {TASK}\n\nContext: {INPUTS}\n\nProvide:\n- Console steps AND the aws CLI equivalent\n- Region, tagging, and naming that fits convention\n- Least-privilege IAM at the narrowest scope that works\n- Projected monthly cost of anything created, and the cheaper alternative considered\n- Rollback/teardown steps\n\nConstraints: {CONSTRAINTS}\nVerification: {VERIFICATION}"
   },
   "python_script": {
     "name": "Python script",
