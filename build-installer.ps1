@@ -31,6 +31,7 @@ function Sign-File($path) {
 
 Write-Host "== 1/4 Running tests =="
 & $python test_logic.py | Out-Null
+& $python test_history.py | Select-Object -Last 1
 & $python test_spell.py | Select-Object -Last 1
 & $python test_gui.py | Select-Object -Last 1
 & $python test_pet.py | Select-Object -Last 1

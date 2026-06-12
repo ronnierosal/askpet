@@ -25,12 +25,12 @@ import urllib.parse
 import urllib.request
 import webbrowser
 import zipfile
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from tkinter import messagebox, ttk
 
 APP_NAME = "PromptMate"
-APP_VERSION = "0.17.4"
+APP_VERSION = "0.18.0"
 CONTENT_VERSION = "2026.06.16"
 
 # ---------------------------------------------------------------------------
@@ -4746,8 +4746,47 @@ def build_prompt(cleaned_task: str, rec: dict, selected_modules: list,
 # ---------------------------------------------------------------------------
 
 
-def save_history_entry(raw: str, cleaned: str, rec: dict, prompt: str):
+# Retention window for prompt history. Default 3 days; users can pick
+# 24 hours or 7 days from the pet menu, or clear manually.
+HISTORY_RETENTION_CHOICES = (("24 hours", 24), ("3 days", 72), ("7 days", 168))
+DEFAULT_RETENTION_HOURS = 72
+
+
+def history_retention_hours(settings: dict = None) -> int:
+    s = settings if settings is not None else load_json(SETTINGS_FILE, {})
+    hours = s.get("history_retention_hours", DEFAULT_RETENTION_HOURS)
+    valid = {h for _, h in HISTORY_RETENTION_CHOICES}
+    return hours if hours in valid else DEFAULT_RETENTION_HOURS
+
+
+def prune_history(retention_hours: int = None) -> int:
+    """Drop history entries older than the retention window; return kept count."""
+    hours = retention_hours or history_retention_hours()
     history = load_json(HISTORY_FILE, [])
+    cutoff = datetime.now() - timedelta(hours=hours)
+    kept = []
+    for e in history:
+        try:
+            ts = datetime.fromisoformat(e.get("timestamp", ""))
+        except (TypeError, ValueError):
+            continue  # unreadable timestamp: treat as expired
+        if ts >= cutoff:
+            kept.append(e)
+    if len(kept) != len(history):
+        save_json(HISTORY_FILE, kept)
+    return len(kept)
+
+
+def clear_history():
+    save_json(HISTORY_FILE, [])
+
+
+def save_history_entry(raw: str, cleaned: str, rec: dict, prompt: str):
+    prune_history()
+    history = load_json(HISTORY_FILE, [])
+    # Generation auto-saves; an explicit Save right after shouldn't duplicate.
+    if history and history[-1].get("prompt") == prompt:
+        return
     history.append({
         "timestamp": datetime.now().isoformat(timespec="seconds"),
         "raw_input": raw,
@@ -5052,7 +5091,9 @@ class PromptMateApp:
         prompt = build_prompt(self.cleaned, self.rec, sel_modules, sel_skills, checked)
         self.output_text.delete("1.0", "end")
         self.output_text.insert("1.0", prompt)
-        self.status_label.config(text="Prompt generated.")
+        raw = self.input_text.get("1.0", "end-1c").strip()
+        save_history_entry(raw, self.cleaned, self.rec, prompt)
+        self.status_label.config(text="Prompt generated (auto-saved to history).")
 
     def _copy(self):
         text = self.output_text.get("1.0", "end-1c")
@@ -5385,6 +5426,7 @@ class PetOverlay:
         self.chat = None
         self.editor = None
         self.settings = load_json(SETTINGS_FILE, {})
+        prune_history(history_retention_hours(self.settings))
 
         ensure_default_pet()
         self.scale = max(1, int(self.settings.get("pet_scale", 2)))  # medium default
@@ -5606,6 +5648,16 @@ class PetOverlay:
             size_menu.add_command(label=label + check,
                                   command=lambda s=scale: self.set_scale(s))
         menu.add_cascade(label="📏 Pet size", menu=size_menu)
+        hist_menu = tk.Menu(menu, tearoff=0)
+        current = history_retention_hours(self.settings)
+        for label, hours in HISTORY_RETENTION_CHOICES:
+            check = " ✓" if hours == current else ""
+            hist_menu.add_command(label=f"Keep {label}{check}",
+                                  command=lambda h=hours: self.set_history_retention(h))
+        hist_menu.add_separator()
+        hist_menu.add_command(label="🧹 Clear history now",
+                              command=self.clear_history_now)
+        menu.add_cascade(label="🕘 Prompt history", menu=hist_menu)
         menu.add_separator()
         label = "Stop wandering" if self.wander else "Allow wandering"
         menu.add_command(label=f"🐾 {label}", command=self._toggle_wander)
@@ -5629,6 +5681,26 @@ class PetOverlay:
 
     def open_pet_browser(self):
         PetBrowser(self)
+
+    def set_history_retention(self, hours: int):
+        self.settings["history_retention_hours"] = hours
+        self._save_settings()
+        kept = prune_history(hours)
+        label = next(l for l, h in HISTORY_RETENTION_CHOICES if h == hours)
+        messagebox.showinfo(
+            "Prompt history",
+            f"History now kept for {label}. {kept} entr"
+            f"{'y' if kept == 1 else 'ies'} currently stored.",
+            parent=self.root)
+
+    def clear_history_now(self):
+        if messagebox.askyesno(
+                "Clear history",
+                "Delete all saved prompt history? This can't be undone.",
+                parent=self.root):
+            clear_history()
+            messagebox.showinfo("Prompt history", "History cleared.",
+                                parent=self.root)
 
     def set_scale(self, scale: int):
         """Resize the pet (1 = full sprite size, larger = smaller pet)."""
@@ -6410,6 +6482,7 @@ class ChatWindow:
         context = [clean_text(a, self.spell) for a in answers]
         prompt = build_prompt(cleaned, rec, rec["modules"], rec["skills"], context)
         self.last = (raw, cleaned, rec, prompt)
+        save_history_entry(raw, cleaned, rec, prompt)
         self._show_typing()
         self.win.after(random.randint(500, 900), lambda: self._deliver_reply(cleaned, rec, prompt))
 

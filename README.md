@@ -41,6 +41,14 @@ still fully local.
 
 ## What's new
 
+**0.18.0** (2026-06-12)
+- Prompt history with retention: every generated prompt is now saved
+  automatically and expires after 3 days by default. Right-click the
+  pet → 🕘 Prompt history to keep 24 hours, 3 days, or 7 days instead,
+  or clear everything immediately. Pruning runs at startup and on
+  every save; history stays local in %LOCALAPPDATA%\PromptMate as
+  always.
+
 **0.17.4** (2026-06-12)
 - Typos now show as a thin red underline under normal-colored text
   instead of solid red words — red text stays reserved for keyword
