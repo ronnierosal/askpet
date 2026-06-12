@@ -6,7 +6,7 @@ __pycache__/
 build/
 dist/
 installer/
-AskPet.spec
+*.spec
 
 # Generated prompt output
 output/
