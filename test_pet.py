@@ -44,11 +44,11 @@ pet.open_editor(prefill=raw)
 assert pet.editor.rec is not None
 print("editor destination:", pet.editor.rec["destination"])
 
-# Pet resize via scale (default is now medium = scale 2)
-pet.set_scale(2)
-assert pet.sprites.w == 96 and pet.sprites.h == 104, (pet.sprites.w, pet.sprites.h)
+# Pet resize via scale (default is medium = scale 2)
 pet.set_scale(1)
-assert pet.sprites.w == 192
+assert pet.sprites.w == 192 and pet.sprites.h == 208, (pet.sprites.w, pet.sprites.h)
+pet.set_scale(2)  # leave settings at the medium default
+assert pet.sprites.w == 96
 print("pet resize OK")
 
 # Nap when ignored, wake on interaction

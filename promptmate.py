@@ -27,7 +27,7 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 APP_NAME = "PromptMate"
-APP_VERSION = "0.11.0"
+APP_VERSION = "0.11.1"
 CONTENT_VERSION = "2026.06.10"
 
 # ---------------------------------------------------------------------------
@@ -3007,7 +3007,9 @@ def build_prompt(cleaned_task: str, rec: dict, selected_modules: list,
     fills = {
         "{TASK}": cleaned_task,
         "{SCOPE}": "Only the work described above; ask before expanding scope.",
-        "{INPUTS}": "; ".join(checked_context) if checked_context else "See task description.",
+        "{INPUTS}": ("; ".join(checked_context) if checked_context else
+                     "(paste the relevant material here: transcripts, error "
+                     "messages, file paths, sample data)"),
         "{TOOLS}": "Standard tooling for this stack; no destructive operations without confirmation.",
         "{CONSTRAINTS}": "Local-first, least privilege, no secrets in output, include rollback steps.",
         "{OUTPUTS}": "Working result plus a short summary of what changed and how it was verified.",
@@ -3703,7 +3705,8 @@ class PetOverlay:
         sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
         x = int(self.settings.get("pet_x", sw - w - 80))
         y = int(self.settings.get("pet_y", sh - h - 120))
-        x = min(max(0, x), sw - w)
+        x0, x1 = self._walk_bounds_for_width(w)
+        x = min(max(x0, x), x1)
         y = min(max(0, y), sh - h)
         root.geometry(f"{w}x{h}+{x}+{y}")
 
@@ -3748,16 +3751,22 @@ class PetOverlay:
         self.frame_i += 1
 
         if self.move_dx and not self._dragging:
-            x = self.root.winfo_x() + self.move_dx
-            y = self.root.winfo_y()
-            sw = self.root.winfo_screenwidth()
-            if x <= 0 or x >= sw - self.sprites.w:
-                self.move_dx = -self.move_dx
-                if self.anim in ("walk_right", "walk_left"):
-                    self.set_anim("walk_right" if self.move_dx > 0 else "walk_left",
-                                  move_dx=self.move_dx, ticks=self.behavior_ticks)
-                x = min(max(0, x), sw - self.sprites.w)
-            self.root.geometry(f"+{x}+{y}")
+            if self.chat and self.chat.is_open():
+                # Never wander while the user is chatting.
+                self.move_dx = 0
+            else:
+                x = self.root.winfo_x() + self.move_dx
+                y = self.root.winfo_y()
+                x0, x1 = self._walk_bounds()
+                if x <= x0 or x >= x1:
+                    # Flip once and step INSIDE the bounds so the next tick
+                    # can't re-trip the edge check (oscillation guard).
+                    self.move_dx = -self.move_dx
+                    if self.anim in ("walk_right", "walk_left"):
+                        self.set_anim("walk_right" if self.move_dx > 0 else "walk_left",
+                                      move_dx=self.move_dx, ticks=self.behavior_ticks)
+                    x = min(max(x0 + abs(self.move_dx), x), x1 - abs(self.move_dx))
+                self.root.geometry(f"+{x}+{y}")
 
         self.behavior_ticks -= 1
         self.idle_ticks += 1
@@ -3765,6 +3774,26 @@ class PetOverlay:
             self._choose_behavior()
 
         self.root.after(self.TICK_MS, self._tick)
+
+    def _walk_bounds(self):
+        return self._walk_bounds_for_width(self.sprites.w)
+
+    def _walk_bounds_for_width(self, w):
+        """Min/max x for the pet, spanning all monitors on Windows.
+
+        Using only the primary screen width made the pet oscillate rapidly
+        when it sat on a second monitor (every tick looked like an edge hit).
+        """
+        if sys.platform == "win32":
+            try:
+                import ctypes
+                u = ctypes.windll.user32
+                vx = u.GetSystemMetrics(76)   # SM_XVIRTUALSCREEN
+                vw = u.GetSystemMetrics(78)   # SM_CXVIRTUALSCREEN
+                return vx, vx + vw - w
+            except Exception:
+                pass
+        return 0, self.root.winfo_screenwidth() - w
 
     def _choose_behavior(self):
         if self.chat and self.chat.is_open():
@@ -3904,8 +3933,9 @@ class PetOverlay:
         self.canvas.config(width=w, height=h)
         self.sprite_item = self.canvas.create_image(0, 0, anchor="nw") if self.sprites.ok else None
         x, y = self.root.winfo_x(), self.root.winfo_y()
-        sw, sh = self.root.winfo_screenwidth(), self.root.winfo_screenheight()
-        self.root.geometry(f"{w}x{h}+{min(x, sw - w)}+{min(y, sh - h)}")
+        x0, x1 = self._walk_bounds_for_width(w)
+        sh = self.root.winfo_screenheight()
+        self.root.geometry(f"{w}x{h}+{min(max(x0, x), x1)}+{min(y, sh - h)}")
         self.set_anim("wave")
 
     def _toggle_wander(self):
