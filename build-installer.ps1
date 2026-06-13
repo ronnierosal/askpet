@@ -42,6 +42,7 @@ Write-Host "== 1/4 Running tests =="
 & $python test_spell.py | Select-Object -Last 1
 & $python test_local_ai.py | Select-Object -Last 1
 & $python test_knowledge.py | Select-Object -Last 1
+& $python test_deckside.py | Select-Object -Last 1
 & $python test_gui.py | Select-Object -Last 1
 & $python test_pet.py | Select-Object -Last 1
 

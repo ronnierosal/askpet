@@ -31,7 +31,7 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 APP_NAME = "AskPet"
-APP_VERSION = "0.21.0"
+APP_VERSION = "0.22.0"
 CONTENT_VERSION = "2026.06.17"
 
 # ---------------------------------------------------------------------------
@@ -5627,6 +5627,110 @@ def local_ai_lane(raw: str, rec: dict):
     return None
 
 
+# ---------------------------------------------------------------------------
+# DeckSide live data: when the user runs DeckSide (a local Electron swim
+# meet-day app) alongside AskPet, the pet can answer meet-day questions —
+# "when is the next meet?", "how many swimmers?" — by querying DeckSide's
+# loopback "agent server" over HTTP. READ-ONLY: AskPet only ever calls
+# DeckSide's deterministic assistant_chat tool, never a propose/write tool,
+# so it can never change a lineup or scratch a swimmer. DeckSide does all
+# the data resolution and hands back an authoritative answer string, which
+# the pet shows verbatim — no local model in the loop, so numbers and names
+# are never paraphrased away. Everything degrades to prompt-building when
+# DeckSide isn't running. Stdlib only, same as the rest of the app.
+# ---------------------------------------------------------------------------
+
+DECKSIDE_DEFAULT_PORT = "41973"
+
+# Swim meet-day vocabulary that marks a LIVE DATA question. Kept to terms
+# that don't collide with IT asks: "freestyle"/"butterfly" not bare "free",
+# "(next/the) meet" with a word boundary so "meeting" can't match. A bare
+# "relay" can also mean an SMTP relay, but a stray hit only costs one
+# unreachable HTTP call before falling back, so the floor is cheap.
+DECKSIDE_DATA_SIGNALS = re.compile(
+    r"\bdeckside\b|\bswim(?:mer|mers|ming|s)?\b|\bswim meet\b|"
+    r"\b(?:next|last|the|this|that) meet\b|\bmeet (?:results|schedule|lineup|day)\b|"
+    r"\brelay(?:s)?\b|\blineup(?:s)?\b|\bline up\b|\bscratch(?:ed|es)?\b|"
+    r"\bseed time(?:s)?\b|\bheat sheet\b|\bchamps\b|\b(?:dual|tri)[- ]meet\b|"
+    r"\bmedley\b|\bbackstroke\b|\bbreaststroke\b|\bbutterfly\b|\bfreestyle\b|"
+    r"\bage (?:band|group)\b|\bteam (?:roster|score|scores)\b|"
+    r"\bchecked in\b|\bcheck[- ]?in\b")
+
+# Schedule/season questions are DeckSide data too, but only when they also
+# name meets/swimming — so IT's "scheduled task" or "schedule a meeting"
+# (note: "meeting" never matches \bmeets?\b) can't trip the lane.
+DECKSIDE_SCHEDULE_SIGNALS = re.compile(r"\b(?:schedule|season|calendar)\b")
+DECKSIDE_MEET_NOUN = re.compile(r"\bmeets?\b|\bswim")
+
+# A DeckSide *development* task ("build a check-in tab", "fix the parser")
+# is NOT a data question — it keeps flowing to the prompt builder.
+DECKSIDE_DEV_SIGNALS = re.compile(
+    r"\b(?:build|implement|ship|code|coding|refactor|debug|compile|"
+    r"feature|parser|architecture|ipc|electron|backlog|agents\.md|"
+    r"unit test|migration|schema|endpoint|component|module|repo|"
+    r"commit|pull request|\bpr\b)\b")
+
+# Data questions can open with words QUESTION_STARTERS misses.
+DECKSIDE_DATA_STARTERS = ("who ", "list ", "show ", "how many ",
+                          "how's ", "hows ")
+
+
+def deckside_data_lane(raw: str) -> bool:
+    """True when this is a live meet-data question to hand to a running
+    DeckSide, as opposed to a DeckSide dev task or an unrelated ask. Pure —
+    does no I/O and doesn't check whether DeckSide is actually up."""
+    lw = raw.strip().lower()
+    if DECKSIDE_DEV_SIGNALS.search(lw):
+        return False
+    hit = bool(DECKSIDE_DATA_SIGNALS.search(lw)) or bool(
+        DECKSIDE_SCHEDULE_SIGNALS.search(lw) and DECKSIDE_MEET_NOUN.search(lw))
+    if not hit:
+        return False
+    return (lw.endswith("?") or lw.startswith(QUESTION_STARTERS)
+            or lw.startswith(DECKSIDE_DATA_STARTERS)
+            or bool(EMBEDDED_QUESTION.search(lw)))
+
+
+def deckside_base() -> str:
+    """Loopback base URL for DeckSide's agent server (honors its env var)."""
+    port = os.environ.get("DECKSIDE_AGENT_PORT", "").strip() or DECKSIDE_DEFAULT_PORT
+    return f"http://127.0.0.1:{port}"
+
+
+def deckside_health(timeout: int = 2):
+    """DeckSide's version string if its agent server answers, else None."""
+    try:
+        data = json.loads(_http_get(deckside_base() + "/agent/health", timeout))
+    except (urllib.error.URLError, OSError, ValueError):
+        return None
+    return data.get("version") if isinstance(data, dict) and data.get("ok") else None
+
+
+def deckside_ask(question: str, timeout: int = 20):
+    """Ask a running DeckSide a meet-data question. Returns (answer, None)
+    on success or (None, reason) where reason is 'offline' (unreachable),
+    'error' (server said no), or 'no-answer' (DeckSide had nothing). Only
+    calls assistant_chat — read-only, never a propose/write tool."""
+    body = json.dumps({"name": "assistant_chat",
+                       "arguments": {"message": question}}).encode("utf-8")
+    req = urllib.request.Request(deckside_base() + "/agent/tools/call",
+                                 data=body,
+                                 headers={"content-type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            data = json.loads(resp.read())
+    except (urllib.error.URLError, OSError, ValueError):
+        return None, "offline"
+    if not isinstance(data, dict) or not data.get("ok"):
+        return None, "error"
+    answer = (data.get("finalAnswer") or "").strip()
+    # DeckSide's generic miss sentinel reads badly in chat; treat it as no
+    # answer (but keep its *helpful* misses like "import the file first").
+    if not answer or answer.lower().startswith("no deterministic deckside answer"):
+        return None, "no-answer"
+    return answer, None
+
+
 def search_pets(query: str) -> list:
     """Server-side catalog search (matches name/creator/tags site-wide)."""
     q = urllib.parse.quote(query)
@@ -7003,6 +7107,12 @@ class ChatWindow:
             return
         cleaned = clean_text(raw, self.spell)
         rec = recommend(cleaned)
+        # A live DeckSide meet-day question is answered straight from the
+        # running DeckSide app (read-only) — no local model needed, so this
+        # comes before the Ollama gate.
+        if not self._ai_busy and deckside_data_lane(raw):
+            self._deckside_request(raw, cleaned, rec)
+            return
         # Light asks (rewrites, summaries, emails, quick questions) get
         # answered right here by the local model when one is available.
         if self.pet.local_ai_ready() and not self._ai_busy:
@@ -7155,6 +7265,57 @@ class ChatWindow:
             return
         self._add("caption",
                   "Local AI didn't answer — building you a prompt instead.")
+        self._standard_request(req["raw"], req["cleaned"], req["rec"])
+
+    # ---- DeckSide live-data lane ----------------------------------------------
+
+    def _deckside_request(self, raw, cleaned, rec):
+        """Answer a meet-day question from a running DeckSide. The HTTP call
+        blocks (DeckSide may warm a query), so it runs on a worker thread and
+        delivers through the same poll/supersession machinery as local AI."""
+        self._ai_busy = True
+        req = {"raw": raw, "cleaned": cleaned, "rec": rec, "events": [],
+               "user_count": sum(1 for k, _ in self.messages if k == "user")}
+        self._show_typing()
+
+        def worker():
+            answer, reason = deckside_ask(raw)
+            req["events"].append(("answer", answer) if answer
+                                 else ("miss", reason))
+
+        threading.Thread(target=worker, daemon=True).start()
+        self._poll_deckside(req)
+
+    def _poll_deckside(self, req):
+        if not self.is_open():
+            self._ai_busy = False  # worker's urllib timeout ends it on its own
+            return
+        if not req["events"]:
+            self.win.after(120, lambda: self._poll_deckside(req))
+            return
+        kind, payload = req["events"].pop(0)
+        self._ai_busy = False
+        self._hide_typing()
+        if kind == "answer":
+            self._add("caption", f"🏊 from DeckSide · live ({deckside_base()})")
+            self._add("pet", payload)
+            # The action row carries its own payload so later prompts can't
+            # change what Copy/Save act on (same contract as local AI).
+            self.messages.append(
+                ("actions", (req["raw"], req["cleaned"], req["rec"], payload)))
+            self._render_all()
+            return
+        # No answer — only fall back to prompt-building if the user hasn't
+        # already moved on to another ask.
+        superseded = (self.pending is not None
+                      or sum(1 for k, _ in self.messages if k == "user")
+                      > req["user_count"])
+        if superseded:
+            return
+        self._add("caption",
+                  "DeckSide isn't running — building you a prompt instead."
+                  if payload == "offline"
+                  else "DeckSide didn't have that — building you a prompt instead.")
         self._standard_request(req["raw"], req["cleaned"], req["rec"])
 
     def _deliver_help(self, bubbles):
