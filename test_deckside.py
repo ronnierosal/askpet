@@ -27,6 +27,15 @@ DATA = [
     "is everyone checked in for the dual meet?",
     "what meets are on the schedule this season?",
     "show me the season calendar of meets",
+    # event / heat / stroke questions (yes-no + imperative forms too)
+    "what events is mabel in?",
+    "who is in event 14?",
+    "check on the 50 free",
+    "is mabel in any events?",
+    "what heat is the 100 free?",
+    "is grace swimming today?",
+    "is the 100 back done?",
+    "how did event 12 go?",
 ]
 for q in DATA:
     assert pm.deckside_data_lane(q), f"should route to DeckSide: {q!r}"
@@ -53,6 +62,12 @@ OTHER = [
     "what does dns actually do?",            # general
     "schedule a task to clean temp files?",  # "scheduled"/"schedule" IT task
     "can you schedule a meeting with the team?",  # schedule + meeting, not meet
+    "check the event log",                   # IT: "event log" collision guard
+    "what events are in the audit log?",     # IT: "audit log" collision guard
+    "is the smtp relay working?",            # IT: "smtp relay" collision guard
+    "create a calendar event",               # IT: "calendar event" collision guard
+    "best props for freestyle?",             # FPV: bare "freestyle" must not route
+    "tiny whoop or freestyle?",              # FPV
 ]
 for q in OTHER:
     assert not pm.deckside_data_lane(q), f"unrelated must NOT route to data: {q!r}"

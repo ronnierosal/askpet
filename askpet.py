@@ -32,7 +32,7 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 APP_NAME = "AskPet"
-APP_VERSION = "0.23.2"
+APP_VERSION = "0.23.3"
 CONTENT_VERSION = "2026.06.17"
 
 # ---------------------------------------------------------------------------
@@ -5643,17 +5643,24 @@ def local_ai_lane(raw: str, rec: dict):
 
 DECKSIDE_DEFAULT_PORT = "41973"
 
-# Swim meet-day vocabulary that marks a LIVE DATA question. Kept to terms
-# that don't collide with IT asks: "freestyle"/"butterfly" not bare "free",
-# "(next/the) meet" with a word boundary so "meeting" can't match. A bare
-# "relay" can also mean an SMTP relay, but a stray hit only costs one
-# unreachable HTTP call before falling back, so the floor is cheap.
+# Swim meet-day vocabulary that marks a LIVE DATA question. Terms are chosen
+# to not collide with the app's other domains: bare "freestyle"/"free"/"fly"
+# are NOT signals (FPV freestyle drones) — strokes only count with a distance
+# in front ("50 free", "100 im") or as swim-only words (backstroke/medley);
+# "event" only counts with a number or a swim-context qualifier (not "event
+# log"); "(next/the) meet" with a boundary so "meeting" can't match. A bare
+# "relay" can also mean an SMTP relay, but a stray hit only costs one HTTP
+# call before falling back to prompt-building, so the floor is cheap.
 DECKSIDE_DATA_SIGNALS = re.compile(
     r"\bdeckside\b|\bswim(?:mer|mers|ming|s)?\b|\bswim meet\b|"
     r"\b(?:next|last|the|this|that) meet\b|\bmeet (?:results|schedule|lineup|day)\b|"
     r"\brelay(?:s)?\b|\blineup(?:s)?\b|\bline up\b|\bscratch(?:ed|es)?\b|"
-    r"\bseed time(?:s)?\b|\bheat sheet\b|\bchamps\b|\b(?:dual|tri)[- ]meet\b|"
-    r"\bmedley\b|\bbackstroke\b|\bbreaststroke\b|\bbutterfly\b|\bfreestyle\b|"
+    r"\bseed time(?:s)?\b|\bheat\b|\bchamps\b|\b(?:dual|tri)[- ]meet\b|"
+    r"\bbackstroke\b|\bbreaststroke\b|\bbutterfly\b|\bmedley\b|"
+    r"\b\d{2,4}\s?(?:free|freestyle|fly|back|breast|im|medley)\b|"
+    r"\bevent\s*#?\s*\d+\b|\bwhat events?\b|\bwhich events?\b|"
+    r"\bevents? (?:is|are|for|left|does|do)\b|"
+    r"\b(?:any|his|her|their|my) events?\b|"
     r"\bage (?:band|group)\b|\bteam (?:roster|score|scores)\b|"
     r"\bchecked in\b|\bcheck[- ]?in\b")
 
@@ -5671,9 +5678,21 @@ DECKSIDE_DEV_SIGNALS = re.compile(
     r"unit test|migration|schema|endpoint|component|module|repo|"
     r"commit|pull request|\bpr\b)\b")
 
-# Data questions can open with words QUESTION_STARTERS misses.
-DECKSIDE_DATA_STARTERS = ("who ", "list ", "show ", "how many ",
-                          "how's ", "hows ")
+# IT phrasings that share a word with swim vocabulary ("relay", "event").
+# These win over the swim signals so an IT ask is never sent to DeckSide.
+DECKSIDE_IT_COLLISION = re.compile(
+    r"\b(?:smtp|mail relay|relay server|relay agent|audit log|event log|"
+    r"event viewer|event id|calendar event|event hub|event grid)\b")
+
+# Data questions/requests can open with words QUESTION_STARTERS misses —
+# yes/no openers and imperatives ("check on...", "look up..."). These are
+# only consulted AFTER a swim signal has already matched, so a generic "is
+# the server down" (no signal) never reaches them.
+DECKSIDE_DATA_STARTERS = ("who ", "list ", "show ", "how many ", "how's ",
+                          "hows ", "is ", "are ", "was ", "were ", "did ",
+                          "does ", "do ", "has ", "have ", "can ", "will ",
+                          "check ", "tell me", "look up", "lookup ", "find ",
+                          "pull up", "look at ", "get ", "give me")
 
 
 def deckside_data_lane(raw: str) -> bool:
@@ -5681,7 +5700,7 @@ def deckside_data_lane(raw: str) -> bool:
     DeckSide, as opposed to a DeckSide dev task or an unrelated ask. Pure —
     does no I/O and doesn't check whether DeckSide is actually up."""
     lw = raw.strip().lower()
-    if DECKSIDE_DEV_SIGNALS.search(lw):
+    if DECKSIDE_DEV_SIGNALS.search(lw) or DECKSIDE_IT_COLLISION.search(lw):
         return False
     hit = bool(DECKSIDE_DATA_SIGNALS.search(lw)) or bool(
         DECKSIDE_SCHEDULE_SIGNALS.search(lw) and DECKSIDE_MEET_NOUN.search(lw))
