@@ -96,12 +96,24 @@ assert pm.roster_fragment("ask the coach ") == ""  # trailing space -> no fragme
 assert pm.roster_fragment("scratch eth") == "scratch eth"
 
 NAMES = ["Jane Smith", "Ethan Rosal", "Ethan Kang", "Cyla Doe"]
-assert pm.roster_rank(NAMES, "smit")[0] == "Jane Smith"
-assert pm.roster_rank(NAMES, "jane")[0] == "Jane Smith"
-assert pm.roster_rank(NAMES, "smiht")[:1] == ["Jane Smith"]    # transposition typo
-assert pm.roster_rank(NAMES, "ethan ro")[0] == "Ethan Rosal"   # two-word disambiguation
-assert pm.roster_rank(NAMES, "z") == []                        # < 2 chars -> nothing
-assert "Ethan Rosal" in pm.roster_rank(NAMES, "ethan")
+# The chat typeahead uses EXACT-prefix matching against the big master roster
+# (fuzzy roster_rank is too loose there — it would surface a hit for almost
+# any letter pair, which made the dropdown pop up on every word).
+assert pm.roster_prefix_matches(NAMES, "smit")[0] == "Jane Smith"      # last-name prefix
+assert pm.roster_prefix_matches(NAMES, "jane")[0] == "Jane Smith"      # first-name prefix
+assert pm.roster_prefix_matches(NAMES, "ethan ro")[0] == "Ethan Rosal" # two-word
+assert pm.roster_prefix_matches(NAMES, "smiht") == []                  # NO fuzzy -> quiet
+assert pm.roster_prefix_matches(NAMES, "z") == []                      # < 2 chars
+assert set(pm.roster_prefix_matches(NAMES, "ethan")) == {"Ethan Rosal", "Ethan Kang"}
+
+# name-like gate: ordinary words don't trigger the dropdown, name starts do
+known = {"is", "the", "when", "free", "relay", "do", "mara"}.__contains__
+assert pm.roster_is_namelike("eth", known) is True
+assert pm.roster_is_namelike("is", known) is False        # common word
+assert pm.roster_is_namelike("when", known) is False
+assert pm.roster_is_namelike("free", known) is False      # swim word that's also English
+assert pm.roster_is_namelike("a", known) is False         # too short
+assert pm.roster_is_namelike("mara", known) is False      # name that IS a dict word (edge)
 
 # accept span is candidate-aware: a leading command word is never swallowed
 assert pm.roster_replace_len("scratch eth", "Ethan Rosal") == 3       # only "eth"

@@ -32,7 +32,7 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 APP_NAME = "AskPet"
-APP_VERSION = "0.23.0"
+APP_VERSION = "0.23.1"
 CONTENT_VERSION = "2026.06.17"
 
 # ---------------------------------------------------------------------------
@@ -5905,6 +5905,47 @@ def roster_replace_len(before: str, display: str) -> int:
     return 0
 
 
+def roster_is_namelike(word: str, is_known) -> bool:
+    """Whether a typed word is worth completing as a name: at least 2 chars
+    and NOT an ordinary dictionary word. The roster is the full ~2000-name
+    master list, so without this gate almost every prose word ("is", "the",
+    "when", "free", "relay") prefixes some name and the dropdown never rests.
+    `is_known(word)` is the spellchecker's dictionary check."""
+    w = (word or "").strip()
+    return len(w) >= 2 and not is_known(w)
+
+
+def roster_prefix_matches(names: list, query_text: str, limit: int = 8) -> list:
+    """Names whose first (x3) or any (x2) token EXACTLY starts with the last
+    typed word — a two-word fragment ("ethan ro") also rewards the first word
+    prefixing the first name (x4). Exact-prefix only: unlike roster_rank's
+    fuzzy matching (kept for reference/parity with DeckSide's small per-meet
+    list), this stays quiet against the large master roster where a fuzzy
+    near-miss would surface for almost any letter pair."""
+    q = _roster_norm(query_text)
+    words = [w for w in q.split(" ") if w]
+    if not words or len(words[-1]) < 2:
+        return []
+    last = words[-1]
+    w0 = words[0] if len(words) > 1 else None
+    scored = []
+    for display in (names or []):
+        toks = [t for t in _roster_norm(display).split(" ") if t]
+        if not toks:
+            continue
+        if w0 and toks[0].startswith(w0) and any(t.startswith(last) for t in toks[1:]):
+            score = 4.0
+        elif toks[0].startswith(last):
+            score = 3.0
+        elif any(t.startswith(last) for t in toks[1:]):
+            score = 2.0
+        else:
+            continue
+        scored.append((score, display))
+    scored.sort(key=lambda t: (-t[0], t[1]))
+    return [d for _, d in scored[:max(1, limit)]]
+
+
 class RosterTypeahead:
     """Swimmer-name autocomplete for the chat box, sourced live from a running
     DeckSide (read-only get_roster). A borderless dropdown sits under the entry;
@@ -6014,7 +6055,10 @@ class RosterTypeahead:
         frag = roster_fragment(before)
         if not frag:
             return self._hide()
-        matches = roster_rank(self._names, frag, 8)
+        # Don't try to complete ordinary words — only name-like fragments.
+        if not roster_is_namelike(frag.split()[-1], self.chat.spell.known):
+            return self._hide()
+        matches = roster_prefix_matches(self._names, frag, 8)
         if matches:
             self._show(matches)
         else:
@@ -6071,11 +6115,6 @@ class RosterTypeahead:
                 pass
         self._hide_after = self.entry.after(150, self._hide)
         return None
-
-    def accept_if_visible(self) -> bool:
-        """Accept the highlighted name if the dropdown is up. Called by the
-        chat's Return handler so Enter completes instead of sending."""
-        return self._accept() if self.visible() else False
 
     def _accept(self) -> bool:
         sel = self._list.curselection() if self._list else ()
@@ -7441,12 +7480,12 @@ class ChatWindow:
     # ---- actions ----------------------------------------------------------
 
     def _on_return(self, event):
-        # If the name dropdown is up, Enter completes the highlighted name
-        # rather than sending the message.
-        if getattr(self, "typeahead", None) and self.typeahead.accept_if_visible():
-            return "break"
         if event.state & 0x0001:  # Shift+Return -> newline
             return None
+        # Enter ALWAYS sends. Accept a name suggestion with Tab or a click —
+        # never by Enter, so finishing a normal message never inserts a name.
+        if getattr(self, "typeahead", None):
+            self.typeahead._hide()
         self.send()
         return "break"
 
