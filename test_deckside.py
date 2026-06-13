@@ -86,38 +86,42 @@ if version:
 else:
     print("live round-trip SKIPPED (DeckSide agent server not reachable)")
 
-# --- roster name matching (ported from DeckSide swimmer-name-suggest.js) ------
+# --- roster name matching --------------------------------------------------
 assert pm.roster_flip_name("Smith, Jane") == "Jane Smith"
 assert pm.roster_flip_name("Cher") == "Cher"
 assert pm.roster_flip_name("") == ""
 
-assert pm.roster_fragment("a") == ""               # < 2 alpha chars
-assert pm.roster_fragment("ask the coach ") == ""  # trailing space -> no fragment
-assert pm.roster_fragment("scratch eth") == "scratch eth"
+# typing context: (current word being typed, completed word before it)
+assert pm.roster_typing_context("scratch ma") == ("ma", "scratch")
+assert pm.roster_typing_context("scratch Mabel fr") == ("fr", "Mabel")
+assert pm.roster_typing_context("Mabel") == ("Mabel", "")        # sentence start
+assert pm.roster_typing_context("replace Mabel with joa") == ("joa", "with")
+assert pm.roster_typing_context("the relay ") == ("", "relay")   # no word being typed
 
 NAMES = ["Jane Smith", "Ethan Rosal", "Ethan Kang", "Cyla Doe"]
-# The chat typeahead uses EXACT-prefix matching against the big master roster
-# (fuzzy roster_rank is too loose there — it would surface a hit for almost
-# any letter pair, which made the dropdown pop up on every word).
-assert pm.roster_prefix_matches(NAMES, "smit")[0] == "Jane Smith"      # last-name prefix
-assert pm.roster_prefix_matches(NAMES, "jane")[0] == "Jane Smith"      # first-name prefix
-assert pm.roster_prefix_matches(NAMES, "ethan ro")[0] == "Ethan Rosal" # two-word
-assert pm.roster_prefix_matches(NAMES, "smiht") == []                  # NO fuzzy -> quiet
-assert pm.roster_prefix_matches(NAMES, "z") == []                      # < 2 chars
+# EXACT-prefix matching on the single current word (no fuzzy, no two-word).
+assert pm.roster_prefix_matches(NAMES, "smit")[0] == "Jane Smith"  # last-name prefix
+assert pm.roster_prefix_matches(NAMES, "jane")[0] == "Jane Smith"  # first-name prefix
+assert pm.roster_prefix_matches(NAMES, "smiht") == []             # NO fuzzy -> quiet
+assert pm.roster_prefix_matches(NAMES, "z") == []                 # < 2 chars
 assert set(pm.roster_prefix_matches(NAMES, "ethan")) == {"Ethan Rosal", "Ethan Kang"}
 
-# name-like gate: ordinary words don't trigger the dropdown, name starts do
-known = {"is", "the", "when", "free", "relay", "do", "mara"}.__contains__
-assert pm.roster_is_namelike("eth", known) is True
-assert pm.roster_is_namelike("is", known) is False        # common word
-assert pm.roster_is_namelike("when", known) is False
-assert pm.roster_is_namelike("free", known) is False      # swim word that's also English
-assert pm.roster_is_namelike("a", known) is False         # too short
-assert pm.roster_is_namelike("mara", known) is False      # name that IS a dict word (edge)
+# the "name slot" gate — the core of the over-triggering fix
+known = {"is", "the", "when", "free", "relay", "do", "from", "mara"}.__contains__
+slot = lambda cur, prev: pm.roster_in_name_slot(cur, prev, known)
+assert slot("eth", "scratch") is True       # after an action cue
+assert slot("mab", "is") is True            # after a state cue
+assert slot("joa", "with") is True          # after a connector cue
+assert slot("eth", "") is True              # sentence start
+assert slot("fr", "Mabel") is False         # word right AFTER a name -> no predict
+assert slot("relay", "the") is False        # prev is a cue but "relay" is a word
+assert slot("meet", "the") is False         # "the" isn't a cue, "meet"/prose
+assert slot("is", "scratch") is False       # current word is an ordinary word
+assert slot("a", "scratch") is False        # too short
 
-# accept span is candidate-aware: a leading command word is never swallowed
-assert pm.roster_replace_len("scratch eth", "Ethan Rosal") == 3       # only "eth"
-assert pm.roster_replace_len("ethan ro", "Ethan Rosal") == len("ethan ro")
+# accept replaces only the current word (accept inserts the full "First Last")
+assert pm.roster_replace_len("scratch eth") == 3        # just "eth"
+assert pm.roster_replace_len("replace Mabel with joa") == 3  # just "joa"
 print("roster matching OK")
 
 # --- deckside_roster fetch / cache / offline (mocked HTTP) --------------------

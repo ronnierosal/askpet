@@ -32,7 +32,7 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 APP_NAME = "AskPet"
-APP_VERSION = "0.23.1"
+APP_VERSION = "0.23.2"
 CONTENT_VERSION = "2026.06.17"
 
 # ---------------------------------------------------------------------------
@@ -5733,11 +5733,13 @@ def deckside_ask(question: str, timeout: int = 20):
 
 
 # --- DeckSide roster: swimmer-name autocomplete --------------------------------
-# The chat box can complete real swimmer names from a running DeckSide via the
-# read-only get_roster tool. The name-matching below is a faithful port of
-# DeckSide's own app/swimmer-name-suggest.js so AskPet's typeahead behaves
-# identically to DeckSide's in-app one (trailing-fragment extraction, typo-
-# tolerant prefix ranking, candidate-aware accept span).
+# The chat box completes real swimmer names from a running DeckSide via the
+# read-only get_roster tool. Triggering is context-aware ("name slot"): a name
+# is only predicted when the word being typed follows a cue that introduces a
+# name ("scratch", "is", "with", "give me", ...) or starts the message — never
+# on the word right after an already-typed name, and never on ordinary words.
+# Matching is exact-prefix (no fuzzy) because the master roster is ~2000 names,
+# where a fuzzy near-miss would hit for almost any letter pair.
 
 _ROSTER_CACHE = {"names": [], "fetched": 0.0, "ver": None}
 _ROSTER_LOCK = threading.Lock()  # serializes cache reads/writes across primes
@@ -5790,154 +5792,104 @@ def _roster_norm(v: str) -> str:
     return re.sub(r"\s+", " ", v).strip()
 
 
-_ROSTER_TRAILING = re.compile(r"([A-Za-z][A-Za-z.'-]*(?:\s+[A-Za-z][A-Za-z.'-]*)?)$")
+# Words that introduce a swimmer name in a coach's phrasing. A name is only
+# predicted when the word being typed follows one of these (or starts the
+# message) — the "name slot" idea. This is what stops the dropdown firing on
+# every word, and especially on the word right AFTER a completed name (whose
+# preceding word is the name itself, not a cue).
+ROSTER_NAME_CUES = frozenset("""
+    scratch scratches scratched add adds adding remove removes removing
+    replace replaces replacing sub subs substitute swap swaps swapping
+    move moves put puts enter drop pull bring give gives gimme show find
+    is are was were am be been who whos whose did does do has have had
+    can could will would should about for with and or to from vs versus
+    against between me us my our his her him their put
+""".split())
 
 
-def roster_fragment(before: str) -> str:
-    """The trailing 1-2 word name fragment being typed before the caret, or
-    "" when there are fewer than 2 alpha chars to work with."""
-    m = _ROSTER_TRAILING.search(before or "")
-    if not m:
-        return ""
-    frag = m.group(1)
-    if len(re.sub(r"[^A-Za-z]", "", frag)) < 2:
-        return ""
-    return frag
+def roster_typing_context(before: str):
+    """(current_word, prev_word) at the caret: the word being typed and the
+    completed word just before it (each "" when absent)."""
+    s = before or ""
+    cur_m = re.search(r"[A-Za-z][A-Za-z.'-]*$", s)
+    cur = cur_m.group(0) if cur_m else ""
+    head = s[:cur_m.start()] if cur_m else s
+    prev_m = re.search(r"([A-Za-z][A-Za-z.'-]*)[^A-Za-z]*$", head)
+    prev = prev_m.group(1) if prev_m else ""
+    return cur, prev
 
 
-def _roster_edit_distance(a: str, b: str) -> int:
-    """Optimal-string-alignment (Damerau-Levenshtein) distance: an adjacent
-    transposition ("etahn"->"ethan") counts as a single edit."""
-    al, bl = len(a), len(b)
-    if not al:
-        return bl
-    if not bl:
-        return al
-    d = [[0] * (bl + 1) for _ in range(al + 1)]
-    for i in range(al + 1):
-        d[i][0] = i
-    for j in range(bl + 1):
-        d[0][j] = j
-    for i in range(1, al + 1):
-        for j in range(1, bl + 1):
-            cost = 0 if a[i - 1] == b[j - 1] else 1
-            d[i][j] = min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost)
-            if i > 1 and j > 1 and a[i - 1] == b[j - 2] and a[i - 2] == b[j - 1]:
-                d[i][j] = min(d[i][j], d[i - 2][j - 2] + 1)
-    return d[al][bl]
+# Ordinary words that are never a swimmer name: common English function/prose
+# words plus swim-meet jargon. A CURATED list, not the full spellcheck
+# dictionary — the dictionary also contains real name stems ("mab", "grace",
+# "mark", "rose"), which should still complete after a cue. Anything not in
+# here that the user types in a name slot is treated as a possible name.
+ROSTER_STOPWORDS = frozenset("""
+    a an and the of to in on at for with from by as is are was were be been
+    being am do does did have has had will would can could should may might
+    must not no nor yes so if then than there here this that these those it
+    its i im you your youre he she we they me my our his her him them us their
+    what when where who whom how why which while into over under again about
+    more most some any all both each every few other such only own same too
+    very just out up down off get got like want need know think make see say
+    said please thanks thank ok okay also still even now today day time put
+    meet meets relay relays lineup lineups heat heats lane lanes event events
+    free freestyle back backstroke breast breaststroke fly butterfly medley
+    swim swimmer swimmers team teams seed times place places points age band
+    group champs dual tri scratch scratched add remove replace swap move enter
+    sub final finals prelim prelims dq ns events versus vs
+""".split())
 
 
-def _roster_fuzzy_prefix(q: str, token: str) -> float:
-    """Score typed `q` as a (possibly mistyped) prefix of `token`: 1.0 exact,
-    0.4-0.9 within an edit or two, 0 otherwise. < 2 chars never fuzzy-matches."""
-    if not q or not token:
-        return 0.0
-    if token.startswith(q):
-        return 1.0
-    if len(q) < 2:
-        return 0.0
-    prefix = token[:len(q)]
-    if len(prefix) < len(q):
-        return 0.0
-    dist = _roster_edit_distance(q, prefix)
-    max_edits = 1 if len(q) <= 4 else 2
-    if dist > max_edits:
-        return 0.0
-    return 1 - (dist / len(q)) * 0.6
+def roster_is_stopword(word: str) -> bool:
+    return word.lower() in ROSTER_STOPWORDS
 
 
-def roster_rank(names: list, query_text: str, limit: int = 8) -> list:
-    """Rank display names against the typed fragment, typo-tolerant. Mirrors
-    DeckSide's rankSwimmers: first-name match (x3) or any-token (x2), with a
-    two-word phrase ("ethan ro") demanding both parts line up."""
-    q = _roster_norm(query_text)
-    if len(re.sub(r"[^a-z0-9]", "", q)) < 2:
-        return []
-    qwords = [w for w in q.split(" ") if w]
-    qlast = qwords[-1]
-    w0 = qwords[0]
-    multi = len(qwords) > 1
-    scored = []
-    for display in (names or []):
-        key = _roster_norm(display)
-        tokens = [t for t in key.split(" ") if t]
-        if not tokens:
-            continue
-        score = 0.0
-        if len(qlast) >= 2:
-            score = max(score, _roster_fuzzy_prefix(qlast, tokens[0]) * 3)
-            for t in tokens[1:]:
-                score = max(score, _roster_fuzzy_prefix(qlast, t) * 2)
-            if score == 0 and len(qlast) >= 4 and qlast in key:
-                score = 0.5
-        if multi:
-            s0 = _roster_fuzzy_prefix(w0, tokens[0])
-            if s0 > 0:
-                if len(qlast) >= 2:
-                    sl = 0.0
-                    for t in tokens[1:]:
-                        sl = max(sl, _roster_fuzzy_prefix(qlast, t))
-                    if sl > 0:
-                        score = max(score, 4 * ((s0 + sl) / 2))
-                elif any(t.startswith(qlast) for t in tokens[1:]):
-                    score = max(score, 4)
-            if key.startswith(q):
-                score = max(score, 4)
-        if score > 0:
-            scored.append((score, display))
-    scored.sort(key=lambda t: (-t[0], t[1]))
-    return [d for _, d in scored[:max(1, limit)]]
-
-
-def roster_replace_len(before: str, display: str) -> int:
-    """How many chars before the caret to replace when accepting `display`:
-    the trailing two words when they prefix the name, else the last word — so
-    a leading command word ("scratch eth") is never swallowed."""
-    cand = _roster_norm(display)
-    two = re.search(r"([A-Za-z][A-Za-z.'-]*)\s+([A-Za-z][A-Za-z.'-]*)$", before or "")
-    if two:
-        phrase = _roster_norm(f"{two.group(1)} {two.group(2)}")
-        if cand.startswith(phrase) or _roster_fuzzy_prefix(phrase, cand) > 0:
-            return len(two.group(0))
-    one = re.search(r"([A-Za-z][A-Za-z.'-]*)$", before or "")
-    if one:
-        return len(one.group(1))
-    return 0
+def roster_replace_len(before: str, display=None) -> int:
+    """Chars before the caret to replace when accepting — just the current
+    word. Accepting inserts the full "First Last", so only the typed stem is
+    replaced and a leading cue ("scratch ") is never swallowed."""
+    m = re.search(r"[A-Za-z][A-Za-z.'-]*$", before or "")
+    return len(m.group(0)) if m else 0
 
 
 def roster_is_namelike(word: str, is_known) -> bool:
-    """Whether a typed word is worth completing as a name: at least 2 chars
-    and NOT an ordinary dictionary word. The roster is the full ~2000-name
-    master list, so without this gate almost every prose word ("is", "the",
-    "when", "free", "relay") prefixes some name and the dropdown never rests.
-    `is_known(word)` is the spellchecker's dictionary check."""
+    """A typed word worth completing: at least 2 chars and NOT an ordinary
+    dictionary word. The roster is ~2000 names, so without this almost any
+    short prose word prefixes some name. `is_known` is the spellchecker's
+    dictionary check (a word-name like "grace" is caught while still complete,
+    but its non-word stem "grac" predicts, so real names still complete)."""
     w = (word or "").strip()
     return len(w) >= 2 and not is_known(w)
 
 
-def roster_prefix_matches(names: list, query_text: str, limit: int = 8) -> list:
-    """Names whose first (x3) or any (x2) token EXACTLY starts with the last
-    typed word — a two-word fragment ("ethan ro") also rewards the first word
-    prefixing the first name (x4). Exact-prefix only: unlike roster_rank's
-    fuzzy matching (kept for reference/parity with DeckSide's small per-meet
-    list), this stays quiet against the large master roster where a fuzzy
-    near-miss would surface for almost any letter pair."""
-    q = _roster_norm(query_text)
-    words = [w for w in q.split(" ") if w]
-    if not words or len(words[-1]) < 2:
+def roster_in_name_slot(cur: str, prev: str, is_known) -> bool:
+    """Whether the current word sits where a swimmer name is expected: it is
+    name-like AND either starts the message or follows a name-cue word. So
+    "scratch ma|" and "is mab|" predict, but "scratch Mabel fr|" (prev is the
+    name) and "the relay|" (prev isn't a cue) do not."""
+    if not roster_is_namelike(cur, is_known):
+        return False
+    if not prev:
+        return True  # sentence start
+    return prev.lower().strip(".,'\"-") in ROSTER_NAME_CUES
+
+
+def roster_prefix_matches(names: list, word: str, limit: int = 8) -> list:
+    """Names whose first (x3) or any (x2) token EXACTLY starts with the typed
+    word. Exact-prefix only — against the large master roster a fuzzy match
+    would surface a hit for almost any letter pair."""
+    w = _roster_norm(word)
+    if len(w) < 2:
         return []
-    last = words[-1]
-    w0 = words[0] if len(words) > 1 else None
     scored = []
     for display in (names or []):
         toks = [t for t in _roster_norm(display).split(" ") if t]
         if not toks:
             continue
-        if w0 and toks[0].startswith(w0) and any(t.startswith(last) for t in toks[1:]):
-            score = 4.0
-        elif toks[0].startswith(last):
+        if toks[0].startswith(w):
             score = 3.0
-        elif any(t.startswith(last) for t in toks[1:]):
+        elif any(t.startswith(w) for t in toks[1:]):
             score = 2.0
         else:
             continue
@@ -6052,13 +6004,13 @@ class RosterTypeahead:
             self._maybe_reprime()
             return self._hide()
         before = self.entry.get("1.0", "insert")
-        frag = roster_fragment(before)
-        if not frag:
+        cur, prev = roster_typing_context(before)
+        # Only predict a name in a "name slot": the current word is name-like
+        # AND follows a name-cue (or starts the message) — not after an
+        # already-typed name or an ordinary word.
+        if not roster_in_name_slot(cur, prev, roster_is_stopword):
             return self._hide()
-        # Don't try to complete ordinary words — only name-like fragments.
-        if not roster_is_namelike(frag.split()[-1], self.chat.spell.known):
-            return self._hide()
-        matches = roster_prefix_matches(self._names, frag, 8)
+        matches = roster_prefix_matches(self._names, cur, 8)
         if matches:
             self._show(matches)
         else:
