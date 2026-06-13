@@ -128,14 +128,23 @@ def main():
     limit = None
     if "--limit" in sys.argv:
         limit = int(sys.argv[sys.argv.index("--limit") + 1])
-    qs = build_battery()
+    # --questions FILE: run real mined questions (fpv_newbie_questions.json)
+    # instead of the generated template battery.
+    out_name = "fpv_battery_results.json"
+    if "--questions" in sys.argv:
+        src = sys.argv[sys.argv.index("--questions") + 1]
+        with open(src, encoding="utf-8-sig") as f:
+            qs = [e["q"] for e in json.load(f)["questions"]]
+        out_name = "fpv_newbie_results.json"
+    else:
+        qs = build_battery()
     if limit:
         qs = qs[:limit]
     packs = pm.knowledge_packs()
     assert packs, "no knowledge pack installed - run build_knowledge_pack.py"
-    pack = packs[0]
-    print(f"{len(qs)} questions; pack '{pack['id']}' "
-          f"({pack.get('videos')} videos, {pack.get('n_chunks')} chunks)")
+    for pack in packs:
+        print(f"pack '{pack['id']}': {pack.get('n_chunks')} chunks")
+    print(f"{len(qs)} questions")
 
     # Phase 1+2: routing + retrieval (fast, no model)
     not_knowledge, no_chunks = [], []
@@ -144,7 +153,8 @@ def main():
         if lane != "knowledge":
             not_knowledge.append((q, lane))
             continue
-        if not pm.knowledge_retrieve(pack, q, k=4):
+        if not any(pm.knowledge_retrieve(p, q, k=4)
+                   for p in pm.knowledge_packs_for(q)):
             no_chunks.append(q)
     print(f"routing: {len(qs) - len(not_knowledge)}/{len(qs)} -> knowledge lane")
     for q, lane in not_knowledge[:10]:
@@ -169,7 +179,8 @@ def main():
         if lane != "knowledge":
             entry["flags"] = ["misrouted"]
         else:
-            sysp = pm.knowledge_system_prompt(pack, q) or pm.LOCAL_AI_LANES["answer"]
+            sysp = (pm.knowledge_system_prompt(pm.knowledge_packs_for(q), q)
+                    or pm.LOCAL_AI_LANES["hobby"])
             grounded = "SOURCE EXCERPTS" in sysp
             t1 = time.perf_counter()
             try:
@@ -199,7 +210,7 @@ def main():
             eta = done / i * (len(qs) - i)
             print(f"  {i}/{len(qs)} ({done:.0f}s, eta {eta / 60:.0f}m)",
                   flush=True)
-    with open("fpv_battery_results.json", "w", encoding="utf-8") as fjson:
+    with open(out_name, "w", encoding="utf-8") as fjson:
         json.dump(results, fjson, indent=1, ensure_ascii=False)
     clean = sum(1 for r in results if not r["flags"])
     secs = [r["secs"] for r in results if "secs" in r]

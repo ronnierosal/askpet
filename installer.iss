@@ -1,4 +1,4 @@
-﻿; AskPet Windows installer (Inno Setup)
+; AskPet Windows installer (Inno Setup)
 ;
 ; Per-user install: no admin rights needed, deployable via Intune in user
 ; context. Supports silent install:  AskPet-Setup.exe /VERYSILENT /NORESTART
@@ -6,7 +6,7 @@
 ; is never touched (and is preserved on uninstall).
 
 #define AppName "AskPet"
-#define AppVersion "0.20.0"
+#define AppVersion "0.21.0"
 #define AppPublisher "SLDD IT"
 #define AppExeName "AskPet.exe"
 
@@ -45,5 +45,5 @@ Name: "{userstartup}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Tasks: startu
 [Run]
 Filename: "{app}\{#AppExeName}"; Description: "Launch {#AppName}"; Flags: nowait postinstall skipifsilent
 ; Tkinter apps don't register with Restart Manager, so RestartApplications
-; can't bring the pet back after a silent upgrade â€” relaunch it explicitly.
+; can't bring the pet back after a silent upgrade ??? relaunch it explicitly.
 Filename: "{app}\{#AppExeName}"; Flags: nowait; Check: WizardSilent

@@ -31,7 +31,7 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 APP_NAME = "AskPet"
-APP_VERSION = "0.20.0"
+APP_VERSION = "0.21.0"
 CONTENT_VERSION = "2026.06.17"
 
 # ---------------------------------------------------------------------------
@@ -5365,8 +5365,27 @@ LOCAL_AI_LANES = {
         "You are AskPet's local assistant, a small model running "
         "fully offline on the user's own PC. Answer directly and "
         "concisely — a few sentences, short bullets only if listing. "
-        "If you are not confident, say so plainly rather than guessing. "
-        "No filler, no preamble."
+        "General and how-to questions never need web access or live "
+        "data: answer them from what you know, and never reply that "
+        "you lack access to information. If you are genuinely unsure, "
+        "say so plainly rather than guessing. No filler, no preamble."
+    ),
+    # Knowledge-pack topic matched but retrieval found nothing — still a
+    # hobby question, so answer it; "I don't have access to that
+    # information" is never the right reply to "whats the best 1s battery".
+    "hobby": (
+        "You are AskPet's local assistant, a small model running fully "
+        "offline on the user's own PC. The user is asking a practical "
+        "hobby question. Answer it directly from your general knowledge. "
+        "These questions never need live data, web access, or current "
+        "prices — never reply that you lack access to information. For "
+        "'best X' or buying questions, name two or three well-known "
+        "solid options and what makes each good. If you don't actually "
+        "recognize a specific product, say so in one short sentence and "
+        "give the general guidance that applies — never invent details "
+        "about products you don't know. When a safety rule applies "
+        "(batteries, soldering, flying), state it. A few sentences, "
+        "short bullets only when listing."
     ),
 }
 
@@ -5416,14 +5435,26 @@ def knowledge_packs() -> list:
     return _KNOWLEDGE_PACKS
 
 
-def knowledge_pack_for(text: str):
-    """The first pack whose keywords match the message, else None."""
+def _unit_split(text: str) -> str:
+    """"500mah battery" -> "500 mah battery", so unit-glued tokens match
+    keywords and chunk text written either way."""
+    return re.sub(r"(\d)([a-z])", r"\1 \2", text)
+
+
+def knowledge_packs_for(text: str) -> list:
+    """All packs whose keywords match the message — packs stack."""
     lw = text.lower()
-    for p in knowledge_packs():
-        if any(re.search(r"\b" + re.escape(k.lower()), lw)
-               for k in p["keywords"]):
-            return p
-    return None
+    lwn = _unit_split(lw)
+    return [p for p in knowledge_packs()
+            if any(re.search(r"\b" + re.escape(k.lower()), lw)
+                   or re.search(r"\b" + re.escape(k.lower()), lwn)
+                   for k in p["keywords"])]
+
+
+def knowledge_pack_for(text: str):
+    """The first matching pack, else None (for yes/no callers)."""
+    packs = knowledge_packs_for(text)
+    return packs[0] if packs else None
 
 
 def _pack_index(pack: dict):
@@ -5439,11 +5470,24 @@ def _pack_index(pack: dict):
     return pack
 
 
-def knowledge_retrieve(pack: dict, query: str, k: int = 4) -> list:
-    """Top-k chunks for a query: term frequency × rarity, stdlib only."""
+def _query_words(query: str) -> list:
+    """Search terms from a query, in both raw and unit-split forms so
+    "500mah" finds chunks that say "500 mah" and vice versa. Two-char
+    tokens only count when they carry a digit ("1s", "2s", "o4")."""
+    lq = query.lower()
+    toks = set(re.findall(r"[a-z0-9]+", lq))
+    toks |= set(re.findall(r"[a-z0-9]+", _unit_split(lq)))
+    return sorted(w for w in toks
+                  if w not in KNOWLEDGE_STOPWORDS
+                  and (len(w) > 2 or (len(w) == 2
+                                      and any(c.isdigit() for c in w))))
+
+
+def _knowledge_scored(pack: dict, query: str) -> list:
+    """Floor-filtered (score, chunk) pairs for a query, best first:
+    term frequency × rarity, stdlib only."""
     _pack_index(pack)
-    words = [w for w in re.findall(r"[a-z0-9]+", query.lower())
-             if len(w) > 2 and w not in KNOWLEDGE_STOPWORDS]
+    words = _query_words(query)
     if not words:
         return []
     scored = []
@@ -5451,8 +5495,10 @@ def knowledge_retrieve(pack: dict, query: str, k: int = 4) -> list:
         s, distinct = 0.0, 0
         for w in words:
             # singular/plural tolerant: "motors" matches "motor" and back
+            # (alpha words only — stripping "1s" to "1" would count every
+            # digit 1 in the chunk as a hit)
             hits = xl.count(w)
-            alt = w[:-1] if w.endswith("s") else w + "s"
+            alt = w[:-1] if w.endswith("s") and len(w) > 3 else w + "s"
             hits += xl.count(alt)
             if hits:
                 distinct += 1
@@ -5463,36 +5509,52 @@ def knowledge_retrieve(pack: dict, query: str, k: int = 4) -> list:
         # quote something irrelevant at the model.
         need = 2 if len(words) >= 3 else 1
         if s > 0 and distinct >= need:
-            scored.append((s, i))
+            scored.append((s, pack["chunks"][i]))
     scored.sort(key=lambda t: -t[0])
     if not scored:
         return []
     floor = scored[0][0] * 0.3
-    return [pack["chunks"][i] for s, i in scored[:k] if s >= floor]
+    return [(s, c) for s, c in scored if s >= floor]
 
 
-def knowledge_system_prompt(pack: dict, query: str):
-    """Grounded system prompt for the answer lane, or None if the pack
-    has nothing relevant (caller falls back to the plain answer lane)."""
-    chunks = knowledge_retrieve(pack, query)
-    if not chunks:
+def knowledge_retrieve(pack: dict, query: str, k: int = 4) -> list:
+    """Top-k chunks for a query from one pack."""
+    return [c for s, c in _knowledge_scored(pack, query)[:k]]
+
+
+def knowledge_system_prompt(packs, query: str):
+    """Grounded system prompt for the answer lane, or None when nothing
+    relevant is found. Accepts one pack or a list — packs stack: chunks
+    merge across packs, scores normalized to each pack's best hit so
+    pack-local idf scales stay comparable."""
+    if isinstance(packs, dict):
+        packs = [packs]
+    merged = []
+    for p in packs:
+        scored = _knowledge_scored(p, query)
+        if scored:
+            top = scored[0][0]
+            merged += [(s / top, c, p) for s, c in scored]
+    if not merged:
         return None
-    seen_titles = []
-    parts = []
-    for c in chunks:
-        if c["t"] not in seen_titles:
-            seen_titles.append(c["t"])
+    merged.sort(key=lambda t: -t[0])
+    merged = merged[:4]
+    credits, parts = [], []
+    for _, c, p in merged:
+        if p["credit"] not in credits:
+            credits.append(p["credit"])
         parts.append(f"[from: {c['t']}]\n{c['x']}")
     excerpts = "\n\n".join(parts)
     return (
         "You are AskPet's local assistant running fully offline. "
-        f"Answer the user's question using the source excerpts below — "
-        f"video transcripts from {pack['credit']} — as your primary "
-        "reference. Prefer what the sources say over your own general "
-        "knowledge; if the excerpts don't cover the question, say so "
-        "plainly and give your best general answer labeled as such. "
-        "Mention which video the information comes from when relevant. "
-        "Be concise: a few sentences or short bullets.\n\n"
+        "Answer the user's question using the source excerpts below — "
+        f"from {'; '.join(credits)} — as your primary reference. "
+        "Prefer what the sources say over your own general knowledge; "
+        "if the excerpts don't cover the question, give your best "
+        "general answer labeled as such. Never reply that you lack "
+        "access to information. Mention which source the information "
+        "comes from when relevant. Be concise: a few sentences or "
+        "short bullets.\n\n"
         "=== SOURCE EXCERPTS ===\n" + excerpts
     )
 
@@ -5504,6 +5566,17 @@ REWRITE_OPENERS = ("rewrite", "reword", "proofread", "shorten this",
                    "fix the grammar", "fix my grammar", "fix the spelling",
                    "fix this sentence", "make this", "tighten this",
                    "polish this", "edit this")
+
+
+# Statement-shaped questions: "i have a 500mah battery, how do i charge"
+# carries no "?" and doesn't START with a question word, but the question
+# is right there mid-sentence. QUESTION_STARTERS misses these.
+EMBEDDED_QUESTION = re.compile(
+    r"\b(how (do|can|should|long|often|much) i\b|how to\b|"
+    r"what should i\b|what('s| is)? the best\b|should i\b|"
+    r"do i need\b|can i\b|why (does|is|do|won'?t|wont|am i)\b|"
+    r"is it (ok|okay|safe|normal|worth|bad)\b|"
+    r"which \w+ (should|do) i\b)")
 
 
 def local_ai_lane(raw: str, rec: dict):
@@ -5528,7 +5601,8 @@ def local_ai_lane(raw: str, rec: dict):
     # Knowledge-pack questions (e.g. FPV) answer locally even when words
     # like "fix" or "motor" trip execution signals — it's a hobby
     # question, not an IT task.
-    question_shaped = lw.endswith("?") or lw.startswith(QUESTION_STARTERS)
+    question_shaped = (lw.endswith("?") or lw.startswith(QUESTION_STARTERS)
+                       or bool(EMBEDDED_QUESTION.search(lw)))
     if (question_shaped or len(lw.split()) <= 14) and knowledge_pack_for(lw):
         return "knowledge"
     # And for email drafting: "write an email asking the landlord to fix
@@ -6963,12 +7037,13 @@ class ChatWindow:
         # finds nothing relevant, degrade to the plain answer lane.
         source_note = ""
         if lane == "knowledge":
-            pack = knowledge_pack_for(raw)
-            system = knowledge_system_prompt(pack, raw) if pack else None
+            packs = knowledge_packs_for(raw)
+            system = knowledge_system_prompt(packs, raw) if packs else None
             if system:
-                source_note = f" · sources: {pack['name']}"
+                names = ", ".join(p["name"] for p in packs)
+                source_note = f" · sources: {names}"
             else:
-                system = LOCAL_AI_LANES["answer"]
+                system = LOCAL_AI_LANES["hobby"]
         else:
             system = LOCAL_AI_LANES[lane]
         self._ai_busy = True
