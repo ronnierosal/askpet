@@ -20,6 +20,7 @@ import re
 import shutil
 import sys
 import threading
+import time
 import tkinter as tk
 import urllib.error
 import urllib.parse
@@ -31,7 +32,7 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 APP_NAME = "AskPet"
-APP_VERSION = "0.22.0"
+APP_VERSION = "0.23.0"
 CONTENT_VERSION = "2026.06.17"
 
 # ---------------------------------------------------------------------------
@@ -5731,6 +5732,367 @@ def deckside_ask(question: str, timeout: int = 20):
     return answer, None
 
 
+# --- DeckSide roster: swimmer-name autocomplete --------------------------------
+# The chat box can complete real swimmer names from a running DeckSide via the
+# read-only get_roster tool. The name-matching below is a faithful port of
+# DeckSide's own app/swimmer-name-suggest.js so AskPet's typeahead behaves
+# identically to DeckSide's in-app one (trailing-fragment extraction, typo-
+# tolerant prefix ranking, candidate-aware accept span).
+
+_ROSTER_CACHE = {"names": [], "fetched": 0.0, "ver": None}
+_ROSTER_LOCK = threading.Lock()  # serializes cache reads/writes across primes
+_ROSTER_TTL = 300.0  # seconds; also re-fetched when DeckSide's version changes
+
+
+def deckside_roster(timeout: int = 4, force: bool = False) -> list:
+    """Flat, sorted, de-duplicated list of roster display names ("First Last")
+    from a running DeckSide, cached. Returns [] (never raises) when DeckSide is
+    offline or has no roster. NOT for the keystroke path — it makes HTTP calls;
+    call it on a worker thread and read the cache on the hot path."""
+    ver = deckside_health(timeout=2)  # reachability gate + cache key
+    if ver is None:
+        return []
+    now = time.monotonic()
+    with _ROSTER_LOCK:
+        if (_ROSTER_CACHE["names"] and not force
+                and _ROSTER_CACHE["ver"] == ver
+                and now - _ROSTER_CACHE["fetched"] < _ROSTER_TTL):
+            return _ROSTER_CACHE["names"]
+    # The HTTP fetch runs OUTSIDE the lock (never hold a lock across I/O);
+    # concurrent primes just both fetch and the cache write is serialized.
+    body = json.dumps({"name": "get_roster", "arguments": {}}).encode("utf-8")
+    req = urllib.request.Request(deckside_base() + "/agent/tools/call",
+                                 data=body,
+                                 headers={"content-type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            data = json.loads(resp.read())
+    except (urllib.error.URLError, OSError, ValueError):
+        with _ROSTER_LOCK:
+            return _ROSTER_CACHE["names"]  # keep last-good on a transient failure
+    roster = (((data or {}).get("data") or {}).get("roster")) or []
+    names = sorted({roster_flip_name(r.get("fullName") or "")
+                    for r in roster if isinstance(r, dict) and r.get("fullName")})
+    with _ROSTER_LOCK:
+        _ROSTER_CACHE.update(names=names, fetched=now, ver=ver)
+    return names
+
+
+def roster_flip_name(raw: str) -> str:
+    """"Smith, Jane" -> "Jane Smith"; pass through names without a comma."""
+    s = (raw or "").strip()
+    i = s.find(",")
+    return f"{s[i + 1:].strip()} {s[:i].strip()}" if i > 0 else s
+
+
+def _roster_norm(v: str) -> str:
+    v = re.sub(r"[^a-z0-9\s]", " ", (v or "").lower())
+    return re.sub(r"\s+", " ", v).strip()
+
+
+_ROSTER_TRAILING = re.compile(r"([A-Za-z][A-Za-z.'-]*(?:\s+[A-Za-z][A-Za-z.'-]*)?)$")
+
+
+def roster_fragment(before: str) -> str:
+    """The trailing 1-2 word name fragment being typed before the caret, or
+    "" when there are fewer than 2 alpha chars to work with."""
+    m = _ROSTER_TRAILING.search(before or "")
+    if not m:
+        return ""
+    frag = m.group(1)
+    if len(re.sub(r"[^A-Za-z]", "", frag)) < 2:
+        return ""
+    return frag
+
+
+def _roster_edit_distance(a: str, b: str) -> int:
+    """Optimal-string-alignment (Damerau-Levenshtein) distance: an adjacent
+    transposition ("etahn"->"ethan") counts as a single edit."""
+    al, bl = len(a), len(b)
+    if not al:
+        return bl
+    if not bl:
+        return al
+    d = [[0] * (bl + 1) for _ in range(al + 1)]
+    for i in range(al + 1):
+        d[i][0] = i
+    for j in range(bl + 1):
+        d[0][j] = j
+    for i in range(1, al + 1):
+        for j in range(1, bl + 1):
+            cost = 0 if a[i - 1] == b[j - 1] else 1
+            d[i][j] = min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost)
+            if i > 1 and j > 1 and a[i - 1] == b[j - 2] and a[i - 2] == b[j - 1]:
+                d[i][j] = min(d[i][j], d[i - 2][j - 2] + 1)
+    return d[al][bl]
+
+
+def _roster_fuzzy_prefix(q: str, token: str) -> float:
+    """Score typed `q` as a (possibly mistyped) prefix of `token`: 1.0 exact,
+    0.4-0.9 within an edit or two, 0 otherwise. < 2 chars never fuzzy-matches."""
+    if not q or not token:
+        return 0.0
+    if token.startswith(q):
+        return 1.0
+    if len(q) < 2:
+        return 0.0
+    prefix = token[:len(q)]
+    if len(prefix) < len(q):
+        return 0.0
+    dist = _roster_edit_distance(q, prefix)
+    max_edits = 1 if len(q) <= 4 else 2
+    if dist > max_edits:
+        return 0.0
+    return 1 - (dist / len(q)) * 0.6
+
+
+def roster_rank(names: list, query_text: str, limit: int = 8) -> list:
+    """Rank display names against the typed fragment, typo-tolerant. Mirrors
+    DeckSide's rankSwimmers: first-name match (x3) or any-token (x2), with a
+    two-word phrase ("ethan ro") demanding both parts line up."""
+    q = _roster_norm(query_text)
+    if len(re.sub(r"[^a-z0-9]", "", q)) < 2:
+        return []
+    qwords = [w for w in q.split(" ") if w]
+    qlast = qwords[-1]
+    w0 = qwords[0]
+    multi = len(qwords) > 1
+    scored = []
+    for display in (names or []):
+        key = _roster_norm(display)
+        tokens = [t for t in key.split(" ") if t]
+        if not tokens:
+            continue
+        score = 0.0
+        if len(qlast) >= 2:
+            score = max(score, _roster_fuzzy_prefix(qlast, tokens[0]) * 3)
+            for t in tokens[1:]:
+                score = max(score, _roster_fuzzy_prefix(qlast, t) * 2)
+            if score == 0 and len(qlast) >= 4 and qlast in key:
+                score = 0.5
+        if multi:
+            s0 = _roster_fuzzy_prefix(w0, tokens[0])
+            if s0 > 0:
+                if len(qlast) >= 2:
+                    sl = 0.0
+                    for t in tokens[1:]:
+                        sl = max(sl, _roster_fuzzy_prefix(qlast, t))
+                    if sl > 0:
+                        score = max(score, 4 * ((s0 + sl) / 2))
+                elif any(t.startswith(qlast) for t in tokens[1:]):
+                    score = max(score, 4)
+            if key.startswith(q):
+                score = max(score, 4)
+        if score > 0:
+            scored.append((score, display))
+    scored.sort(key=lambda t: (-t[0], t[1]))
+    return [d for _, d in scored[:max(1, limit)]]
+
+
+def roster_replace_len(before: str, display: str) -> int:
+    """How many chars before the caret to replace when accepting `display`:
+    the trailing two words when they prefix the name, else the last word — so
+    a leading command word ("scratch eth") is never swallowed."""
+    cand = _roster_norm(display)
+    two = re.search(r"([A-Za-z][A-Za-z.'-]*)\s+([A-Za-z][A-Za-z.'-]*)$", before or "")
+    if two:
+        phrase = _roster_norm(f"{two.group(1)} {two.group(2)}")
+        if cand.startswith(phrase) or _roster_fuzzy_prefix(phrase, cand) > 0:
+            return len(two.group(0))
+    one = re.search(r"([A-Za-z][A-Za-z.'-]*)$", before or "")
+    if one:
+        return len(one.group(1))
+    return 0
+
+
+class RosterTypeahead:
+    """Swimmer-name autocomplete for the chat box, sourced live from a running
+    DeckSide (read-only get_roster). A borderless dropdown sits under the entry;
+    the entry keeps focus throughout, so the caret never moves to the list.
+    A complete no-op when DeckSide is closed or has no roster — it never blocks
+    typing (the keystroke path only ever reads an in-memory list; all HTTP
+    happens on a worker thread)."""
+
+    NAV_KEYS = ("Up", "Down", "Left", "Right", "Return", "Tab", "Escape",
+                "Shift_L", "Shift_R", "Control_L", "Control_R", "Alt_L", "Alt_R")
+    # Short so a DeckSide opened AFTER the chat (app launched first) shows up
+    # within a few keystrokes; the fetch is a quick call to a local server.
+    REPRIME_EVERY = 8.0
+
+    def __init__(self, chat):
+        self.chat = chat
+        self.entry = chat.entry
+        self._names = []
+        self._win = None
+        self._list = None
+        self._priming = False
+        self._last_prime = 0.0
+        self._hide_after = None
+        self._prime()  # warm the cache off-thread so the first keystroke is fast
+        # add="+" is MANDATORY: a bare bind would replace SpellSupport's
+        # KeyRelease handler and silently kill spell-check.
+        self.entry.bind("<KeyRelease>", self._on_key, add="+")
+        self.entry.bind("<FocusOut>", self._on_focus_out, add="+")
+        for seq in ("<Up>", "<Down>", "<Tab>", "<Escape>"):
+            self.entry.bind(seq, self._on_nav, add="+")
+        chat.win.bind("<Configure>", lambda e: self._hide(), add="+")
+
+    # ---- roster priming (always off the UI thread) ---------------------------
+    def _prime(self):
+        if self._priming:
+            return
+        self._priming = True
+        self._last_prime = time.monotonic()
+
+        def work():
+            try:
+                names = deckside_roster()
+            except Exception:
+                names = []
+            self._priming = False
+            if names:
+                self._names = names
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def _maybe_reprime(self):
+        if (not self._names and not self._priming
+                and time.monotonic() - self._last_prime > self.REPRIME_EVERY):
+            self._prime()
+
+    # ---- visibility ----------------------------------------------------------
+    def visible(self) -> bool:
+        return bool(self._win and self._win.winfo_exists()
+                    and self._win.winfo_ismapped())
+
+    def _build(self):
+        self._win = tk.Toplevel(self.entry)
+        self._win.wm_overrideredirect(True)
+        self._win.wm_attributes("-topmost", True)
+        self._win.withdraw()
+        self._list = tk.Listbox(self._win, height=6, font=("Segoe UI", 9),
+                                activestyle="none", selectmode="single",
+                                exportselection=False, bd=1,
+                                relief="solid", highlightthickness=0)
+        self._list.pack(fill="both", expand=True)
+        self._list.bind("<ButtonRelease-1>", self._on_click)
+
+    def _show(self, matches):
+        if self._win is None:
+            self._build()
+        self._list.delete(0, "end")
+        for m in matches:
+            self._list.insert("end", m)
+        self._list.selection_clear(0, "end")
+        self._list.selection_set(0)
+        self._list.activate(0)
+        self._list.config(height=min(len(matches), 8))
+        # The entry is already laid out (a keystroke only reaches a mapped
+        # widget), so its screen geometry is valid without an idle flush.
+        x = self.entry.winfo_rootx()
+        y = self.entry.winfo_rooty() + self.entry.winfo_height() + 1
+        self._win.wm_geometry(f"+{x}+{y}")
+        self._win.deiconify()
+        self._win.lift()
+
+    def _hide(self, *_):
+        self._hide_after = None
+        if self._win is not None and self._win.winfo_exists():
+            self._win.withdraw()
+        return None
+
+    # ---- input handling ------------------------------------------------------
+    def _on_key(self, event):
+        if event.keysym in self.NAV_KEYS:
+            return None
+        if self.chat._placeholder_on:  # don't match the fake "Message" text
+            return self._hide()
+        if not self._names:
+            self._maybe_reprime()
+            return self._hide()
+        before = self.entry.get("1.0", "insert")
+        frag = roster_fragment(before)
+        if not frag:
+            return self._hide()
+        matches = roster_rank(self._names, frag, 8)
+        if matches:
+            self._show(matches)
+        else:
+            self._hide()
+        return None
+
+    def _on_nav(self, event):
+        if not self.visible():
+            return None  # let Tab/Up/Down/Escape do their normal thing
+        if event.keysym == "Escape":
+            self._hide()
+            return "break"
+        if event.keysym == "Up":
+            self._move(-1)
+            return "break"
+        if event.keysym == "Down":
+            self._move(1)
+            return "break"
+        if event.keysym == "Tab":
+            # Only swallow Tab if we actually completed a name — otherwise let
+            # Tab do its normal thing instead of trapping focus.
+            return "break" if self._accept() else None
+        return None
+
+    def _move(self, delta):
+        size = self._list.size()
+        if not size:
+            return
+        cur = self._list.curselection()
+        i = (cur[0] if cur else 0) + delta
+        i = max(0, min(size - 1, i))
+        self._list.selection_clear(0, "end")
+        self._list.selection_set(i)
+        self._list.activate(i)
+        self._list.see(i)
+
+    def _on_click(self, event):
+        idx = self._list.nearest(event.y)
+        if idx >= 0:
+            self._list.selection_clear(0, "end")
+            self._list.selection_set(idx)
+            self._accept()
+        return "break"
+
+    def _on_focus_out(self, _event):
+        # A click on the list steals focus from the entry; defer the hide so
+        # the list's ButtonRelease (which accepts) runs first. Replace any
+        # prior pending hide so callbacks don't stack. (Tk auto-cancels the
+        # entry's after() callbacks when the window is destroyed.)
+        if self._hide_after:
+            try:
+                self.entry.after_cancel(self._hide_after)
+            except Exception:
+                pass
+        self._hide_after = self.entry.after(150, self._hide)
+        return None
+
+    def accept_if_visible(self) -> bool:
+        """Accept the highlighted name if the dropdown is up. Called by the
+        chat's Return handler so Enter completes instead of sending."""
+        return self._accept() if self.visible() else False
+
+    def _accept(self) -> bool:
+        sel = self._list.curselection() if self._list else ()
+        if not sel:
+            self._hide()
+            return False
+        display = self._list.get(sel[0])
+        before = self.entry.get("1.0", "insert")
+        n = roster_replace_len(before, display)
+        if n > 0:
+            self.entry.delete(f"insert - {n} chars", "insert")
+        self.entry.insert("insert", display + " ")
+        self._hide()
+        self.entry.focus_set()
+        return True
+
+
 def search_pets(query: str) -> list:
     """Server-side catalog search (matches name/creator/tags site-wide)."""
     q = urllib.parse.quote(query)
@@ -6811,6 +7173,10 @@ class ChatWindow:
         self.entry.bind("<Return>", self._on_return)
         self.entry.bind("<FocusIn>", self._clear_placeholder)
         self.entry.bind("<FocusOut>", self._set_placeholder)
+        # Swimmer-name autocomplete from a running DeckSide. Built AFTER
+        # SpellSupport (line above) so its add="+" KeyRelease stacks onto the
+        # spellchecker's instead of replacing it.
+        self.typeahead = RosterTypeahead(self)
 
         self._add("caption", datetime.now().strftime("Today %H:%M"))
         self._add("pet", CHAT_GREETING)
@@ -7075,6 +7441,10 @@ class ChatWindow:
     # ---- actions ----------------------------------------------------------
 
     def _on_return(self, event):
+        # If the name dropdown is up, Enter completes the highlighted name
+        # rather than sending the message.
+        if getattr(self, "typeahead", None) and self.typeahead.accept_if_visible():
+            return "break"
         if event.state & 0x0001:  # Shift+Return -> newline
             return None
         self.send()
