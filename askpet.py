@@ -32,7 +32,7 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 APP_NAME = "AskPet"
-APP_VERSION = "0.28.1"
+APP_VERSION = "0.29.0"
 CONTENT_VERSION = "2026.06.17"
 
 # ---------------------------------------------------------------------------
@@ -96,6 +96,7 @@ DATA_DIR = user_data_dir()
 KNOWLEDGE_DIR = DATA_DIR / "knowledge"
 SETTINGS_FILE = DATA_DIR / "settings.json"
 HISTORY_FILE = DATA_DIR / "prompt-history.json"
+CHAT_HISTORY_FILE = DATA_DIR / "chat-history.json"
 CUSTOM_DICT_FILE = DATA_DIR / "custom-dictionary.json"
 LEARNED_FILE = DATA_DIR / "learned-corrections.json"
 
@@ -4884,6 +4885,66 @@ def save_history_entry(raw: str, cleaned: str, rec: dict, prompt: str):
 
 
 # ---------------------------------------------------------------------------
+# Chat transcript history (separate from the saved-prompt history above).
+# The chat keeps a rolling transcript so each reopen shows everything up to
+# the last clear, then a "new chat" divider. Persisted on chat close, local
+# only. Interactive message kinds (chips/actions) are NOT stored — only the
+# conversation itself. Age-pruned like the prompt history; manually clearable.
+# ---------------------------------------------------------------------------
+
+CHAT_PERSIST_KINDS = ("user", "pet", "prompt")  # transcript content worth keeping
+CHAT_HISTORY_CAP = 200                           # max stored messages
+
+
+def chat_retention_hours(settings: dict = None) -> int:
+    s = settings if settings is not None else load_json(SETTINGS_FILE, {})
+    hours = s.get("chat_retention_hours", DEFAULT_RETENTION_HOURS)
+    valid = {h for _, h in HISTORY_RETENTION_CHOICES}
+    return hours if hours in valid else DEFAULT_RETENTION_HOURS
+
+
+def prune_chat_history(retention_hours: int = None) -> int:
+    """Drop chat messages older than the retention window; return kept count."""
+    hours = retention_hours or chat_retention_hours()
+    hist = load_json(CHAT_HISTORY_FILE, [])
+    cutoff = datetime.now() - timedelta(hours=hours)
+    kept = []
+    for e in hist:
+        try:
+            ts = datetime.fromisoformat(e.get("ts", ""))
+        except (TypeError, ValueError):
+            continue  # unreadable timestamp: treat as expired
+        if ts >= cutoff:
+            kept.append(e)
+    if len(kept) != len(hist):
+        save_json(CHAT_HISTORY_FILE, kept)
+    return len(kept)
+
+
+def load_chat_history() -> list:
+    """The saved transcript (after age-pruning) as a list of (kind, text)."""
+    prune_chat_history()
+    hist = load_json(CHAT_HISTORY_FILE, [])
+    return [(e.get("kind", "pet"), e.get("text", "")) for e in hist
+            if e.get("kind") in CHAT_PERSIST_KINDS and e.get("text")]
+
+
+def append_chat_messages(pairs: list):
+    """Append (kind, text) pairs to the saved chat history (capped)."""
+    if not pairs:
+        return
+    hist = load_json(CHAT_HISTORY_FILE, [])
+    ts = datetime.now().isoformat(timespec="seconds")
+    for kind, text in pairs:
+        hist.append({"ts": ts, "kind": kind, "text": text})
+    save_json(CHAT_HISTORY_FILE, hist[-CHAT_HISTORY_CAP:])
+
+
+def clear_chat_history():
+    save_json(CHAT_HISTORY_FILE, [])
+
+
+# ---------------------------------------------------------------------------
 # Tkinter UI
 # ---------------------------------------------------------------------------
 
@@ -6655,6 +6716,16 @@ class PetOverlay:
         hist_menu.add_command(label="🧹 Clear history now",
                               command=self.clear_history_now)
         menu.add_cascade(label="🕘 Prompt history", menu=hist_menu)
+        chat_menu = tk.Menu(menu, tearoff=0)
+        current_chat = chat_retention_hours(self.settings)
+        for label, hours in HISTORY_RETENTION_CHOICES:
+            check = " ✓" if hours == current_chat else ""
+            chat_menu.add_command(label=f"Keep {label}{check}",
+                                  command=lambda h=hours: self.set_chat_retention(h))
+        chat_menu.add_separator()
+        chat_menu.add_command(label="🧹 Clear chat history now",
+                              command=self.clear_chat_history_now)
+        menu.add_cascade(label="💬 Chat history", menu=chat_menu)
         ai_menu = tk.Menu(menu, tearoff=0)
         if self.local_models:
             check = " ✓" if self.local_ai_enabled else ""
@@ -6794,6 +6865,28 @@ class PetOverlay:
             messagebox.showinfo("Prompt history", "History cleared.",
                                 parent=self.root)
 
+    def set_chat_retention(self, hours: int):
+        self.settings["chat_retention_hours"] = hours
+        self._save_settings()
+        kept = prune_chat_history(hours)
+        label = next(l for l, h in HISTORY_RETENTION_CHOICES if h == hours)
+        messagebox.showinfo(
+            "Chat history",
+            f"Chat now kept for {label}. {kept} message"
+            f"{'' if kept == 1 else 's'} currently stored.",
+            parent=self.root)
+
+    def clear_chat_history_now(self):
+        if messagebox.askyesno(
+                "Clear chat history",
+                "Delete all saved chat history? This can't be undone.",
+                parent=self.root):
+            clear_chat_history()
+            if self.chat and self.chat.is_open():
+                self.chat.clear_view()  # reset the open window to a fresh chat
+            messagebox.showinfo("Chat history", "Chat history cleared.",
+                                parent=self.root)
+
     def set_scale(self, scale: int):
         """Resize the pet (1 = full sprite size, larger = smaller pet)."""
         self.scale = max(1, int(scale))
@@ -6878,8 +6971,8 @@ class PetOverlay:
         disk["pet_id"] = self.pet_id
         disk["pet_wander"] = self.wander
         for key in ("pet_x", "pet_y", "history_retention_hours",
-                    "local_ai_enabled", "local_ai_model",
-                    "local_ai_intro_shown", "chat_theme"):
+                    "chat_retention_hours", "local_ai_enabled",
+                    "local_ai_model", "local_ai_intro_shown", "chat_theme"):
             if key in self.settings:
                 disk[key] = self.settings[key]
         disk["app_version"] = APP_VERSION
@@ -7200,6 +7293,11 @@ CHAT_GREETING = (
     "command."
 )
 
+# Synthetic pet greeting shown when the pet is swapped while the chat is open.
+PETSWITCH_GREETING = "New look, same AskPet! What are we working on?"
+# Pet bubbles that are UI greetings, never persisted into the saved transcript.
+EPHEMERAL_PET_TEXTS = frozenset({CHAT_GREETING, PETSWITCH_GREETING})
+
 SKIP_WORDS = {"skip", "idk", "i dont know", "i don't know", "not sure",
               "dunno", "just generate", "just build it", "go ahead", "na", "n/a"}
 
@@ -7381,6 +7479,8 @@ class ChatWindow:
         self._placeholder_on = False
         self._bulk = False     # True during a full reflow: defer the gradient
         self._localai_note_shown = False  # one-time "no Ollama -> prompt" note
+        self._session_start = 0  # index in self.messages where THIS session's
+                                 # new messages begin (loaded history precedes it)
 
         win = tk.Toplevel(pet.root)
         self.win = win
@@ -7446,8 +7546,17 @@ class ChatWindow:
         # Slash-command palette ('/' at the start of a message).
         self.slash = SlashCommands(self)
 
-        self._add("caption", datetime.now().strftime("Today %H:%M"))
-        self._add("pet", CHAT_GREETING)
+        # Restore the saved transcript (read-only) above a "new chat" divider:
+        # each open is a fresh session that still shows everything up to the
+        # last clear. This session's new messages are appended on close.
+        for kind, text in load_chat_history():
+            self.messages.append(("histprompt" if kind == "prompt" else kind, text))
+        if self.messages:
+            self.messages.append(("caption", "─────────  new chat  ─────────"))
+        self.messages.append(("caption", datetime.now().strftime("Today %H:%M")))
+        self.messages.append(("pet", CHAT_GREETING))
+        self._session_start = len(self.messages)
+        self._render_all()
         self.entry.focus_set()
         # A destroyed window cancels its pending after() callbacks, so the
         # poll loop can't do this cleanup itself.
@@ -7506,6 +7615,7 @@ class ChatWindow:
     def _on_destroy(self, event):
         if event.widget is not self.win:
             return
+        self._persist_session()  # save this session's transcript before teardown
         # A destroyed window cancels its own pending after() callbacks, but
         # cancel ours explicitly to match _schedule_close_check and avoid a
         # stray _check_close on a dead widget.
@@ -7516,6 +7626,48 @@ class ChatWindow:
                 pass
         if self._ai_req:
             self._ai_req["cancel"].set()
+
+    def _persist_session(self):
+        """Append this session's NEW conversation (user/pet/prompt) to the saved
+        chat history. Skipped: loaded history + greeting/divider (they precede
+        _session_start), the interactive 'actions'/'chips' rows (kind filter),
+        the synthetic UI greetings, and a still-streaming answer (whose text is
+        only a partial buffer until the stream finishes)."""
+        try:
+            streaming = (self._ai_req.get("msg_index")
+                         if self._ai_busy and self._ai_req else None)
+            new = []
+            for i in range(self._session_start, len(self.messages)):
+                if i == streaming:
+                    continue  # don't save a truncated mid-stream answer
+                kind, text = self.messages[i]
+                if kind not in CHAT_PERSIST_KINDS or not text:
+                    continue
+                if kind == "pet" and text in EPHEMERAL_PET_TEXTS:
+                    continue  # a UI greeting, not real conversation
+                new.append((kind, text))
+            append_chat_messages(new)
+        except Exception:
+            pass  # never let a save failure block window teardown
+
+    def clear_view(self):
+        """Reset the open chat to a fresh session (the saved history file has
+        already been cleared by the caller)."""
+        self.last = None
+        self.pending = None
+        if self._ai_req:  # stop an in-flight stream so its poll can't redraw
+            self._ai_req["cancel"].set()
+        self._ai_req = None
+        self._ai_busy = False
+        for f in self._frames:
+            f.destroy()
+        self._frames = []
+        self.messages = [
+            ("caption", datetime.now().strftime("Today %H:%M")),
+            ("pet", CHAT_GREETING),
+        ]
+        self._session_start = len(self.messages)
+        self._render_all()
 
     # ---- header --------------------------------------------------------------
 
@@ -7630,7 +7782,7 @@ class ChatWindow:
         self._update_header()
         self._add("caption", f"{self.pet.pet_name()} joined the chat "
                              f"(art by {pet_credit(self.pet.pet_meta)})")
-        self._add("pet", "New look, same AskPet! What are we working on?")
+        self._add("pet", PETSWITCH_GREETING)
 
     def _on_wheel(self, event):
         if self.is_open():
@@ -7730,6 +7882,9 @@ class ChatWindow:
             self._draw_bubble(text, "left", self.t["PROMPT_BUBBLE"],
                               self.t["PROMPT_TEXT"], font=("Consolas", 8))
             self._draw_actions()
+        elif kind == "histprompt":  # a saved prompt from history: read-only,
+            self._draw_bubble(text, "left", self.t["PROMPT_BUBBLE"],  # no actions
+                              self.t["PROMPT_TEXT"], font=("Consolas", 8))
         elif kind == "actions":
             self._draw_actions(payload=text)
 

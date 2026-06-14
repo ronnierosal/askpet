@@ -10,6 +10,17 @@ _settings_backup = pm.SETTINGS_FILE.read_bytes() if pm.SETTINGS_FILE.exists() el
 atexit.register(lambda: pm.SETTINGS_FILE.write_bytes(_settings_backup)
                 if _settings_backup else None)
 
+# Same for the chat-history file: the chat persists its transcript on close, so
+# snapshot + clear it (deterministic, and the user's real chat isn't touched).
+_chat_backup = pm.CHAT_HISTORY_FILE.read_bytes() if pm.CHAT_HISTORY_FILE.exists() else None
+def _restore_chat():
+    if _chat_backup is not None:
+        pm.CHAT_HISTORY_FILE.write_bytes(_chat_backup)
+    elif pm.CHAT_HISTORY_FILE.exists():
+        pm.CHAT_HISTORY_FILE.unlink()
+atexit.register(_restore_chat)
+pm.clear_chat_history()
+
 root = tk.Tk()
 pet = pm.PetOverlay(root)
 # The chat default is now general chat (local AI). Disable local AI so the
@@ -205,6 +216,72 @@ chat._ai_busy = False
 print("click-outside-close ai-busy guard OK")
 
 chat.close()
+
+# --- chat history: persist on close, restore on open, clearable -------------
+pm.clear_chat_history()
+assert pm.load_chat_history() == []
+pm.append_chat_messages([("user", "hello there"),
+                         ("pet", "hi! how can i help?"),
+                         ("prompt", "# A previously built prompt")])
+assert pm.load_chat_history() == [("user", "hello there"),
+                                  ("pet", "hi! how can i help?"),
+                                  ("prompt", "# A previously built prompt")]
+# a fresh open shows the saved transcript above a "new chat" divider + greeting
+pet.toggle_chat()
+ch = pet.chat
+assert ("user", "hello there") in ch.messages
+assert ("histprompt", "# A previously built prompt") in ch.messages, \
+    "a saved prompt should load read-only as 'histprompt' (no action buttons)"
+assert any(k == "caption" and "new chat" in (t or "") for k, t in ch.messages)
+assert ch._session_start == len(ch.messages), "session starts after the greeting"
+# loaded history is NOT re-persisted; a new message IS, on close
+before = len(pm.load_chat_history())
+ch._add("user", "a brand new question")
+ch.close()
+after = pm.load_chat_history()
+assert len(after) == before + 1, (before, len(after))
+assert after[-1] == ("user", "a brand new question")
+# clear wipes it; clear_view resets an open window to a fresh chat
+pet.toggle_chat()
+ch = pet.chat
+pm.clear_chat_history()
+ch.clear_view()
+assert pm.load_chat_history() == []
+assert not any(t == "hello there" for _, t in ch.messages), "view not reset"
+assert ch.messages[-1] == ("pet", pm.CHAT_GREETING)
+ch.close()
+pm.clear_chat_history()
+print("chat history OK (persist on close, restore on open, clear)")
+
+# age-pruning drops messages older than the retention window
+pm.clear_chat_history()
+pm.save_json(pm.CHAT_HISTORY_FILE, [
+    {"ts": "2000-01-01T00:00:00", "kind": "user", "text": "ancient"},
+    {"ts": pm.datetime.now().isoformat(timespec="seconds"), "kind": "user", "text": "recent"},
+])
+assert pm.prune_chat_history(24) == 1
+assert pm.load_chat_history() == [("user", "recent")]
+print("chat history age-prune OK")
+
+# a still-streaming answer and the pet-switch greeting are NOT persisted
+pm.clear_chat_history()
+pet.toggle_chat()
+ch = pet.chat
+ch._add("user", "a real question")
+ch._add("pet", pm.PETSWITCH_GREETING)   # synthetic UI greeting
+ch._add("pet", "partial answ")           # pretend this is a live stream buffer
+ch._ai_busy = True
+ch._ai_req = {"msg_index": len(ch.messages) - 1}
+ch._persist_session()
+ch._ai_busy = False
+ch._ai_req = None
+saved = pm.load_chat_history()
+assert ("user", "a real question") in saved
+assert ("pet", pm.PETSWITCH_GREETING) not in saved, "pet-switch greeting persisted"
+assert ("pet", "partial answ") not in saved, "mid-stream partial persisted"
+ch.close()
+pm.clear_chat_history()
+print("chat history exclusions OK (mid-stream + pet-switch greeting)")
 
 root.destroy()
 print("PET SMOKE TEST PASSED")
