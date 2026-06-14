@@ -149,6 +149,29 @@ chat._cw = 600
 chat._render_all()
 assert len(chat.messages) == n_msgs, "re-flow lost messages"
 print(f"chat re-flow OK ({n_msgs} messages redrawn at new width)")
+
+# Theme switching: resolve, live apply, and persistence
+assert pm.resolve_chat_theme("light") is pm.CHAT_THEMES["light"]
+assert pm.resolve_chat_theme("dark") is pm.CHAT_THEMES["dark"]
+assert pm.resolve_chat_theme("auto") in (pm.CHAT_THEMES["light"], pm.CHAT_THEMES["dark"])
+assert pm._lerp_color("#101820", "#ffffff", 0.0) == "#101820"
+assert pm._lerp_color("#101820", "#ffffff", 1.0) == "#ffffff"
+n_msgs = len(chat.messages)
+pet.set_chat_theme("dark")
+assert chat.t is pm.CHAT_THEMES["dark"], "live theme apply did not swap palette"
+assert len(chat.messages) == n_msgs, "theme re-flow lost messages"
+assert pm.load_json(pm.SETTINGS_FILE, {}).get("chat_theme") == "dark"
+pet.set_chat_theme("light")
+assert chat.t is pm.CHAT_THEMES["light"]
+print("chat theme switch OK (resolve + live apply + persist)")
+
+# Click-outside-closes must NOT fire while the pet's right-click menu is up
+pet._menu_open = True
+chat._check_close()
+assert chat.is_open(), "chat auto-closed while the context menu was open"
+pet._menu_open = False
+print("click-outside-close menu guard OK")
+
 chat.close()
 
 root.destroy()

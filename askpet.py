@@ -32,7 +32,7 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 APP_NAME = "AskPet"
-APP_VERSION = "0.26.1"
+APP_VERSION = "0.27.0"
 CONTENT_VERSION = "2026.06.17"
 
 # ---------------------------------------------------------------------------
@@ -5896,6 +5896,11 @@ class CompletionMenu:
         self._list.selection_set(0)
         self._list.activate(0)
         self._list.config(height=min(len(items), 8))
+        # Width the box to its content so "/command   description" isn't
+        # cramped (the Listbox otherwise defaults to ~20 chars). Capped so a
+        # long description can't run off-screen; @-mention names stay compact.
+        longest = max((len(str(it)) for it in items), default=20)
+        self._list.config(width=min(72, longest + 2))
         # Open UPWARD by default: the chat input sits at the bottom of the
         # window, so a downward menu gets clipped off-screen. Needs the menu's
         # real height, so flush layout once (cheap; only when showing).
@@ -6386,6 +6391,7 @@ class PetOverlay:
         self.spell = SpellHelper()
         self.chat = None
         self.editor = None
+        self._menu_open = False
         self.settings = load_json(SETTINGS_FILE, {})
         prune_history(history_retention_hours(self.settings))
 
@@ -6615,6 +6621,14 @@ class PetOverlay:
             size_menu.add_command(label=label + check,
                                   command=lambda s=scale: self.set_scale(s))
         menu.add_cascade(label="📏 Pet size", menu=size_menu)
+        theme_menu = tk.Menu(menu, tearoff=0)
+        current_theme = self.settings.get("chat_theme", "auto")
+        for label, val in (("Auto (match Windows)", "auto"),
+                           ("Light", "light"), ("Dark", "dark")):
+            check = " ✓" if val == current_theme else ""
+            theme_menu.add_command(label=label + check,
+                                   command=lambda v=val: self.set_chat_theme(v))
+        menu.add_cascade(label="🎨 Chat theme", menu=theme_menu)
         hist_menu = tk.Menu(menu, tearoff=0)
         current = history_retention_hours(self.settings)
         for label, hours in HISTORY_RETENTION_CHOICES:
@@ -6658,6 +6672,10 @@ class PetOverlay:
         menu.add_command(label=f"🐾 {label}", command=self._toggle_wander)
         menu.add_separator()
         menu.add_command(label="❌ Exit AskPet", command=self.quit)
+        # Hold the chat open while this menu is up (it owns the theme toggle);
+        # the chat's click-outside-closes check skips while _menu_open is set.
+        self._menu_open = True
+        menu.bind("<Unmap>", lambda e: setattr(self, "_menu_open", False), add="+")
         menu.tk_popup(event.x_root, event.y_root)
 
     def pet_name(self) -> str:
@@ -6806,6 +6824,14 @@ class PetOverlay:
         self.chat = ChatWindow(self)
         self.set_anim("sit", ticks=40)
 
+    def set_chat_theme(self, value):
+        """Persist the chat theme ('auto'|'light'|'dark') and, if the chat is
+        open, restyle it live."""
+        self.settings["chat_theme"] = value
+        self._save_settings()
+        if self.chat and self.chat.is_open():
+            self.chat.apply_theme()
+
     def open_editor(self, prefill: str = ""):
         if self.editor and self.editor.root.winfo_exists():
             self.editor.root.deiconify()
@@ -6837,7 +6863,7 @@ class PetOverlay:
         disk["pet_wander"] = self.wander
         for key in ("pet_x", "pet_y", "history_retention_hours",
                     "local_ai_enabled", "local_ai_model",
-                    "local_ai_intro_shown"):
+                    "local_ai_intro_shown", "chat_theme"):
             if key in self.settings:
                 disk[key] = self.settings[key]
         disk["app_version"] = APP_VERSION
@@ -7163,6 +7189,70 @@ SKIP_WORDS = {"skip", "idk", "i dont know", "i don't know", "not sure",
               "dunno", "just generate", "just build it", "go ahead", "na", "n/a"}
 
 
+# Chat appearance. Two full palettes; the chat reads whichever the user's
+# "chat_theme" setting resolves to ("auto" follows the Windows app theme).
+# Every color the ChatWindow paints comes from here so a theme switch is a
+# single dict swap + re-flow — no scattered literals.
+CHAT_THEMES = {
+    "light": {
+        "WIN_BG": "#dde6f7", "GRAD_TOP": "#dfe8f8", "GRAD_BOTTOM": "#b7c8ec",
+        "HEADER_BG": "#d3ddf2", "HEADER_TEXT": "#1e2438", "DIVIDER": "#aebbd8",
+        "CAPTION": "#5b6478",
+        "PET_BUBBLE": "#ffffff", "PET_TEXT": "#1c2030",
+        "USER_BUBBLE": "#bcd6fb", "USER_TEXT": "#12305f",
+        "PROMPT_BUBBLE": "#eef2fb", "PROMPT_TEXT": "#262a3a",
+        "CHIP_BG": "#cdd9f0",
+        "ENTRY_BORDER": "#aebbd8", "ENTRY_BG": "#ffffff",
+        "ENTRY_TEXT": "#1c2030", "ENTRY_PLACEHOLDER": "#8089a0",
+        "SEND_BG": "#4f86ef", "SEND_ACTIVE": "#3b73db", "SEND_FG": "#ffffff",
+    },
+    "dark": {
+        "WIN_BG": "#1b1e27", "GRAD_TOP": "#262b3a", "GRAD_BOTTOM": "#13151d",
+        "HEADER_BG": "#20242f", "HEADER_TEXT": "#eceef5", "DIVIDER": "#363c4b",
+        "CAPTION": "#9aa1b2",
+        "PET_BUBBLE": "#2e3442", "PET_TEXT": "#e9ebf2",
+        "USER_BUBBLE": "#3a6fd0", "USER_TEXT": "#ffffff",
+        "PROMPT_BUBBLE": "#23262f", "PROMPT_TEXT": "#d6dae6",
+        "CHIP_BG": "#262b38",
+        "ENTRY_BORDER": "#3a4150", "ENTRY_BG": "#2a2f3b",
+        "ENTRY_TEXT": "#e9ebf2", "ENTRY_PLACEHOLDER": "#878fa3",
+        "SEND_BG": "#3a6fd0", "SEND_ACTIVE": "#2f5cb0", "SEND_FG": "#ffffff",
+    },
+}
+CHAT_WIN_ALPHA = 0.96  # soft whole-window translucency (Windows -alpha)
+
+
+def _os_prefers_dark() -> bool:
+    """True if Windows is set to a dark app theme. Best-effort; False elsewhere
+    or if the registry value is missing."""
+    if sys.platform != "win32":
+        return False
+    try:
+        import winreg
+        with winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER,
+            r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
+        ) as k:
+            return winreg.QueryValueEx(k, "AppsUseLightTheme")[0] == 0
+    except OSError:
+        return False
+
+
+def resolve_chat_theme(setting: str) -> dict:
+    """Map a chat_theme setting ('auto'|'light'|'dark') to a palette dict."""
+    name = setting if setting in CHAT_THEMES else ("dark" if _os_prefers_dark()
+                                                   else "light")
+    return CHAT_THEMES[name]
+
+
+def _lerp_color(c1: str, c2: str, t: float) -> str:
+    """Linearly blend two '#rrggbb' colors; t in [0,1]."""
+    a = [int(c1[i:i + 2], 16) for i in (1, 3, 5)]
+    b = [int(c2[i:i + 2], 16) for i in (1, 3, 5)]
+    r = [round(a[j] + (b[j] - a[j]) * t) for j in range(3)]
+    return f"#{r[0]:02x}{r[1]:02x}{r[2]:02x}"
+
+
 class ChatWindow:
     """iMessage-style chat window opened by clicking the pet.
 
@@ -7170,14 +7260,9 @@ class ChatWindow:
     resized, so bubbles always wrap to the current width.
     """
 
-    BG = "#ffffff"
-    HEADER_BG = "#f6f6f7"
-    USER_BUBBLE = "#0b93f6"
-    PET_BUBBLE = "#e9e9eb"
-    CAPTION = "#8e8e93"
-
     def __init__(self, pet: PetOverlay):
         self.pet = pet
+        self.t = resolve_chat_theme(pet.settings.get("chat_theme", "auto"))
         self.spell = pet.spell
         self.last = None       # (raw, cleaned, rec, prompt)
         self.pending = None    # active follow-up Q&A state
@@ -7194,38 +7279,50 @@ class ChatWindow:
         self.win = win
         win.title(f"{pet.pet_name()} — AskPet")
         win.wm_attributes("-topmost", True)
+        # Soft whole-window translucency for the "frosted" look. Harmless if
+        # the platform ignores -alpha.
+        try:
+            win.wm_attributes("-alpha", CHAT_WIN_ALPHA)
+        except tk.TclError:
+            pass
         win.minsize(340, 400)
         self._place_near_pet(440, 600)
-        win.configure(bg=self.BG)
+        win.configure(bg=self.t["WIN_BG"])
 
         self._build_header()
 
-        # Conversation canvas
-        log_frame = tk.Frame(win, bg=self.BG)
-        log_frame.pack(fill="both", expand=True)
-        self.canvas = tk.Canvas(log_frame, bg=self.BG, highlightthickness=0)
-        scroll = ttk.Scrollbar(log_frame, command=self.canvas.yview)
+        # Conversation canvas (a gradient is painted as its bottom layer).
+        self.log_frame = tk.Frame(win, bg=self.t["WIN_BG"])
+        self.log_frame.pack(fill="both", expand=True)
+        self.canvas = tk.Canvas(self.log_frame, bg=self.t["GRAD_TOP"],
+                                highlightthickness=0)
+        scroll = ttk.Scrollbar(self.log_frame, command=self.canvas.yview)
         self.canvas.configure(yscrollcommand=scroll.set)
         scroll.pack(side="right", fill="y")
         self.canvas.pack(fill="both", expand=True)
         self.canvas.bind("<MouseWheel>", self._on_wheel)
         self.canvas.bind("<Configure>", self._on_canvas_resize)
 
-        # Input row: entry with placeholder + round blue send button
-        input_frame = tk.Frame(win, bg=self.BG, padx=8, pady=8)
-        input_frame.pack(fill="x")
+        # Input row: entry with placeholder + round send button
+        self.input_frame = tk.Frame(win, bg=self.t["WIN_BG"], padx=8, pady=8)
+        self.input_frame.pack(fill="x")
         # Button first, from the right, so the entry can never squeeze it out
         # (a Text widget's default requested width is ~80 chars).
-        send_btn = tk.Button(input_frame, text="↑", command=self.send,
-                             bg=self.USER_BUBBLE, fg="white", relief="flat",
-                             font=("Segoe UI", 13, "bold"), width=3, cursor="hand2",
-                             activebackground="#0a84d0", activeforeground="white")
-        send_btn.pack(side="right", padx=(8, 0), fill="y")
-        entry_holder = tk.Frame(input_frame, bg="#d1d1d6", padx=1, pady=1)
-        entry_holder.pack(side="left", fill="both", expand=True)
-        self.entry = tk.Text(entry_holder, height=2, width=10, wrap="word",
+        self.send_btn = tk.Button(self.input_frame, text="↑", command=self.send,
+                                  bg=self.t["SEND_BG"], fg=self.t["SEND_FG"],
+                                  relief="flat", font=("Segoe UI", 13, "bold"),
+                                  width=3, cursor="hand2",
+                                  activebackground=self.t["SEND_ACTIVE"],
+                                  activeforeground=self.t["SEND_FG"])
+        self.send_btn.pack(side="right", padx=(8, 0), fill="y")
+        self.entry_holder = tk.Frame(self.input_frame, bg=self.t["ENTRY_BORDER"],
+                                     padx=1, pady=1)
+        self.entry_holder.pack(side="left", fill="both", expand=True)
+        self.entry = tk.Text(self.entry_holder, height=2, width=10, wrap="word",
                              relief="flat", font=("Segoe UI", 10), undo=True,
-                             padx=8, pady=6)
+                             padx=8, pady=6, bg=self.t["ENTRY_BG"],
+                             fg=self.t["ENTRY_TEXT"],
+                             insertbackground=self.t["ENTRY_TEXT"])
         self.entry.pack(fill="both", expand=True)
         SpellSupport(self.entry, self.spell)
         self.entry.bind("<Return>", self._on_return)
@@ -7244,7 +7341,41 @@ class ChatWindow:
         # A destroyed window cancels its pending after() callbacks, so the
         # poll loop can't do this cleanup itself.
         self._ai_req = None
+        self._close_job = None
         win.bind("<Destroy>", self._on_destroy)
+        # Click-outside-closes: when focus leaves the chat for something that
+        # isn't ours (another app, the desktop), auto-close. Deferred and
+        # checked via focus_get() so focus moving to our own entry, dropdowns,
+        # or the pet's right-click menu doesn't trip it. See _check_close.
+        win.bind("<FocusOut>", self._schedule_close_check)
+
+    def _schedule_close_check(self, *_):
+        if self._close_job:
+            try:
+                self.win.after_cancel(self._close_job)
+            except Exception:
+                pass
+        self._close_job = self.win.after(140, self._check_close)
+
+    def _check_close(self):
+        # Coalesced FocusOut handler. Use focus_displayof(), NOT focus_get():
+        # focus_get() returns Tk's app-internal focus, which on Windows
+        # persists even after another OS app becomes foreground (so it never
+        # reports None on click-away). focus_displayof() returns None only when
+        # no window of THIS app holds the display's input focus — i.e. another
+        # application or the desktop took over. Focus on our own entry,
+        # dropdowns, or the pet still returns a widget, so those don't close it.
+        self._close_job = None
+        if not self.is_open():
+            return
+        if getattr(self.pet, "_menu_open", False):
+            return  # the pet's right-click menu is up; keep the chat open
+        try:
+            foc = self.win.focus_displayof()
+        except (tk.TclError, KeyError):
+            return  # ambiguous focus window (e.g. our own popup) -> keep open
+        if foc is None:
+            self.close()
 
     def _on_destroy(self, event):
         if event.widget is self.win and self._ai_req:
@@ -7253,19 +7384,22 @@ class ChatWindow:
     # ---- header --------------------------------------------------------------
 
     def _build_header(self):
-        header = tk.Frame(self.win, bg=self.HEADER_BG)
-        header.pack(fill="x")
-        self.avatar_label = tk.Label(header, bg=self.HEADER_BG)
+        self.header = tk.Frame(self.win, bg=self.t["HEADER_BG"])
+        self.header.pack(fill="x")
+        self.avatar_label = tk.Label(self.header, bg=self.t["HEADER_BG"])
         self.avatar_label.pack(side="left", padx=(10, 8), pady=4)
-        box = tk.Frame(header, bg=self.HEADER_BG)
-        box.pack(side="left", pady=4)
-        self.header_name = tk.Label(box, bg=self.HEADER_BG, anchor="w",
+        self.header_box = tk.Frame(self.header, bg=self.t["HEADER_BG"])
+        self.header_box.pack(side="left", pady=4)
+        self.header_name = tk.Label(self.header_box, bg=self.t["HEADER_BG"],
+                                    fg=self.t["HEADER_TEXT"], anchor="w",
                                     font=("Segoe UI", 11, "bold"))
         self.header_name.pack(anchor="w")
-        self.header_sub = tk.Label(box, bg=self.HEADER_BG, fg=self.CAPTION,
-                                   anchor="w", font=("Segoe UI", 8))
+        self.header_sub = tk.Label(self.header_box, bg=self.t["HEADER_BG"],
+                                   fg=self.t["CAPTION"], anchor="w",
+                                   font=("Segoe UI", 8))
         self.header_sub.pack(anchor="w")
-        tk.Frame(self.win, bg="#d1d1d6", height=1).pack(fill="x")
+        self.divider = tk.Frame(self.win, bg=self.t["DIVIDER"], height=1)
+        self.divider.pack(fill="x")
         self._update_header()
 
     def _update_header(self):
@@ -7320,6 +7454,30 @@ class ChatWindow:
         if self.is_open():
             self.win.destroy()
 
+    def apply_theme(self):
+        """Re-resolve the chat theme and restyle the open window in place, then
+        re-flow so every bubble/caption repaints in the new palette."""
+        self.t = resolve_chat_theme(self.pet.settings.get("chat_theme", "auto"))
+        self.win.configure(bg=self.t["WIN_BG"])
+        self.header.configure(bg=self.t["HEADER_BG"])
+        self.avatar_label.configure(bg=self.t["HEADER_BG"])
+        self.header_box.configure(bg=self.t["HEADER_BG"])
+        self.header_name.configure(bg=self.t["HEADER_BG"], fg=self.t["HEADER_TEXT"])
+        self.header_sub.configure(bg=self.t["HEADER_BG"], fg=self.t["CAPTION"])
+        self.divider.configure(bg=self.t["DIVIDER"])
+        self.log_frame.configure(bg=self.t["WIN_BG"])
+        self.canvas.configure(bg=self.t["GRAD_TOP"])
+        self.input_frame.configure(bg=self.t["WIN_BG"])
+        self.entry_holder.configure(bg=self.t["ENTRY_BORDER"])
+        self.send_btn.configure(bg=self.t["SEND_BG"], fg=self.t["SEND_FG"],
+                                activebackground=self.t["SEND_ACTIVE"],
+                                activeforeground=self.t["SEND_FG"])
+        ph = self._placeholder_on
+        self.entry.configure(
+            bg=self.t["ENTRY_BG"], insertbackground=self.t["ENTRY_TEXT"],
+            fg=self.t["ENTRY_PLACEHOLDER"] if ph else self.t["ENTRY_TEXT"])
+        self._render_all()
+
     def on_pet_changed(self):
         self.win.title(f"{self.pet.pet_name()} — AskPet")
         self._update_header()
@@ -7344,7 +7502,7 @@ class ChatWindow:
     def _set_placeholder(self, *_):
         if not self.entry.get("1.0", "end-1c").strip():
             self._placeholder_on = True
-            self.entry.config(fg=self.CAPTION)
+            self.entry.config(fg=self.t["ENTRY_PLACEHOLDER"])
             self.entry.delete("1.0", "end")
             self.entry.insert("1.0", "Message  ·  / commands · @ swimmers")
 
@@ -7352,7 +7510,7 @@ class ChatWindow:
         if self._placeholder_on:
             self._placeholder_on = False
             self.entry.delete("1.0", "end")
-            self.entry.config(fg="#000000")
+            self.entry.config(fg=self.t["ENTRY_TEXT"])
 
     # ---- bubble drawing ---------------------------------------------------------
 
@@ -7361,9 +7519,28 @@ class ChatWindow:
                x2 - r, y2, x1 + r, y2, x1, y2, x1, y2 - r, x1, y1 + r, x1, y1]
         return self.canvas.create_polygon(pts, smooth=True, **kw)
 
+    def _paint_gradient(self):
+        """Vertical gradient as the canvas's bottom layer. tkinter has no
+        native gradient, so paint horizontal bands and lower them under the
+        bubbles. Covers the taller of the viewport or the content so neither a
+        short conversation nor a scrolled one reveals a bare strip."""
+        self.canvas.delete("grad")
+        h = max(self.canvas.winfo_height(), self._y, 1)
+        w = max(self._cw, 1)
+        top, bot = self.t["GRAD_TOP"], self.t["GRAD_BOTTOM"]
+        bands = 64
+        for i in range(bands):
+            y1 = h * i // bands
+            y2 = h * (i + 1) // bands
+            c = _lerp_color(top, bot, i / (bands - 1))
+            self.canvas.create_rectangle(0, y1, w, y2, fill=c, outline=c,
+                                         tags="grad")
+        self.canvas.tag_lower("grad")
+
     def _finish(self, bottom):
         self._y = bottom + 8
         self.canvas.configure(scrollregion=(0, 0, self._cw, self._y))
+        self._paint_gradient()
         self.canvas.yview_moveto(1.0)
 
     def _add(self, kind, text=None):
@@ -7388,25 +7565,27 @@ class ChatWindow:
         if kind == "caption":
             self._draw_caption(text)
         elif kind == "user":
-            self._draw_bubble(text, "right", self.USER_BUBBLE, "#ffffff")
+            self._draw_bubble(text, "right", self.t["USER_BUBBLE"],
+                              self.t["USER_TEXT"])
         elif kind == "pet":
-            self._draw_bubble(text, "left", self.PET_BUBBLE, "#000000")
+            self._draw_bubble(text, "left", self.t["PET_BUBBLE"],
+                              self.t["PET_TEXT"])
         elif kind == "chips":
             self._draw_chips(text)
         elif kind == "prompt":
-            self._draw_bubble(text, "left", "#f2f2f7", "#1c1c1e",
-                              font=("Consolas", 8))
+            self._draw_bubble(text, "left", self.t["PROMPT_BUBBLE"],
+                              self.t["PROMPT_TEXT"], font=("Consolas", 8))
             self._draw_actions()
         elif kind == "actions":
             self._draw_actions(payload=text)
 
     def _draw_chips(self, items):
         """Clickable module/skill chips, two per row; click shows the text."""
-        holder = tk.Frame(self.canvas, bg=self.BG)
+        holder = tk.Frame(self.canvas, bg=self.t["CHIP_BG"])
         row = None
         for i, it in enumerate(items):
             if i % 2 == 0:
-                row = tk.Frame(holder, bg=self.BG)
+                row = tk.Frame(holder, bg=self.t["CHIP_BG"])
                 row.pack(anchor="w")
             ttk.Button(row, text=it["label"],
                        command=lambda it=it: self._show_item(it)).pack(
@@ -7428,7 +7607,7 @@ class ChatWindow:
 
     def _draw_caption(self, text):
         item = self.canvas.create_text(self._cw // 2, self._y + 4, text=text,
-                                       fill=self.CAPTION, font=("Segoe UI", 8),
+                                       fill=self.t["CAPTION"], font=("Segoe UI", 8),
                                        anchor="n", width=max(120, self._cw - 60),
                                        justify="center")
         self._finish(self.canvas.bbox(item)[3])
@@ -7457,7 +7636,7 @@ class ChatWindow:
         # Without a payload the buttons act on self.last (the prompt flow);
         # with one (local-AI answers) they act on that answer forever, no
         # matter what gets generated later.
-        btns = tk.Frame(self.canvas, bg=self.BG)
+        btns = tk.Frame(self.canvas, bg=self.t["CHIP_BG"])
         if payload is None:
             actions = (("📋 Copy", self._copy_last), ("💾 Save", self._save_last),
                        ("🛠 Adjust in editor", self._open_in_editor))
@@ -7485,9 +7664,9 @@ class ChatWindow:
 
     def _draw_typing(self):
         self._round_rect(12, self._y, 64, self._y + 30, r=15,
-                         fill=self.PET_BUBBLE, outline=self.PET_BUBBLE)
+                         fill=self.t["PET_BUBBLE"], outline=self.t["PET_BUBBLE"])
         self.canvas.create_text(38, self._y + 15, text="• • •",
-                                fill=self.CAPTION, font=("Segoe UI", 9))
+                                fill=self.t["CAPTION"], font=("Segoe UI", 9))
         self._finish(self._y + 30)
 
     def _show_typing(self):
