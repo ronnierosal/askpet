@@ -165,6 +165,12 @@ pet.set_chat_theme("light")
 assert chat.t is pm.CHAT_THEMES["light"]
 print("chat theme switch OK (resolve + live apply + persist)")
 
+# Slim custom scrollbar replaced the ttk one and speaks the scrollbar protocol
+assert isinstance(chat._scroll, pm.SlimScrollbar), type(chat._scroll)
+chat._scroll.set(0.0, 0.5)   # partial view -> thumb drawn
+chat._scroll.set(0.0, 1.0)   # everything fits -> no thumb
+print("slim scrollbar OK")
+
 # Click-outside-closes must NOT fire while the pet's right-click menu is up
 pet._menu_open = True
 chat._check_close()

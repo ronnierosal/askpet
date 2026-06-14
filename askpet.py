@@ -32,7 +32,7 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 APP_NAME = "AskPet"
-APP_VERSION = "0.27.1"
+APP_VERSION = "0.27.2"
 CONTENT_VERSION = "2026.06.17"
 
 # ---------------------------------------------------------------------------
@@ -7202,6 +7202,7 @@ CHAT_THEMES = {
         "USER_BUBBLE": "#bcd6fb", "USER_TEXT": "#12305f",
         "PROMPT_BUBBLE": "#eef2fb", "PROMPT_TEXT": "#262a3a",
         "CHIP_BG": "#cdd9f0",
+        "SCROLL_TROUGH": "#cdd9f0", "SCROLL_THUMB": "#9aafd6",
         "ENTRY_BORDER": "#aebbd8", "ENTRY_BG": "#ffffff",
         "ENTRY_TEXT": "#1c2030", "ENTRY_PLACEHOLDER": "#8089a0",
         "SEND_BG": "#4f86ef", "SEND_ACTIVE": "#3b73db", "SEND_FG": "#ffffff",
@@ -7214,6 +7215,7 @@ CHAT_THEMES = {
         "USER_BUBBLE": "#3a6fd0", "USER_TEXT": "#ffffff",
         "PROMPT_BUBBLE": "#23262f", "PROMPT_TEXT": "#d6dae6",
         "CHIP_BG": "#262b38",
+        "SCROLL_TROUGH": "#1c2029", "SCROLL_THUMB": "#49526a",
         "ENTRY_BORDER": "#3a4150", "ENTRY_BG": "#2a2f3b",
         "ENTRY_TEXT": "#e9ebf2", "ENTRY_PLACEHOLDER": "#878fa3",
         "SEND_BG": "#3a6fd0", "SEND_ACTIVE": "#2f5cb0", "SEND_FG": "#ffffff",
@@ -7253,6 +7255,94 @@ def _lerp_color(c1: str, c2: str, t: float) -> str:
     return f"#{r[0]:02x}{r[1]:02x}{r[2]:02x}"
 
 
+def _set_titlebar_dark(win, dark: bool):
+    """Match the native Windows title bar to the chat theme via the DWM
+    immersive-dark-mode attribute (Win10 1809+). Best-effort: a no-op on
+    non-Windows or where the attribute isn't supported."""
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+        win.update_idletasks()
+        hwnd = ctypes.windll.user32.GetParent(win.winfo_id())
+        val = ctypes.c_int(1 if dark else 0)
+        # DWMWA_USE_IMMERSIVE_DARK_MODE is 20 on builds 19041+, 19 on 1809-1903.
+        for attr in (20, 19):
+            if ctypes.windll.dwmapi.DwmSetWindowAttribute(
+                    hwnd, attr, ctypes.byref(val), ctypes.sizeof(val)) == 0:
+                break
+    except Exception:
+        pass
+
+
+class SlimScrollbar(tk.Canvas):
+    """A thin, flat, theme-colored vertical scrollbar — a clean modern stand-in
+    for ttk.Scrollbar (no arrow buttons, no native chrome). It speaks the
+    scrollbar protocol: .set(first, last) is wired to a canvas' yscrollcommand,
+    and it drives the canvas via its yview command on drag. The capsule thumb
+    disappears when everything already fits."""
+
+    WIDTH = 9
+    MIN_THUMB = 28
+
+    def __init__(self, parent, yview, trough="#cccccc", thumb="#888888"):
+        super().__init__(parent, width=self.WIDTH, highlightthickness=0, bd=0,
+                         bg=trough, takefocus=0)
+        self._yview = yview          # the canvas' yview callable
+        self._first, self._last = 0.0, 1.0
+        self._thumb = thumb
+        self._drag_off = None        # pointer offset within the thumb while dragging
+        self.bind("<Button-1>", self._on_press)
+        self.bind("<B1-Motion>", self._on_drag)
+        self.bind("<ButtonRelease-1>", lambda e: setattr(self, "_drag_off", None))
+        self.bind("<Configure>", lambda e: self._redraw())
+
+    def set(self, first, last):      # yscrollcommand callback
+        self._first, self._last = float(first), float(last)
+        self._redraw()
+
+    def set_colors(self, trough, thumb):
+        self._thumb = thumb
+        self.configure(bg=trough)
+        self._redraw()
+
+    def _bounds(self):
+        h = max(1, self.winfo_height())
+        y1, y2 = self._first * h, self._last * h
+        if y2 - y1 < self.MIN_THUMB:     # keep it grabbable
+            y1 = min(y1, h - self.MIN_THUMB)
+            y2 = y1 + self.MIN_THUMB
+        return y1, y2
+
+    def _redraw(self):
+        self.delete("all")
+        if self.winfo_height() <= 1:
+            return
+        if self._first <= 0.0 and self._last >= 1.0:
+            return                       # everything fits -> no thumb
+        y1, y2 = self._bounds()
+        w = self.WIDTH
+        d = w - 4                        # capsule diameter (2px margin each side)
+        c = self._thumb
+        self.create_oval(2, y1, 2 + d, y1 + d, fill=c, outline=c)
+        self.create_oval(2, y2 - d, 2 + d, y2, fill=c, outline=c)
+        self.create_rectangle(2, y1 + d / 2, 2 + d, y2 - d / 2, fill=c, outline=c)
+
+    def _on_press(self, e):
+        y1, y2 = self._bounds()
+        self._drag_off = (e.y - y1) if y1 <= e.y <= y2 else (y2 - y1) / 2
+        self._scroll_to(e.y)
+
+    def _on_drag(self, e):
+        if self._drag_off is not None:
+            self._scroll_to(e.y)
+
+    def _scroll_to(self, y):
+        h = max(1, self.winfo_height())
+        top = y - (self._drag_off or 0)
+        self._yview("moveto", max(0.0, min(1.0, top / h)))
+
+
 class ChatWindow:
     """iMessage-style chat window opened by clicking the pet.
 
@@ -7278,6 +7368,7 @@ class ChatWindow:
 
         win = tk.Toplevel(pet.root)
         self.win = win
+        win.withdraw()  # stay hidden until the dark title bar is set (no flash)
         win.title(f"{pet.pet_name()} — AskPet")
         win.wm_attributes("-topmost", True)
         # Soft whole-window translucency for the "frosted" look. Harmless if
@@ -7297,9 +7388,12 @@ class ChatWindow:
         self.log_frame.pack(fill="both", expand=True)
         self.canvas = tk.Canvas(self.log_frame, bg=self.t["GRAD_TOP"],
                                 highlightthickness=0)
-        scroll = ttk.Scrollbar(self.log_frame, command=self.canvas.yview)
-        self.canvas.configure(yscrollcommand=scroll.set)
-        scroll.pack(side="right", fill="y")
+        # Slim, flat, theme-colored scrollbar (replaces the chunky ttk one).
+        self._scroll = SlimScrollbar(self.log_frame, self.canvas.yview,
+                                     trough=self.t["SCROLL_TROUGH"],
+                                     thumb=self.t["SCROLL_THUMB"])
+        self.canvas.configure(yscrollcommand=self._scroll.set)
+        self._scroll.pack(side="right", fill="y")
         self.canvas.pack(fill="both", expand=True)
         self.canvas.bind("<MouseWheel>", self._on_wheel)
         self.canvas.bind("<Configure>", self._on_canvas_resize)
@@ -7349,6 +7443,12 @@ class ChatWindow:
         # checked via focus_get() so focus moving to our own entry, dropdowns,
         # or the pet's right-click menu doesn't trip it. See _check_close.
         win.bind("<FocusOut>", self._schedule_close_check)
+
+        # Theme the native title bar to match, then reveal the window.
+        _set_titlebar_dark(win, self.t is CHAT_THEMES["dark"])
+        win.deiconify()
+        win.lift()
+        self.entry.focus_set()
 
     def _schedule_close_check(self, *_):
         if self._close_job:
@@ -7475,6 +7575,7 @@ class ChatWindow:
     def apply_theme(self):
         """Re-resolve the chat theme and restyle the open window in place, then
         re-flow so every bubble/caption repaints in the new palette."""
+        was_dark = self.t is CHAT_THEMES["dark"]
         self.t = resolve_chat_theme(self.pet.settings.get("chat_theme", "auto"))
         self.win.configure(bg=self.t["WIN_BG"])
         self.header.configure(bg=self.t["HEADER_BG"])
@@ -7494,6 +7595,16 @@ class ChatWindow:
         self.entry.configure(
             bg=self.t["ENTRY_BG"], insertbackground=self.t["ENTRY_TEXT"],
             fg=self.t["ENTRY_PLACEHOLDER"] if ph else self.t["ENTRY_TEXT"])
+        self._scroll.set_colors(self.t["SCROLL_TROUGH"], self.t["SCROLL_THUMB"])
+        now_dark = self.t is CHAT_THEMES["dark"]
+        _set_titlebar_dark(self.win, now_dark)
+        if now_dark != was_dark:
+            # The title bar repaints only on the next activation, so re-map the
+            # window to apply the new caption color immediately.
+            self.win.withdraw()
+            self.win.deiconify()
+            self.win.lift()
+            self.entry.focus_set()
         self._render_all()
 
     def on_pet_changed(self):
