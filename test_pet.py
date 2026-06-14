@@ -336,6 +336,22 @@ pm.clear_chat_history()
 print("chat history exclusions OK (mid-stream + pet-switch greeting)")
 
 # --- pet memory: long-term (remembers you) + short-term (conversation) ------
+# capture intent: explicit marker OR personal lead; reject casual/ambiguous
+assert pm.remember_fact("remember that my name is Mia") == "my name is Mia"
+assert pm.remember_fact("remember I have a cat") == "I have a cat"
+assert pm.remember_fact("don't forget my dog is named Rex") == "my dog is named Rex"
+assert pm.remember_fact("remember: we live in Ohio") == "we live in Ohio"
+assert pm.remember_fact("remember the good old days") is None   # casual, no intent
+assert pm.remember_fact("remember to call mom") is None         # a task
+assert pm.remember_fact("remember whatever you want") is None   # not personal/marked
+assert pm.remember_fact("what's your favorite food?") is None   # normal chat
+# the canned confirmations are ephemeral (won't persist or feed back as memory)
+assert pm.REMEMBER_ACK in pm.EPHEMERAL_PET_TEXTS
+assert pm.REMEMBER_DUP in pm.EPHEMERAL_PET_TEXTS
+# facts are normalized: internal newlines/whitespace collapsed
+pm.clear_pet_memory()
+pm.add_pet_memory("I like\n  swimming")
+assert pm.load_pet_memory() == ["I like swimming"]
 pm.clear_pet_memory()
 assert pm.add_pet_memory("my name is Mia") is True
 assert pm.add_pet_memory("My name is Mia.") is False        # dedup (case/punct)

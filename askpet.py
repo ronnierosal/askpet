@@ -32,7 +32,7 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 APP_NAME = "AskPet"
-APP_VERSION = "0.32.0"
+APP_VERSION = "0.32.1"
 CONTENT_VERSION = "2026.06.17"
 
 # ---------------------------------------------------------------------------
@@ -4954,15 +4954,17 @@ def clear_chat_history():
 # ---------------------------------------------------------------------------
 
 PET_MEMORY_CAP = 40
-# "remember (that|this|:) X" / "don't forget X" -> store X. NOT "remember to X"
-# (that's a reminder/task, not a fact about the user).
+# Capture a fact only when intent is clear: either an explicit marker
+# ("remember THAT/THIS/: X") or a personal lead ("remember I/my/we/our/me …").
+# This avoids hijacking casual chat like "remember the good old days". "to X"
+# is excluded from the marker branch (that's a task, not a fact).
+_REMEMBER_VERB = r"(?:remember|don'?t\s+forget|keep\s+in\s+mind)"
 _REMEMBER_RE = re.compile(
-    r"^\s*(?:hey[, ]+|ok[, ]+|please[, ]+)?"
-    r"(?:remember|don'?t\s+forget|keep\s+in\s+mind)"
-    r"(?:\s+that|\s+this|:)?\s+"
-    # not "remember TO …" (a task) nor "remember WHEN/WHAT/… ?" (a question)
-    r"(?!to\b|when\b|if\b|how\b|why\b|what\b|where\b|who\b|whether\b)(.+)",
-    re.I | re.S)
+    r"^\s*(?:hey[, ]+|ok[, ]+|please[, ]+)?" + _REMEMBER_VERB + r"(?:"
+    r"(?:\s+that|\s+this|:)\s+(?!to\b)(.+)"               # explicit marker
+    r"|"
+    r"\s+(?=(?:i|i'?m|my|mine|we|our|me)\b)(.+)"          # personal fact lead
+    r")", re.I | re.S)
 
 
 def load_pet_memory() -> list:
@@ -4973,8 +4975,10 @@ def load_pet_memory() -> list:
 
 
 def add_pet_memory(fact: str) -> bool:
-    """Store a fact (deduped, capped). Returns True if it was newly added."""
-    fact = (fact or "").strip().rstrip(".").strip()
+    """Store a fact (normalized, deduped, capped). Returns True if newly added."""
+    # Collapse internal whitespace/newlines (the capture is dot-all) and trim
+    # trailing punctuation so the persona stays single-line and dedup is stable.
+    fact = re.sub(r"\s+", " ", (fact or "")).strip().rstrip(".!?,;:").strip()
     if not fact:
         return False
     facts = load_pet_memory()
@@ -4995,7 +4999,7 @@ def remember_fact(raw: str):
     m = _REMEMBER_RE.match(raw or "")
     if not m:
         return None
-    fact = m.group(1).strip().rstrip(".").strip()
+    fact = (m.group(1) or m.group(2) or "").strip().rstrip(".!?,;:").strip()
     return fact or None
 
 
@@ -7459,8 +7463,13 @@ CHAT_GREETING = (
 
 # Synthetic pet greeting shown when the pet is swapped while the chat is open.
 PETSWITCH_GREETING = "New look, same AskPet! What are we working on?"
-# Pet bubbles that are UI greetings, never persisted into the saved transcript.
-EPHEMERAL_PET_TEXTS = frozenset({CHAT_GREETING, PETSWITCH_GREETING})
+# Canned confirmations for the "remember that …" capture (memory feature).
+REMEMBER_ACK = "Got it — I'll remember that! ✨"
+REMEMBER_DUP = "I already remember that! ✨"
+# Pet bubbles that are transient UI, never persisted into the saved transcript
+# nor fed back as short-term memory (greetings + memory-capture confirmations).
+EPHEMERAL_PET_TEXTS = frozenset({CHAT_GREETING, PETSWITCH_GREETING,
+                                 REMEMBER_ACK, REMEMBER_DUP})
 
 SKIP_WORDS = {"skip", "idk", "i dont know", "i don't know", "not sure",
               "dunno", "just generate", "just build it", "go ahead", "na", "n/a"}
@@ -8203,8 +8212,7 @@ class ChatWindow:
         fact = remember_fact(raw)
         if fact is not None:
             added = add_pet_memory(fact)
-            self._add("pet", "Got it — I'll remember that! ✨" if added
-                      else "I already remember that! ✨")
+            self._add("pet", REMEMBER_ACK if added else REMEMBER_DUP)
             return
         cleaned = clean_text(raw, self.spell)
         rec = recommend(cleaned)
