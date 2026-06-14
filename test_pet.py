@@ -69,6 +69,31 @@ assert "family-friendly" in godz.lower(), "persona must stay kid-safe"
 assert pet.pet_name() in pm.persona_system_prompt(pet)
 print("pet persona OK (in-character, switches with the loaded pet)")
 
+# sprite flipping: the pet faces its direction of travel (move_dx)
+pet.sprites.frames["__fliptest"] = ["N"]
+pet.sprites.flipped["__fliptest"] = ["F"]
+pet.sprites.facing["__fliptest"] = 1          # native facing: right
+pet.anim = "__fliptest"
+pet.move_dx = 5;  assert pet._display_frames() == ["N"]   # moving right, native right
+pet.move_dx = -5; assert pet._display_frames() == ["F"]   # moving left  -> mirror
+pet.move_dx = 0;  assert pet._display_frames() == ["N"]   # stationary   -> no mirror
+pet.sprites.facing["__fliptest"] = -1         # native facing: left
+pet.move_dx = -5; assert pet._display_frames() == ["N"]
+pet.move_dx = 5;  assert pet._display_frames() == ["F"]
+del pet.sprites.frames["__fliptest"]
+pet.sprites.flipped.pop("__fliptest"); pet.sprites.facing.pop("__fliptest")
+pet.anim = "idle"; pet.move_dx = 0
+# every real animation has a mirrored set of equal length + a known facing
+assert pet.sprites.flipped, "no mirrored frame sets were built (PIL missing?)"
+for _n, _fr in pet.sprites.frames.items():
+    assert _n in pet.sprites.flipped and len(pet.sprites.flipped[_n]) == len(_fr), _n
+    assert pet.sprites.facing.get(_n) in (1, -1), _n
+# manifest "facing" override is honored (Godzilla Blue's walk_right art faces left)
+if pet.pet_id == "godzilla-blue":
+    assert pet.sprites.facing.get("walk_right") == -1
+    assert pet.sprites.facing.get("walk_left") == 1
+print("sprite flip OK (faces travel direction; mirrored sets built)")
+
 # Open chat and run a full send cycle
 pet.toggle_chat()
 assert pet.chat.is_open()

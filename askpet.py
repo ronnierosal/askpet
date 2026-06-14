@@ -32,7 +32,7 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 APP_NAME = "AskPet"
-APP_VERSION = "0.30.0"
+APP_VERSION = "0.31.0"
 CONTENT_VERSION = "2026.06.17"
 
 # ---------------------------------------------------------------------------
@@ -6443,6 +6443,8 @@ class SpriteLibrary:
     def __init__(self, pet_dir: Path, scale: int = 1):
         self.ok = False
         self.frames = {}
+        self.flipped = {}   # horizontally-mirrored variants (face the other way)
+        self.facing = {}    # native facing per animation: +1 right, -1 left
         self.key = KEY_COLOR
         self.w, self.h = 96, 104
         manifest = load_json(pet_dir / "manifest.json", None)
@@ -6455,9 +6457,24 @@ class SpriteLibrary:
             return
         cw, ch = manifest["cell_w"], manifest["cell_h"]
         self.key = manifest.get("key_color", self.key)
+        # PIL copy of the sheet for building mirrored frames — Tk's `photo copy`
+        # can't flip horizontally. Optional: if PIL is unavailable we just skip
+        # the flipped sets and fall back to the un-mirrored frames.
+        try:
+            from PIL import Image
+            pil_sheet = Image.open(sheet_path).convert("RGB")
+        except Exception:
+            pil_sheet = None
         for name, anim in manifest["animations"].items():
             row, count = anim["row"], anim["frames"]
-            frames = []
+            # Native facing of the AUTHORED art. Convention: pet sheets are
+            # drawn facing RIGHT and the app mirrors them for leftward travel
+            # (verified true for the bundled pets — even their walk_left rows
+            # face right). A pet whose art faces left declares "facing":"left"
+            # per animation in its manifest.
+            face = str(anim.get("facing", "right")).lower()
+            self.facing[name] = -1 if face.startswith("l") else 1
+            frames, flips = [], []
             for col in range(count):
                 img = tk.PhotoImage()
                 img.tk.call(img, "copy", sheet, "-from",
@@ -6466,10 +6483,30 @@ class SpriteLibrary:
                 if scale > 1:
                     img = img.subsample(scale, scale)
                 frames.append(img)
+                if pil_sheet is not None:
+                    flips.append(self._mirror_cell(pil_sheet, row, col, cw, ch, scale))
             if frames:
                 self.frames[name] = frames
+                if flips and all(flips):
+                    self.flipped[name] = flips
         self.w, self.h = cw // scale, ch // scale
         self.ok = bool(self.frames)
+
+    @staticmethod
+    def _mirror_cell(pil_sheet, row, col, cw, ch, scale):
+        """A horizontally-mirrored Tk image for one cell (Tk's photo copy can't
+        mirror, so go through PIL). Returns None on any failure."""
+        try:
+            from PIL import Image
+            cell = pil_sheet.crop((col * cw, row * ch, (col + 1) * cw,
+                                   (row + 1) * ch)).transpose(Image.FLIP_LEFT_RIGHT)
+            if scale > 1:
+                cell = cell.resize((cw // scale, ch // scale), Image.NEAREST)
+            buf = io.BytesIO()
+            cell.save(buf, format="PNG")
+            return tk.PhotoImage(data=base64.b64encode(buf.getvalue()).decode("ascii"))
+        except Exception:
+            return None
 
 
 class PetOverlay:
@@ -6572,6 +6609,16 @@ class PetOverlay:
             return [None]
         return self.sprites.frames.get(self.anim) or next(iter(self.sprites.frames.values()))
 
+    def _display_frames(self):
+        """Frames for the current animation, mirrored when needed so the pet
+        faces its direction of travel (move_dx). Falls back to the un-mirrored
+        frames when stationary or when no flipped set exists."""
+        normal = self.anim_frames()
+        d = 1 if self.move_dx > 0 else -1 if self.move_dx < 0 else 0
+        if d == 0 or self.sprites.facing.get(self.anim, 1) == d:
+            return normal
+        return self.sprites.flipped.get(self.anim) or normal
+
     def set_anim(self, name, move_dx=0, ticks=None):
         if self.sprites.ok and name not in self.sprites.frames:
             name = "idle"
@@ -6582,7 +6629,7 @@ class PetOverlay:
 
     def _tick(self):
         self._tick_n = getattr(self, "_tick_n", 0) + 1
-        frames = self.anim_frames()
+        frames = self._display_frames()
         if self.sprites.ok:
             frame = frames[self.frame_i % len(frames)]
             self.canvas.itemconfigure(self.sprite_item, image=frame)
