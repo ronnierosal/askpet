@@ -71,3 +71,25 @@ print("PROMPT LENGTH:", len(prompt))
 print("suggestions for tempalte:", spell.suggestions("tempalte"))
 print("suggestions for deplyoment:", spell.suggestions("deplyoment"))
 print("known(jira):", spell.known("jira"), "known(xyzzyq):", spell.known("xyzzyq"))
+
+# --- robustness: stale module/skill keys must not crash rendering -------------
+# A rec that names a module/skill no longer in the library (renamed/removed, or
+# replayed from older history) should degrade gracefully, not raise KeyError.
+cleaned = pm.clean_text("intune compliance policy for new laptops", spell)
+rec = pm.recommend(cleaned)
+real_modules = [m for m in rec["modules"] if m in pm.AGENT_MODULES]
+real_skills = [s for s in rec["skills"] if s in pm.SKILL_TEMPLATES]
+rec["modules"] = rec["modules"] + ["no_such_module_xyzzy"]
+rec["skills"] = rec["skills"] + ["no_such_skill_xyzzy"]
+
+prompt = pm.build_prompt(cleaned, rec, rec["modules"], rec["skills"], [])
+assert "no_such_module_xyzzy" not in prompt and "no_such_skill_xyzzy" not in prompt
+for k in real_modules:
+    assert pm.AGENT_MODULES[k]["name"] in prompt, k
+
+mcp = pm._mcp_recommendation(cleaned, rec, prompt)
+assert "no_such_module_xyzzy" not in mcp["modules"]
+assert "no_such_skill_xyzzy" not in mcp["skills"]
+assert list(mcp["modules"]) == real_modules
+assert list(mcp["skills"]) == real_skills
+print("stale-key robustness OK (build_prompt + _mcp_recommendation filter unknown keys)")

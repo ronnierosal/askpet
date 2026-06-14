@@ -32,7 +32,7 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 APP_NAME = "AskPet"
-APP_VERSION = "0.26.0"
+APP_VERSION = "0.26.1"
 CONTENT_VERSION = "2026.06.17"
 
 # ---------------------------------------------------------------------------
@@ -4798,15 +4798,19 @@ def build_prompt(cleaned_task: str, rec: dict, selected_modules: list,
 
     parts = [f"# {template['name']}", "", body]
 
-    if selected_modules:
+    # Filter to keys that still exist so a renamed/removed library entry (or a
+    # rec replayed from history) degrades gracefully instead of raising KeyError.
+    modules = [mk for mk in selected_modules if mk in AGENT_MODULES]
+    if modules:
         parts.append("\n## Operating instructions")
-        for mk in selected_modules:
+        for mk in modules:
             m = AGENT_MODULES[mk]
             parts.append(f"\n### {m['name']}\n{m['body']}")
 
-    if selected_skills:
+    skills = [sk for sk in selected_skills if sk in SKILL_TEMPLATES]
+    if skills:
         parts.append("\n## Reusable workflow(s) to follow")
-        for sk in selected_skills:
+        for sk in skills:
             s = SKILL_TEMPLATES[sk]
             parts.append(f"\n### {s['name']}\n{s['body']}")
             for i, step in enumerate(s.get("steps", []), 1):
@@ -7882,9 +7886,9 @@ class ChatWindow:
             details += f"\n\nIt'll work even better if you paste in:\n{hints}"
         self._add("pet", details)
         chips = ([{"label": f"🧩 {AGENT_MODULES[m]['name']}", "kind": "module", "key": m}
-                  for m in rec["modules"]]
+                  for m in rec["modules"] if m in AGENT_MODULES]
                  + [{"label": f"🛠 {SKILL_TEMPLATES[s]['name']}", "kind": "skill", "key": s}
-                    for s in rec["skills"]])
+                    for s in rec["skills"] if s in SKILL_TEMPLATES])
         if chips:
             self._add("caption", "I baked these in — tap one to read what it adds:")
             self._add("chips", chips)
@@ -8036,8 +8040,8 @@ def _mcp_recommendation(cleaned: str, rec: dict, prompt: str) -> dict:
         "destination_reason": rec["reason"],
         "template": rec["template"],
         "template_name": PROMPT_TEMPLATES[rec["template"]]["name"],
-        "modules": {k: AGENT_MODULES[k]["name"] for k in rec["modules"]},
-        "skills": {k: SKILL_TEMPLATES[k]["name"] for k in rec["skills"]},
+        "modules": {k: AGENT_MODULES[k]["name"] for k in rec["modules"] if k in AGENT_MODULES},
+        "skills": {k: SKILL_TEMPLATES[k]["name"] for k in rec["skills"] if k in SKILL_TEMPLATES},
         "context_checklist": rec["checklist"][:5],
         "prompt": prompt,
     }
