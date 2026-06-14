@@ -52,6 +52,23 @@ assert _lane("rewrite this to be more professional: hey can u send the file") ==
 assert _lane("write an email to the vendor about the late shipment") == "email"
 print("general-chat routing OK (default=answer; specialized lanes still win)")
 
+# the general-chat persona is built from the LOADED pet and switches with it
+class _FakePet:
+    def __init__(self, name, desc):
+        self._name, self.pet_meta = name, {"description": desc}
+    def pet_name(self):
+        return self._name
+godz = pm.persona_system_prompt(_FakePet("Godzilla Blue", "A chibi Godzilla with a blue flame."))
+corgi = pm.persona_system_prompt(_FakePet("Biscuit", "A cheerful chibi corgi."))
+assert "Godzilla Blue" in godz and "blue flame" in godz
+assert "Biscuit" in corgi and "chibi corgi" in corgi
+assert godz != corgi, "persona should change with the pet"
+assert "you are an ai" in godz.lower(), "persona must keep the no-AI rule"
+assert "family-friendly" in godz.lower(), "persona must stay kid-safe"
+# the real loaded pet's name is in its persona
+assert pet.pet_name() in pm.persona_system_prompt(pet)
+print("pet persona OK (in-character, switches with the loaded pet)")
+
 # Open chat and run a full send cycle
 pet.toggle_chat()
 assert pet.chat.is_open()

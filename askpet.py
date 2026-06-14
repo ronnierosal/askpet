@@ -32,7 +32,7 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 APP_NAME = "AskPet"
-APP_VERSION = "0.29.0"
+APP_VERSION = "0.30.0"
 CONTENT_VERSION = "2026.06.17"
 
 # ---------------------------------------------------------------------------
@@ -5657,6 +5657,31 @@ EMBEDDED_QUESTION = re.compile(
     r"which \w+ (should|do) i\b)")
 
 
+def persona_system_prompt(pet) -> str:
+    """In-character system prompt for the general-chat ('answer') lane, built
+    from the CURRENTLY LOADED pet — so the personality changes with the pet
+    (Godzilla Blue answers as a friendly kaiju; a corgi answers as a corgi).
+    Silly/personal questions get fun in-character answers; real questions are
+    still answered helpfully, in the pet's voice. Kid-safe by construction."""
+    name = pet.pet_name()
+    meta = pet.pet_meta or {}
+    desc = (meta.get("description") or "").strip()
+    bio = f" Here's you in a nutshell: {desc}" if desc else ""
+    return (
+        f"You ARE {name}, a friendly desktop pet who lives on the user's "
+        f"computer and loves to chat — often with kids.{bio}\n"
+        f"Stay fully in character as {name}: speak in the first person with a "
+        f"warm, playful, gentle personality that fits your name and how you "
+        f"look. For silly or personal questions — favorite food, color, games, "
+        f"how your day is going — make up a fun, imaginative in-character "
+        f"answer; never say you don't have preferences. For real questions, "
+        f"still answer helpfully, just in your own voice. Keep replies short, "
+        f"cheerful, and family-friendly (G-rated) — never scary, mean, or "
+        f"violent, even if your character could be. Never say you are an AI, a "
+        f"model, or a program; you are {name}. No disclaimers, no preamble."
+    )
+
+
 def local_ai_lane(raw: str, rec: dict):
     """Which local-AI lane should answer this message. General chat ("answer")
     is the DEFAULT; specialized lanes (rewrite/summarize/review/email/knowledge)
@@ -8160,6 +8185,9 @@ class ChatWindow:
                 source_note = f" · sources: {names}"
             else:
                 system = LOCAL_AI_LANES["hobby"]
+        elif lane == "answer":
+            # General chat speaks AS the loaded pet, with personality.
+            system = persona_system_prompt(self.pet)
         else:
             system = LOCAL_AI_LANES[lane]
         self._ai_busy = True
