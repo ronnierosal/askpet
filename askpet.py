@@ -32,7 +32,7 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 APP_NAME = "AskPet"
-APP_VERSION = "0.28.0"
+APP_VERSION = "0.28.1"
 CONTENT_VERSION = "2026.06.17"
 
 # ---------------------------------------------------------------------------
@@ -7487,6 +7487,8 @@ class ChatWindow:
             return
         if getattr(self.pet, "_menu_open", False):
             return  # the pet's right-click menu is up; keep the chat open
+        if self._ai_busy:
+            return  # a local-AI answer is still streaming — don't drop it
         # Our completion dropdowns are separate overrideredirect Toplevels;
         # keep the chat open while one is showing so a click inside it can't be
         # read as a click away.

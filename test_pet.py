@@ -196,6 +196,14 @@ assert chat.is_open(), "chat auto-closed while the context menu was open"
 pet._menu_open = False
 print("click-outside-close menu guard OK")
 
+# ...and must NOT fire while a local-AI answer is still streaming (else a
+# focus blip during a 20s gemma generation would discard the in-progress reply)
+chat._ai_busy = True
+chat._check_close()
+assert chat.is_open(), "chat auto-closed mid local-AI answer"
+chat._ai_busy = False
+print("click-outside-close ai-busy guard OK")
+
 chat.close()
 
 root.destroy()
