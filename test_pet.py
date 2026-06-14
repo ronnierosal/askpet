@@ -21,6 +21,16 @@ def _restore_chat():
 atexit.register(_restore_chat)
 pm.clear_chat_history()
 
+# ...and the long-term pet-memory file (persona reads it; tests write it).
+_mem_backup = pm.PET_MEMORY_FILE.read_bytes() if pm.PET_MEMORY_FILE.exists() else None
+def _restore_mem():
+    if _mem_backup is not None:
+        pm.PET_MEMORY_FILE.write_bytes(_mem_backup)
+    elif pm.PET_MEMORY_FILE.exists():
+        pm.PET_MEMORY_FILE.unlink()
+atexit.register(_restore_mem)
+pm.clear_pet_memory()
+
 root = tk.Tk()
 pet = pm.PetOverlay(root)
 # The chat default is now general chat (local AI). Disable local AI so the
@@ -324,6 +334,37 @@ assert ("pet", "partial answ") not in saved, "mid-stream partial persisted"
 ch.close()
 pm.clear_chat_history()
 print("chat history exclusions OK (mid-stream + pet-switch greeting)")
+
+# --- pet memory: long-term (remembers you) + short-term (conversation) ------
+pm.clear_pet_memory()
+assert pm.add_pet_memory("my name is Mia") is True
+assert pm.add_pet_memory("My name is Mia.") is False        # dedup (case/punct)
+assert pm.add_pet_memory("I love dinosaurs") is True
+assert pm.load_pet_memory() == ["my name is Mia", "I love dinosaurs"]
+sysp = pm.persona_system_prompt(pet)
+assert "my name is Mia" in sysp and "I love dinosaurs" in sysp, "facts not in persona"
+pm.clear_pet_memory()
+assert pm.load_pet_memory() == []
+assert "I love dinosaurs" not in pm.persona_system_prompt(pet)
+# a "remember …" message is captured (stored + confirmed), not sent to the model
+pet.toggle_chat()
+ch = pet.chat
+ch.entry.insert("1.0", "remember that my favorite color is blue")
+ch.send()
+assert "my favorite color is blue" in pm.load_pet_memory()
+assert ch.last is None and ch.pending is None
+assert ch.messages[-1][0] == "pet" and "remember" in ch.messages[-1][1].lower()
+# short-term: recent turns map to roles; the current message is excluded
+ch._add("user", "what's 2+2?"); ch._add("pet", "Four!")
+ch._add("user", "and 3+3?")  # current (last) message
+hist = ch._recent_history()
+assert {"role": "user", "content": "what's 2+2?"} in hist
+assert {"role": "assistant", "content": "Four!"} in hist
+assert all(h["content"] != "and 3+3?" for h in hist), "current msg leaked into history"
+assert all(h["role"] in ("user", "assistant") for h in hist)
+ch.close()
+pm.clear_pet_memory()
+print("pet memory OK (remember/recall + conversation history)")
 
 root.destroy()
 print("PET SMOKE TEST PASSED")

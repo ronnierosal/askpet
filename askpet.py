@@ -32,7 +32,7 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 APP_NAME = "AskPet"
-APP_VERSION = "0.31.1"
+APP_VERSION = "0.32.0"
 CONTENT_VERSION = "2026.06.17"
 
 # ---------------------------------------------------------------------------
@@ -97,6 +97,7 @@ KNOWLEDGE_DIR = DATA_DIR / "knowledge"
 SETTINGS_FILE = DATA_DIR / "settings.json"
 HISTORY_FILE = DATA_DIR / "prompt-history.json"
 CHAT_HISTORY_FILE = DATA_DIR / "chat-history.json"
+PET_MEMORY_FILE = DATA_DIR / "pet-memory.json"
 CUSTOM_DICT_FILE = DATA_DIR / "custom-dictionary.json"
 LEARNED_FILE = DATA_DIR / "learned-corrections.json"
 
@@ -4945,6 +4946,60 @@ def clear_chat_history():
 
 
 # ---------------------------------------------------------------------------
+# Long-term pet memory: durable facts the pet "remembers" about the person it
+# chats with (names, favorites). Injected into the persona so it persists
+# across sessions and applies to whichever pet is loaded. Captured explicitly
+# ("remember that …") — auto-extraction is unreliable on a small local model.
+# Local-only, clearable. Separate from the chat transcript history.
+# ---------------------------------------------------------------------------
+
+PET_MEMORY_CAP = 40
+# "remember (that|this|:) X" / "don't forget X" -> store X. NOT "remember to X"
+# (that's a reminder/task, not a fact about the user).
+_REMEMBER_RE = re.compile(
+    r"^\s*(?:hey[, ]+|ok[, ]+|please[, ]+)?"
+    r"(?:remember|don'?t\s+forget|keep\s+in\s+mind)"
+    r"(?:\s+that|\s+this|:)?\s+"
+    # not "remember TO …" (a task) nor "remember WHEN/WHAT/… ?" (a question)
+    r"(?!to\b|when\b|if\b|how\b|why\b|what\b|where\b|who\b|whether\b)(.+)",
+    re.I | re.S)
+
+
+def load_pet_memory() -> list:
+    """The durable facts the pet remembers, as a list of strings."""
+    d = load_json(PET_MEMORY_FILE, {})
+    return [f.strip() for f in d.get("facts", [])
+            if isinstance(f, str) and f.strip()]
+
+
+def add_pet_memory(fact: str) -> bool:
+    """Store a fact (deduped, capped). Returns True if it was newly added."""
+    fact = (fact or "").strip().rstrip(".").strip()
+    if not fact:
+        return False
+    facts = load_pet_memory()
+    if any(fact.lower() == f.lower() for f in facts):
+        return False
+    facts.append(fact)
+    save_json(PET_MEMORY_FILE, {"facts": facts[-PET_MEMORY_CAP:]})
+    return True
+
+
+def clear_pet_memory():
+    save_json(PET_MEMORY_FILE, {"facts": []})
+
+
+def remember_fact(raw: str):
+    """The fact to store if `raw` is an explicit 'remember …' request, else
+    None (so normal chat isn't intercepted)."""
+    m = _REMEMBER_RE.match(raw or "")
+    if not m:
+        return None
+    fact = m.group(1).strip().rstrip(".").strip()
+    return fact or None
+
+
+# ---------------------------------------------------------------------------
 # Tkinter UI
 # ---------------------------------------------------------------------------
 
@@ -5370,18 +5425,26 @@ def pick_local_model(models: list, preferred: str = None) -> str:
 
 
 def ollama_chat_stream(model: str, system: str, user: str, on_chunk,
-                       timeout: int = 300, cancel: "threading.Event" = None) -> str:
+                       timeout: int = 300, cancel: "threading.Event" = None,
+                       history: list = None) -> str:
     """Stream a chat response; on_chunk(text) fires per token batch.
+
+    `history` (optional) is a list of prior {role, content} turns inserted
+    between the system prompt and the current user message — short-term
+    conversation memory for the general-chat lane.
 
     Generous timeout: the first call after idle loads the model into
     memory. keep_alive holds it warm for subsequent asks. Setting the
     cancel event aborts the read; leaving the with-block closes the
     connection, which makes Ollama stop generating server-side.
     """
+    messages = [{"role": "system", "content": system}]
+    if history:
+        messages.extend(history)
+    messages.append({"role": "user", "content": user})
     body = json.dumps({
         "model": model,
-        "messages": [{"role": "system", "content": system},
-                     {"role": "user", "content": user}],
+        "messages": messages,
         "stream": True,
         "keep_alive": "30m",
         # Low temperature: editing and factual lanes want faithful output,
@@ -5667,9 +5730,15 @@ def persona_system_prompt(pet) -> str:
     meta = pet.pet_meta or {}
     desc = (meta.get("description") or "").strip()
     bio = f" Here's you in a nutshell: {desc}" if desc else ""
+    # Long-term memory: facts the person asked you to remember, woven in so the
+    # pet recalls names/favorites across sessions.
+    mem = load_pet_memory()
+    memblock = ("\nThings you remember about the person you're chatting with "
+                "(use them naturally when they're relevant, don't just recite "
+                "them): " + "; ".join(mem) + ".") if mem else ""
     return (
         f"You ARE {name}, a friendly desktop pet who lives on the user's "
-        f"computer and loves to chat — often with kids.{bio}\n"
+        f"computer and loves to chat — often with kids.{bio}{memblock}\n"
         f"Stay fully in character as {name}: speak in the first person with a "
         f"warm, playful, gentle personality that fits your name and how you "
         f"look. For silly or personal questions — favorite food, color, games, "
@@ -6797,6 +6866,20 @@ class PetOverlay:
         chat_menu.add_command(label="🧹 Clear chat history now",
                               command=self.clear_chat_history_now)
         menu.add_cascade(label="💬 Chat history", menu=chat_menu)
+        mem_menu = tk.Menu(menu, tearoff=0)
+        facts = load_pet_memory()
+        if facts:
+            for f in facts[-12:]:
+                mem_menu.add_command(label=(f[:48] + "…") if len(f) > 49 else f,
+                                     state="disabled")
+            mem_menu.add_separator()
+        else:
+            mem_menu.add_command(label="(nothing yet — say “remember that …”)",
+                                 state="disabled")
+            mem_menu.add_separator()
+        mem_menu.add_command(label="🧹 Forget everything",
+                             command=self.clear_pet_memory_now)
+        menu.add_cascade(label="🧠 What the pet remembers", menu=mem_menu)
         ai_menu = tk.Menu(menu, tearoff=0)
         if self.local_models:
             check = " ✓" if self.local_ai_enabled else ""
@@ -6956,6 +7039,16 @@ class PetOverlay:
             if self.chat and self.chat.is_open():
                 self.chat.clear_view()  # reset the open window to a fresh chat
             messagebox.showinfo("Chat history", "Chat history cleared.",
+                                parent=self.root)
+
+    def clear_pet_memory_now(self):
+        if messagebox.askyesno(
+                "Forget everything",
+                "Make the pet forget everything it remembers about you? "
+                "This can't be undone.",
+                parent=self.root):
+            clear_pet_memory()
+            messagebox.showinfo("Pet memory", "Done — a fresh start.",
                                 parent=self.root)
 
     def set_scale(self, scale: int):
@@ -8104,6 +8197,15 @@ class ChatWindow:
             self.win.after(random.randint(400, 800),
                            lambda: self._deliver_help(help_answer))
             return
+        # "Remember that …" — store a durable fact the pet recalls in future
+        # chats (injected into its persona). Captured explicitly; works even
+        # without local AI.
+        fact = remember_fact(raw)
+        if fact is not None:
+            added = add_pet_memory(fact)
+            self._add("pet", "Got it — I'll remember that! ✨" if added
+                      else "I already remember that! ✨")
+            return
         cleaned = clean_text(raw, self.spell)
         rec = recommend(cleaned)
         # A live DeckSide meet-day question is answered straight from the
@@ -8216,6 +8318,22 @@ class ChatWindow:
     AI_FIRST_CHUNK_TICKS = 1500
     AI_STALL_TICKS = 500
 
+    def _recent_history(self, max_msgs=8):
+        """Recent conversation turns as chat messages for short-term memory:
+        user -> user, pet replies -> assistant. Skips greetings and
+        non-conversational rows, and EXCLUDES the just-added current message
+        (it's passed separately as the prompt). Includes restored history, so
+        the pet remembers across reopens too."""
+        turns = []
+        for kind, text in self.messages[:-1]:
+            if not text:
+                continue
+            if kind == "user":
+                turns.append({"role": "user", "content": text})
+            elif kind == "pet" and text not in EPHEMERAL_PET_TEXTS:
+                turns.append({"role": "assistant", "content": text})
+        return turns[-max_msgs:]
+
     def _local_ai_request(self, lane, raw, cleaned, rec):
         model = self.pet.local_model()
         if not model:  # model list changed under us
@@ -8237,10 +8355,15 @@ class ChatWindow:
             system = persona_system_prompt(self.pet)
         else:
             system = LOCAL_AI_LANES[lane]
+        # Short-term memory: only general chat carries prior turns. Utility
+        # lanes (rewrite/summarize/review/email) and knowledge are one-shot —
+        # past chatter must not bleed into a transform or a grounded answer.
+        history = self._recent_history() if lane == "answer" else None
         self._ai_busy = True
         req = {
             "lane": lane, "raw": raw, "cleaned": cleaned, "rec": rec,
             "model": model, "system": system, "source_note": source_note,
+            "history": history,
             "events": [], "cancel": threading.Event(),
             "msg_index": None, "caption_index": None, "buffer": "",
             "idle_ticks": 0,
@@ -8265,7 +8388,7 @@ class ChatWindow:
                 text = ollama_chat_stream(
                     model, req["system"], raw,
                     on_chunk=lambda p: req["events"].append(("chunk", p)),
-                    cancel=req["cancel"])
+                    cancel=req["cancel"], history=req["history"])
                 req["events"].append(("done", text))
             except Exception as e:  # any failure falls back to prompt flow
                 req["events"].append(("error", str(e)))
