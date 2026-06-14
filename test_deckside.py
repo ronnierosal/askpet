@@ -106,37 +106,22 @@ assert pm.roster_flip_name("Smith, Jane") == "Jane Smith"
 assert pm.roster_flip_name("Cher") == "Cher"
 assert pm.roster_flip_name("") == ""
 
-# typing context: (current word being typed, completed word before it)
-assert pm.roster_typing_context("scratch ma") == ("ma", "scratch")
-assert pm.roster_typing_context("scratch Mabel fr") == ("fr", "Mabel")
-assert pm.roster_typing_context("Mabel") == ("Mabel", "")        # sentence start
-assert pm.roster_typing_context("replace Mabel with joa") == ("joa", "with")
-assert pm.roster_typing_context("the relay ") == ("", "relay")   # no word being typed
+# @-mention detection: the menu opens ONLY inside an "@..." token
+assert pm.mention_fragment("is @mab") == "mab"
+assert pm.mention_fragment("is @") == ""            # bare @ -> show roster start
+assert pm.mention_fragment("scratch @Mabel Aff ") is None   # space ended the token
+assert pm.mention_fragment("hello world") is None   # no @
+assert pm.mention_fragment("email@host.com") is None  # @ not space-preceded
+assert pm.mention_fragment("@gra") == "gra"         # @ at message start
 
 NAMES = ["Jane Smith", "Ethan Rosal", "Ethan Kang", "Cyla Doe"]
-# EXACT-prefix matching on the single current word (no fuzzy, no two-word).
+# EXACT-prefix matching on the @-fragment (no fuzzy).
 assert pm.roster_prefix_matches(NAMES, "smit")[0] == "Jane Smith"  # last-name prefix
 assert pm.roster_prefix_matches(NAMES, "jane")[0] == "Jane Smith"  # first-name prefix
 assert pm.roster_prefix_matches(NAMES, "smiht") == []             # NO fuzzy -> quiet
-assert pm.roster_prefix_matches(NAMES, "z") == []                 # < 2 chars
+assert pm.roster_prefix_matches(NAMES, "z") == []                 # < 2 chars (default)
+assert pm.roster_prefix_matches(NAMES, "e", min_len=1)            # 1 char ok for @
 assert set(pm.roster_prefix_matches(NAMES, "ethan")) == {"Ethan Rosal", "Ethan Kang"}
-
-# the "name slot" gate — the core of the over-triggering fix
-known = {"is", "the", "when", "free", "relay", "do", "from", "mara"}.__contains__
-slot = lambda cur, prev: pm.roster_in_name_slot(cur, prev, known)
-assert slot("eth", "scratch") is True       # after an action cue
-assert slot("mab", "is") is True            # after a state cue
-assert slot("joa", "with") is True          # after a connector cue
-assert slot("eth", "") is True              # sentence start
-assert slot("fr", "Mabel") is False         # word right AFTER a name -> no predict
-assert slot("relay", "the") is False        # prev is a cue but "relay" is a word
-assert slot("meet", "the") is False         # "the" isn't a cue, "meet"/prose
-assert slot("is", "scratch") is False       # current word is an ordinary word
-assert slot("a", "scratch") is False        # too short
-
-# accept replaces only the current word (accept inserts the full "First Last")
-assert pm.roster_replace_len("scratch eth") == 3        # just "eth"
-assert pm.roster_replace_len("replace Mabel with joa") == 3  # just "joa"
 print("roster matching OK")
 
 # --- deckside_roster fetch / cache / offline (mocked HTTP) --------------------

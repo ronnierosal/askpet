@@ -32,7 +32,7 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 APP_NAME = "AskPet"
-APP_VERSION = "0.24.1"
+APP_VERSION = "0.25.0"
 CONTENT_VERSION = "2026.06.17"
 
 # ---------------------------------------------------------------------------
@@ -5751,14 +5751,12 @@ def deckside_ask(question: str, timeout: int = 20):
     return answer, None
 
 
-# --- DeckSide roster: swimmer-name autocomplete --------------------------------
+# --- DeckSide roster: swimmer @-mentions ---------------------------------------
 # The chat box completes real swimmer names from a running DeckSide via the
-# read-only get_roster tool. Triggering is context-aware ("name slot"): a name
-# is only predicted when the word being typed follows a cue that introduces a
-# name ("scratch", "is", "with", "give me", ...) or starts the message — never
-# on the word right after an already-typed name, and never on ordinary words.
-# Matching is exact-prefix (no fuzzy) because the master roster is ~2000 names,
-# where a fuzzy near-miss would hit for almost any letter pair.
+# read-only get_roster tool. Mentions are EXPLICIT: the menu opens only when
+# the caret is in an "@..." token ("is @mab"), so it never fires on the wrong
+# word. Matching is exact-prefix (no fuzzy) because the master roster is ~2000
+# names, where a fuzzy near-miss would hit for almost any letter pair.
 
 _ROSTER_CACHE = {"names": [], "fetched": 0.0, "ver": None}
 _ROSTER_LOCK = threading.Lock()  # serializes cache reads/writes across primes
@@ -5811,95 +5809,30 @@ def _roster_norm(v: str) -> str:
     return re.sub(r"\s+", " ", v).strip()
 
 
-# Words that introduce a swimmer name in a coach's phrasing. A name is only
-# predicted when the word being typed follows one of these (or starts the
-# message) — the "name slot" idea. This is what stops the dropdown firing on
-# every word, and especially on the word right AFTER a completed name (whose
-# preceding word is the name itself, not a cue).
-ROSTER_NAME_CUES = frozenset("""
-    scratch scratches scratched add adds adding remove removes removing
-    replace replaces replacing sub subs substitute swap swaps swapping
-    move moves put puts enter drop pull bring give gives gimme show find
-    is are was were am be been who whos whose did does do has have had
-    can could will would should about for with and or to from vs versus
-    against between me us my our his her him their put
-""".split())
+# Swimmer mentions are EXPLICIT: the name menu opens only when the caret is in
+# an "@..." token (after a space or at the start of the message), e.g. "is
+# @mab". This replaced the old guess-when-you-mean-a-name heuristic — no more
+# predicting on the wrong word. "email@host" never triggers (its @ isn't
+# space-preceded).
+_MENTION_RE = re.compile(r"(?:^|\s)@([A-Za-z][A-Za-z.'-]*)?$")
 
 
-def roster_typing_context(before: str):
-    """(current_word, prev_word) at the caret: the word being typed and the
-    completed word just before it (each "" when absent)."""
-    s = before or ""
-    cur_m = re.search(r"[A-Za-z][A-Za-z.'-]*$", s)
-    cur = cur_m.group(0) if cur_m else ""
-    head = s[:cur_m.start()] if cur_m else s
-    prev_m = re.search(r"([A-Za-z][A-Za-z.'-]*)[^A-Za-z]*$", head)
-    prev = prev_m.group(1) if prev_m else ""
-    return cur, prev
+def mention_fragment(before: str):
+    """The text after the '@' the caret is currently inside ("is @mab" ->
+    "mab", "is @" -> ""), or None when the caret isn't in an @-mention."""
+    m = _MENTION_RE.search(before or "")
+    if not m:
+        return None
+    return m.group(1) or ""
 
 
-# Ordinary words that are never a swimmer name: common English function/prose
-# words plus swim-meet jargon. A CURATED list, not the full spellcheck
-# dictionary — the dictionary also contains real name stems ("mab", "grace",
-# "mark", "rose"), which should still complete after a cue. Anything not in
-# here that the user types in a name slot is treated as a possible name.
-ROSTER_STOPWORDS = frozenset("""
-    a an and the of to in on at for with from by as is are was were be been
-    being am do does did have has had will would can could should may might
-    must not no nor yes so if then than there here this that these those it
-    its i im you your youre he she we they me my our his her him them us their
-    what when where who whom how why which while into over under again about
-    more most some any all both each every few other such only own same too
-    very just out up down off get got like want need know think make see say
-    said please thanks thank ok okay also still even now today day time put
-    meet meets relay relays lineup lineups heat heats lane lanes event events
-    free freestyle back backstroke breast breaststroke fly butterfly medley
-    swim swimmer swimmers team teams seed times place places points age band
-    group champs dual tri scratch scratched add remove replace swap move enter
-    sub final finals prelim prelims dq ns events versus vs
-""".split())
-
-
-def roster_is_stopword(word: str) -> bool:
-    return word.lower() in ROSTER_STOPWORDS
-
-
-def roster_replace_len(before: str, display=None) -> int:
-    """Chars before the caret to replace when accepting — just the current
-    word. Accepting inserts the full "First Last", so only the typed stem is
-    replaced and a leading cue ("scratch ") is never swallowed."""
-    m = re.search(r"[A-Za-z][A-Za-z.'-]*$", before or "")
-    return len(m.group(0)) if m else 0
-
-
-def roster_is_namelike(word: str, is_known) -> bool:
-    """A typed word worth completing: at least 2 chars and NOT an ordinary
-    dictionary word. The roster is ~2000 names, so without this almost any
-    short prose word prefixes some name. `is_known` is the spellchecker's
-    dictionary check (a word-name like "grace" is caught while still complete,
-    but its non-word stem "grac" predicts, so real names still complete)."""
-    w = (word or "").strip()
-    return len(w) >= 2 and not is_known(w)
-
-
-def roster_in_name_slot(cur: str, prev: str, is_known) -> bool:
-    """Whether the current word sits where a swimmer name is expected: it is
-    name-like AND either starts the message or follows a name-cue word. So
-    "scratch ma|" and "is mab|" predict, but "scratch Mabel fr|" (prev is the
-    name) and "the relay|" (prev isn't a cue) do not."""
-    if not roster_is_namelike(cur, is_known):
-        return False
-    if not prev:
-        return True  # sentence start
-    return prev.lower().strip(".,'\"-") in ROSTER_NAME_CUES
-
-
-def roster_prefix_matches(names: list, word: str, limit: int = 8) -> list:
+def roster_prefix_matches(names: list, word: str, limit: int = 8,
+                          min_len: int = 2) -> list:
     """Names whose first (x3) or any (x2) token EXACTLY starts with the typed
     word. Exact-prefix only — against the large master roster a fuzzy match
     would surface a hit for almost any letter pair."""
     w = _roster_norm(word)
-    if len(w) < 2:
+    if len(w) < min_len:
         return []
     scored = []
     for display in (names or []):
@@ -6110,18 +6043,16 @@ class RosterTypeahead:
             return None
         if self.chat._placeholder_on:  # don't match the fake placeholder text
             return self.menu.hide()
-        before = self.entry.get("1.0", "insert")
-        if before.lstrip().startswith("/"):  # the slash palette owns this line
+        frag = mention_fragment(self.entry.get("1.0", "insert"))
+        if frag is None:  # the caret isn't inside an @-mention
             return self.menu.hide()
         if not self._names:
             self._maybe_reprime()
             return self.menu.hide()
-        cur, prev = roster_typing_context(before)
-        # Only predict in a "name slot": current word is name-like AND follows
-        # a name-cue (or starts the message).
-        if not roster_in_name_slot(cur, prev, roster_is_stopword):
-            return self.menu.hide()
-        return self.menu.show(roster_prefix_matches(self._names, cur, 8))
+        # Bare "@" shows the start of the roster; "@ab" filters by prefix.
+        items = (self._names[:8] if not frag
+                 else roster_prefix_matches(self._names, frag, 8, min_len=1))
+        return self.menu.show(items)
 
     def _on_nav(self, event):
         if not self.menu.visible():
@@ -6141,11 +6072,13 @@ class RosterTypeahead:
         return None
 
     def _accept_name(self, display):
+        # Replace the typed "@frag" with "@Full Name " — keeps the @ so it
+        # reads as a mention (and Phase 3 can resolve it for DeckSide).
         before = self.entry.get("1.0", "insert")
-        n = roster_replace_len(before, display)
-        if n > 0:
-            self.entry.delete(f"insert - {n} chars", "insert")
-        self.entry.insert("insert", display + " ")
+        m = re.search(r"@[A-Za-z.'-]*$", before)
+        if m:
+            self.entry.delete(f"insert - {len(m.group(0))} chars", "insert")
+        self.entry.insert("insert", "@" + display + " ")
 
 
 class SlashCommands:
@@ -7402,7 +7335,7 @@ class ChatWindow:
             self._placeholder_on = True
             self.entry.config(fg=self.CAPTION)
             self.entry.delete("1.0", "end")
-            self.entry.insert("1.0", "Message  ·  type / for commands")
+            self.entry.insert("1.0", "Message  ·  / commands · @ swimmers")
 
     def _clear_placeholder(self, *_):
         if self._placeholder_on:
