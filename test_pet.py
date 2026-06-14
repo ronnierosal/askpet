@@ -104,6 +104,25 @@ if pet.pet_id == "godzilla-blue":
     assert pet.sprites.facing.get("walk_left") == 1
 print("sprite flip OK (faces travel direction; mirrored sets built)")
 
+# install_pet stamps known per-pet facing corrections into the manifest so a
+# re-download keeps Godzilla Blue facing the right way (its walk_right/run art
+# is drawn facing left). This is the write-side fix; PetSprites already reads it.
+_anims = {"idle": {"row": 0, "frames": 6}, "walk_right": {"row": 1, "frames": 8},
+          "walk_left": {"row": 2, "frames": 8}, "run": {"row": 4, "frames": 5}}
+pm.apply_facing_overrides("godzilla-blue", _anims)
+assert _anims["walk_right"]["facing"] == "left"
+assert _anims["walk_left"]["facing"] == "right"
+assert _anims["run"]["facing"] == "left"
+assert "facing" not in _anims["idle"], "untouched animations should stay as-is"
+# a pet with no override entry is left exactly as built; missing rows are skipped
+_plain = {"walk_right": {"row": 1, "frames": 8}}
+pm.apply_facing_overrides("some-other-pet", _plain)
+assert "facing" not in _plain["walk_right"]
+_partial = {"idle": {"row": 0, "frames": 6}}   # godzilla sheet missing walk/run rows
+pm.apply_facing_overrides("godzilla-blue", _partial)
+assert _partial == {"idle": {"row": 0, "frames": 6}}, "absent rows must not be invented"
+print("facing override OK (install_pet stamps known corrections)")
+
 # Open chat and run a full send cycle
 pet.toggle_chat()
 assert pet.chat.is_open()

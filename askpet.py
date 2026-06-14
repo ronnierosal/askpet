@@ -32,7 +32,7 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 APP_NAME = "AskPet"
-APP_VERSION = "0.32.1"
+APP_VERSION = "0.32.2"
 CONTENT_VERSION = "2026.06.17"
 
 # ---------------------------------------------------------------------------
@@ -3368,8 +3368,8 @@ SKILL_TEMPLATES = {
         "topics": ["local_llm"],
         "body": "Stand up a private chatbot with Ollama: hardware check, model pull, system prompt, test.",
         "steps": [
-            "Check hardware: 8GB RAM runs small models (gemma3:4b); a GPU with 8GB+ VRAM runs mid-size well.",
-            "Install Ollama, then `ollama pull gemma3` (or the size that fits).",
+            "Check hardware: 8GB RAM runs small models (3–4B params); a GPU with 8GB+ VRAM runs mid-size well.",
+            "Install Ollama, then pull a small model that fits — browse ollama.com/library (e.g. `ollama pull gemma3`).",
             "Test in terminal with `ollama run` and your 5 most typical questions.",
             "Write a system prompt: role, tone, what it must refuse, knowledge limits — small models need explicit guidance.",
             "Add a front end (Open WebUI or a simple script via the localhost API) and re-test the same questions.",
@@ -5380,6 +5380,28 @@ KEY_COLOR = "#fe00fe"
 ROW_NAMES = ["idle", "walk_right", "walk_left", "wave", "run",
              "sleepy", "sit", "mosey", "emote"]
 
+# Per-pet facing corrections. AskPet's convention is that art faces RIGHT and
+# the app mirrors it for leftward travel; a sheet drawn facing LEFT otherwise
+# looks like it walks backwards. We can't fix codex-pets.net (third-party art),
+# so when one of its pets is drawn the other way we annotate the affected
+# animations here and re-stamp them on every (re)download. Keyed by pet id;
+# each value maps an animation name to the direction its art actually faces.
+PET_FACING_OVERRIDES = {
+    "godzilla-blue": {"walk_right": "left", "walk_left": "right", "run": "left"},
+}
+
+
+def apply_facing_overrides(pet_id: str, animations: dict) -> dict:
+    """Stamp known per-pet `facing` corrections onto a freshly built manifest.
+
+    No-op for pets without an override entry, and skips animations the sheet
+    didn't actually include. Mutates and returns `animations`.
+    """
+    for name, face in PET_FACING_OVERRIDES.get(pet_id, {}).items():
+        if name in animations:
+            animations[name]["facing"] = face
+    return animations
+
 
 def _http_get(url: str, timeout: int = 30) -> bytes:
     req = urllib.request.Request(url, headers={"User-Agent": f"{APP_NAME}/{APP_VERSION}"})
@@ -6398,6 +6420,7 @@ def install_pet(pet_id: str, info: dict = None) -> Path:
             animations[ROW_NAMES[r]] = {"row": r, "frames": n}
     if not animations:
         raise RuntimeError("Spritesheet appears to be empty.")
+    apply_facing_overrides(pet_id, animations)
 
     pet_dir = PETS_DIR / pet_id
     pet_dir.mkdir(parents=True, exist_ok=True)
