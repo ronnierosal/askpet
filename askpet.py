@@ -32,7 +32,7 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 APP_NAME = "AskPet"
-APP_VERSION = "0.27.0"
+APP_VERSION = "0.27.1"
 CONTENT_VERSION = "2026.06.17"
 
 # ---------------------------------------------------------------------------
@@ -7234,7 +7234,7 @@ def _os_prefers_dark() -> bool:
             r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
         ) as k:
             return winreg.QueryValueEx(k, "AppsUseLightTheme")[0] == 0
-    except OSError:
+    except (OSError, ImportError):
         return False
 
 
@@ -7274,6 +7274,7 @@ class ChatWindow:
         self._cw = 440         # canvas width used for the current layout
         self._resize_job = None
         self._placeholder_on = False
+        self._bulk = False     # True during a full reflow: defer the gradient
 
         win = tk.Toplevel(pet.root)
         self.win = win
@@ -7370,6 +7371,13 @@ class ChatWindow:
             return
         if getattr(self.pet, "_menu_open", False):
             return  # the pet's right-click menu is up; keep the chat open
+        # Our completion dropdowns are separate overrideredirect Toplevels;
+        # keep the chat open while one is showing so a click inside it can't be
+        # read as a click away.
+        if getattr(self, "typeahead", None) and self.typeahead.menu.visible():
+            return
+        if getattr(self, "slash", None) and self.slash.menu.visible():
+            return
         try:
             foc = self.win.focus_displayof()
         except (tk.TclError, KeyError):
@@ -7378,7 +7386,17 @@ class ChatWindow:
             self.close()
 
     def _on_destroy(self, event):
-        if event.widget is self.win and self._ai_req:
+        if event.widget is not self.win:
+            return
+        # A destroyed window cancels its own pending after() callbacks, but
+        # cancel ours explicitly to match _schedule_close_check and avoid a
+        # stray _check_close on a dead widget.
+        if self._close_job:
+            try:
+                self.win.after_cancel(self._close_job)
+            except Exception:
+                pass
+        if self._ai_req:
             self._ai_req["cancel"].set()
 
     # ---- header --------------------------------------------------------------
@@ -7526,7 +7544,7 @@ class ChatWindow:
         short conversation nor a scrolled one reveals a bare strip."""
         self.canvas.delete("grad")
         h = max(self.canvas.winfo_height(), self._y, 1)
-        w = max(self._cw, 1)
+        w = max(self.canvas.winfo_width(), self._cw, 1)
         top, bot = self.t["GRAD_TOP"], self.t["GRAD_BOTTOM"]
         bands = 64
         for i in range(bands):
@@ -7540,7 +7558,11 @@ class ChatWindow:
     def _finish(self, bottom):
         self._y = bottom + 8
         self.canvas.configure(scrollregion=(0, 0, self._cw, self._y))
-        self._paint_gradient()
+        # During a full reflow the gradient is painted once at the end (see
+        # _render_all), not once per message — repainting it per line would
+        # build and discard 64 rectangles for every bubble.
+        if not self._bulk:
+            self._paint_gradient()
         self.canvas.yview_moveto(1.0)
 
     def _add(self, kind, text=None):
@@ -7556,10 +7578,13 @@ class ChatWindow:
         self._frames = []
         self.canvas.delete("all")
         self._y = 12
+        self._bulk = True
         for kind, text in self.messages:
             self._draw(kind, text)
         if self._typing:
             self._draw_typing()
+        self._bulk = False
+        self._paint_gradient()
 
     def _draw(self, kind, text):
         if kind == "caption":
