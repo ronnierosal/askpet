@@ -32,7 +32,7 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 APP_NAME = "AskPet"
-APP_VERSION = "0.23.3"
+APP_VERSION = "0.24.0"
 CONTENT_VERSION = "2026.06.17"
 
 # ---------------------------------------------------------------------------
@@ -5917,39 +5917,166 @@ def roster_prefix_matches(names: list, word: str, limit: int = 8) -> list:
     return [d for _, d in scored[:max(1, limit)]]
 
 
+class CompletionMenu:
+    """A borderless dropdown of selectable strings anchored under a Text
+    entry's caret. Shared by the slash-command palette and the @-mention menu.
+    The entry keeps focus throughout (the menu never steals it); the owner
+    drives it with show()/hide()/move() and is handed the chosen item via the
+    on_select callback (also fired on a mouse click)."""
+
+    def __init__(self, entry, on_select):
+        self.entry = entry
+        self.on_select = on_select
+        self._win = None
+        self._list = None
+        self._hide_after = None
+
+    def visible(self) -> bool:
+        return bool(self._win and self._win.winfo_exists()
+                    and self._win.winfo_ismapped())
+
+    def _build(self):
+        self._win = tk.Toplevel(self.entry)
+        self._win.wm_overrideredirect(True)
+        self._win.wm_attributes("-topmost", True)
+        self._win.withdraw()
+        self._list = tk.Listbox(self._win, height=6, font=("Segoe UI", 9),
+                                activestyle="none", selectmode="single",
+                                exportselection=False, bd=1, relief="solid",
+                                highlightthickness=0)
+        self._list.pack(fill="both", expand=True)
+        self._list.bind("<ButtonRelease-1>", self._on_click)
+
+    def show(self, items):
+        if not items:
+            return self.hide()
+        if self._win is None:
+            self._build()
+        self._list.delete(0, "end")
+        for it in items:
+            self._list.insert("end", it)
+        self._list.selection_clear(0, "end")
+        self._list.selection_set(0)
+        self._list.activate(0)
+        self._list.config(height=min(len(items), 8))
+        # The entry is already laid out when a keystroke reaches it, so its
+        # screen geometry is valid without an idle flush.
+        x = self.entry.winfo_rootx()
+        y = self.entry.winfo_rooty() + self.entry.winfo_height() + 1
+        self._win.wm_geometry(f"+{x}+{y}")
+        self._win.deiconify()
+        self._win.lift()
+        return None
+
+    def hide(self, *_):
+        self._hide_after = None
+        if self._win is not None and self._win.winfo_exists():
+            self._win.withdraw()
+        return None
+
+    def move(self, delta):
+        size = self._list.size() if self._list else 0
+        if not size:
+            return
+        cur = self._list.curselection()
+        i = max(0, min(size - 1, (cur[0] if cur else 0) + delta))
+        self._list.selection_clear(0, "end")
+        self._list.selection_set(i)
+        self._list.activate(i)
+        self._list.see(i)
+
+    def current(self):
+        sel = self._list.curselection() if self._list else ()
+        return self._list.get(sel[0]) if sel else None
+
+    def accept(self) -> bool:
+        """Fire on_select for the highlighted item; True if one was chosen.
+        The entry is refocused so a mouse-click accept doesn't strand the
+        caret in the list."""
+        item = self.current()
+        if item is None:
+            self.hide()
+            return False
+        self.hide()
+        self.on_select(item)
+        self.entry.focus_set()
+        return True
+
+    def _on_click(self, event):
+        idx = self._list.nearest(event.y)
+        if idx >= 0:
+            self._list.selection_clear(0, "end")
+            self._list.selection_set(idx)
+            self.accept()
+        return "break"
+
+    def schedule_hide(self):
+        # A click on the list steals focus from the entry; defer the hide so
+        # the list's ButtonRelease (which accepts) runs first.
+        if self._hide_after:
+            try:
+                self.entry.after_cancel(self._hide_after)
+            except Exception:
+                pass
+        self._hide_after = self.entry.after(150, self.hide)
+
+
+# Slash commands: explicit, discoverable ways to invoke a lane, like the
+# command palettes in ChatGPT/Claude. Each maps to a capability that already
+# exists, so dispatch just FORCES the lane instead of guessing it. Tuple is
+# (name, description, action) where action is a local-AI lane, "prompt" (the
+# IT prompt builder), or "help".
+SLASH_COMMANDS = [
+    ("/rewrite", "Rewrite text — clearer, shorter, or more professional", "rewrite"),
+    ("/email", "Draft a workplace email", "email"),
+    ("/summarize", "Summarize text into the key points", "summarize"),
+    ("/ask", "Answer a quick question, locally", "answer"),
+    ("/fpv", "Answer a micro-drone (FPV) question", "knowledge"),
+    ("/prompt", "Build a best-practice prompt for an IT task", "prompt"),
+    ("/help", "Show what AskPet can do", "help"),
+]
+SLASH_BY_NAME = {name[1:]: (desc, action) for name, desc, action in SLASH_COMMANDS}
+
+
+def parse_slash(raw: str):
+    """(command, argument) when a message opens with a /command, else None.
+    "/rewrite make this shorter" -> ("rewrite", "make this shorter")."""
+    m = re.match(r"\s*/([a-zA-Z]+)\b[ \t]*(.*)$", raw or "", re.S)
+    if not m:
+        return None
+    return m.group(1).lower(), m.group(2).strip()
+
+
+# Keys that move/commit within a dropdown rather than edit text — a keystroke
+# handler ignores them so it doesn't re-filter on arrow/Tab/etc.
+_MENU_NAV_KEYS = ("Up", "Down", "Left", "Right", "Return", "Tab", "Escape",
+                  "Shift_L", "Shift_R", "Control_L", "Control_R", "Alt_L", "Alt_R")
+
+
 class RosterTypeahead:
     """Swimmer-name autocomplete for the chat box, sourced live from a running
-    DeckSide (read-only get_roster). A borderless dropdown sits under the entry;
-    the entry keeps focus throughout, so the caret never moves to the list.
-    A complete no-op when DeckSide is closed or has no roster — it never blocks
-    typing (the keystroke path only ever reads an in-memory list; all HTTP
-    happens on a worker thread)."""
+    DeckSide (read-only get_roster). A complete no-op when DeckSide is closed
+    or has no roster — the keystroke path only reads an in-memory list; all
+    HTTP happens on a worker thread."""
 
-    NAV_KEYS = ("Up", "Down", "Left", "Right", "Return", "Tab", "Escape",
-                "Shift_L", "Shift_R", "Control_L", "Control_R", "Alt_L", "Alt_R")
-    # Short so a DeckSide opened AFTER the chat (app launched first) shows up
-    # within a few keystrokes; the fetch is a quick call to a local server.
-    REPRIME_EVERY = 8.0
+    REPRIME_EVERY = 8.0  # seconds; lets a DeckSide opened mid-session appear
 
     def __init__(self, chat):
         self.chat = chat
         self.entry = chat.entry
         self._names = []
-        self._win = None
-        self._list = None
         self._priming = False
         self._last_prime = 0.0
-        self._hide_after = None
+        self.menu = CompletionMenu(self.entry, self._accept_name)
         self._prime()  # warm the cache off-thread so the first keystroke is fast
         # add="+" is MANDATORY: a bare bind would replace SpellSupport's
         # KeyRelease handler and silently kill spell-check.
         self.entry.bind("<KeyRelease>", self._on_key, add="+")
-        self.entry.bind("<FocusOut>", self._on_focus_out, add="+")
+        self.entry.bind("<FocusOut>", lambda e: self.menu.schedule_hide(), add="+")
         for seq in ("<Up>", "<Down>", "<Tab>", "<Escape>"):
             self.entry.bind(seq, self._on_nav, add="+")
-        chat.win.bind("<Configure>", lambda e: self._hide(), add="+")
+        chat.win.bind("<Configure>", lambda e: self.menu.hide(), add="+")
 
-    # ---- roster priming (always off the UI thread) ---------------------------
     def _prime(self):
         if self._priming:
             return
@@ -5972,135 +6099,106 @@ class RosterTypeahead:
                 and time.monotonic() - self._last_prime > self.REPRIME_EVERY):
             self._prime()
 
-    # ---- visibility ----------------------------------------------------------
-    def visible(self) -> bool:
-        return bool(self._win and self._win.winfo_exists()
-                    and self._win.winfo_ismapped())
-
-    def _build(self):
-        self._win = tk.Toplevel(self.entry)
-        self._win.wm_overrideredirect(True)
-        self._win.wm_attributes("-topmost", True)
-        self._win.withdraw()
-        self._list = tk.Listbox(self._win, height=6, font=("Segoe UI", 9),
-                                activestyle="none", selectmode="single",
-                                exportselection=False, bd=1,
-                                relief="solid", highlightthickness=0)
-        self._list.pack(fill="both", expand=True)
-        self._list.bind("<ButtonRelease-1>", self._on_click)
-
-    def _show(self, matches):
-        if self._win is None:
-            self._build()
-        self._list.delete(0, "end")
-        for m in matches:
-            self._list.insert("end", m)
-        self._list.selection_clear(0, "end")
-        self._list.selection_set(0)
-        self._list.activate(0)
-        self._list.config(height=min(len(matches), 8))
-        # The entry is already laid out (a keystroke only reaches a mapped
-        # widget), so its screen geometry is valid without an idle flush.
-        x = self.entry.winfo_rootx()
-        y = self.entry.winfo_rooty() + self.entry.winfo_height() + 1
-        self._win.wm_geometry(f"+{x}+{y}")
-        self._win.deiconify()
-        self._win.lift()
-
-    def _hide(self, *_):
-        self._hide_after = None
-        if self._win is not None and self._win.winfo_exists():
-            self._win.withdraw()
-        return None
-
-    # ---- input handling ------------------------------------------------------
     def _on_key(self, event):
-        if event.keysym in self.NAV_KEYS:
+        if event.keysym in _MENU_NAV_KEYS:
             return None
-        if self.chat._placeholder_on:  # don't match the fake "Message" text
-            return self._hide()
+        if self.chat._placeholder_on:  # don't match the fake placeholder text
+            return self.menu.hide()
+        before = self.entry.get("1.0", "insert")
+        if before.lstrip().startswith("/"):  # the slash palette owns this line
+            return self.menu.hide()
         if not self._names:
             self._maybe_reprime()
-            return self._hide()
-        before = self.entry.get("1.0", "insert")
+            return self.menu.hide()
         cur, prev = roster_typing_context(before)
-        # Only predict a name in a "name slot": the current word is name-like
-        # AND follows a name-cue (or starts the message) — not after an
-        # already-typed name or an ordinary word.
+        # Only predict in a "name slot": current word is name-like AND follows
+        # a name-cue (or starts the message).
         if not roster_in_name_slot(cur, prev, roster_is_stopword):
-            return self._hide()
-        matches = roster_prefix_matches(self._names, cur, 8)
-        if matches:
-            self._show(matches)
-        else:
-            self._hide()
-        return None
+            return self.menu.hide()
+        return self.menu.show(roster_prefix_matches(self._names, cur, 8))
 
     def _on_nav(self, event):
-        if not self.visible():
-            return None  # let Tab/Up/Down/Escape do their normal thing
+        if not self.menu.visible():
+            return None
         if event.keysym == "Escape":
-            self._hide()
+            self.menu.hide()
             return "break"
         if event.keysym == "Up":
-            self._move(-1)
+            self.menu.move(-1)
             return "break"
         if event.keysym == "Down":
-            self._move(1)
+            self.menu.move(1)
             return "break"
         if event.keysym == "Tab":
-            # Only swallow Tab if we actually completed a name — otherwise let
-            # Tab do its normal thing instead of trapping focus.
-            return "break" if self._accept() else None
+            # Only swallow Tab if a name was actually completed.
+            return "break" if self.menu.accept() else None
         return None
 
-    def _move(self, delta):
-        size = self._list.size()
-        if not size:
-            return
-        cur = self._list.curselection()
-        i = (cur[0] if cur else 0) + delta
-        i = max(0, min(size - 1, i))
-        self._list.selection_clear(0, "end")
-        self._list.selection_set(i)
-        self._list.activate(i)
-        self._list.see(i)
-
-    def _on_click(self, event):
-        idx = self._list.nearest(event.y)
-        if idx >= 0:
-            self._list.selection_clear(0, "end")
-            self._list.selection_set(idx)
-            self._accept()
-        return "break"
-
-    def _on_focus_out(self, _event):
-        # A click on the list steals focus from the entry; defer the hide so
-        # the list's ButtonRelease (which accepts) runs first. Replace any
-        # prior pending hide so callbacks don't stack. (Tk auto-cancels the
-        # entry's after() callbacks when the window is destroyed.)
-        if self._hide_after:
-            try:
-                self.entry.after_cancel(self._hide_after)
-            except Exception:
-                pass
-        self._hide_after = self.entry.after(150, self._hide)
-        return None
-
-    def _accept(self) -> bool:
-        sel = self._list.curselection() if self._list else ()
-        if not sel:
-            self._hide()
-            return False
-        display = self._list.get(sel[0])
+    def _accept_name(self, display):
         before = self.entry.get("1.0", "insert")
         n = roster_replace_len(before, display)
         if n > 0:
             self.entry.delete(f"insert - {n} chars", "insert")
         self.entry.insert("insert", display + " ")
-        self._hide()
-        self.entry.focus_set()
-        return True
+
+
+class SlashCommands:
+    """The '/' command palette. Opens when the line starts with '/', filters
+    SLASH_COMMANDS as you type, and inserts the chosen command. Execution
+    happens on send (parse_slash + the chat's slash dispatcher)."""
+
+    def __init__(self, chat):
+        self.chat = chat
+        self.entry = chat.entry
+        self.menu = CompletionMenu(self.entry, self._accept)
+        self.entry.bind("<KeyRelease>", self._on_key, add="+")
+        self.entry.bind("<FocusOut>", lambda e: self.menu.schedule_hide(), add="+")
+        for seq in ("<Up>", "<Down>", "<Tab>", "<Escape>"):
+            self.entry.bind(seq, self._on_nav, add="+")
+        chat.win.bind("<Configure>", lambda e: self.menu.hide(), add="+")
+
+    def _typed(self):
+        """The leading '/word' being typed (caret still inside it), else None."""
+        before = self.entry.get("1.0", "insert")
+        m = re.match(r"\s*(/[a-zA-Z]*)$", before)
+        return m.group(1).lower() if m else None
+
+    def _on_key(self, event):
+        if event.keysym in _MENU_NAV_KEYS:
+            return None
+        if self.chat._placeholder_on:
+            return self.menu.hide()
+        typed = self._typed()
+        if typed is None:
+            return self.menu.hide()
+        items = [f"{name}   {desc}" for name, desc, _ in SLASH_COMMANDS
+                 if name.startswith(typed)]
+        return self.menu.show(items)
+
+    def _on_nav(self, event):
+        if not self.menu.visible():
+            return None
+        if event.keysym == "Escape":
+            self.menu.hide()
+            return "break"
+        if event.keysym == "Up":
+            self.menu.move(-1)
+            return "break"
+        if event.keysym == "Down":
+            self.menu.move(1)
+            return "break"
+        if event.keysym == "Tab":
+            self.menu.accept()
+            return "break"
+        return None
+
+    def _accept(self, item):
+        name = item.split()[0]  # "/rewrite   desc" -> "/rewrite"
+        before = self.entry.get("1.0", "insert")
+        m = re.search(r"/[a-zA-Z]*$", before)
+        if m:
+            self.entry.delete(f"insert - {len(m.group(0))} chars", "insert")
+        self.entry.insert("insert", name + " ")
 
 
 def search_pets(query: str) -> list:
@@ -7187,6 +7285,8 @@ class ChatWindow:
         # SpellSupport (line above) so its add="+" KeyRelease stacks onto the
         # spellchecker's instead of replacing it.
         self.typeahead = RosterTypeahead(self)
+        # Slash-command palette ('/' at the start of a message).
+        self.slash = SlashCommands(self)
 
         self._add("caption", datetime.now().strftime("Today %H:%M"))
         self._add("pet", CHAT_GREETING)
@@ -7296,7 +7396,7 @@ class ChatWindow:
             self._placeholder_on = True
             self.entry.config(fg=self.CAPTION)
             self.entry.delete("1.0", "end")
-            self.entry.insert("1.0", "Message")
+            self.entry.insert("1.0", "Message  ·  type / for commands")
 
     def _clear_placeholder(self, *_):
         if self._placeholder_on:
@@ -7453,10 +7553,15 @@ class ChatWindow:
     def _on_return(self, event):
         if event.state & 0x0001:  # Shift+Return -> newline
             return None
-        # Enter ALWAYS sends. Accept a name suggestion with Tab or a click —
-        # never by Enter, so finishing a normal message never inserts a name.
+        # When the slash palette is open, Enter picks the highlighted command
+        # (a deliberate "/..." context, so no risk of hijacking a real send).
+        if getattr(self, "slash", None) and self.slash.menu.visible():
+            self.slash.menu.accept()
+            return "break"
+        # Otherwise Enter ALWAYS sends; the name dropdown is just dismissed
+        # (accept a name with Tab or a click, never Enter).
         if getattr(self, "typeahead", None):
-            self.typeahead._hide()
+            self.typeahead.menu.hide()
         self.send()
         return "break"
 
@@ -7477,6 +7582,11 @@ class ChatWindow:
     # ---- follow-up question flow ---------------------------------------------
 
     def _start_request(self, raw):
+        # Explicit /slash command? It forces a lane — no heuristic guessing.
+        parsed = parse_slash(raw)
+        if parsed is not None:
+            self._run_slash(parsed, raw)
+            return
         # Question about prompting/AskPet? Answer it instead of
         # generating a prompt.
         help_answer = answer_help_question(raw)
@@ -7501,6 +7611,39 @@ class ChatWindow:
                 self._local_ai_request(lane, raw, cleaned, rec)
                 return
         self._standard_request(raw, cleaned, rec)
+
+    def _run_slash(self, parsed, raw):
+        """Dispatch a /command (the user bubble is already shown by send())."""
+        name, arg = parsed
+        entry = SLASH_BY_NAME.get(name)
+        if entry is None:
+            self._add("pet", f"I don't know /{name}. Type /help to see what I can do.")
+            return
+        action = entry[1]
+        if action == "help":
+            self._show_help()
+            return
+        if not arg:
+            self._add("pet", f"Add your text after /{name} — e.g. “/{name} …”.")
+            return
+        cleaned = clean_text(arg, self.spell)
+        rec = recommend(cleaned)
+        if action == "prompt":
+            self._standard_request(arg, cleaned, rec)
+            return
+        # The writing/answer/knowledge lanes need the local model.
+        if self.pet.local_ai_ready() and not self._ai_busy:
+            self._local_ai_request(action, arg, cleaned, rec)
+        else:
+            self._add("caption", "Local AI (Ollama) isn't running — "
+                                 "building you a prompt instead.")
+            self._standard_request(arg, cleaned, rec)
+
+    def _show_help(self):
+        lines = ["Here's what I can do — type / then a command:"]
+        lines += [f"  {name}  —  {desc}" for name, desc, _ in SLASH_COMMANDS]
+        lines.append("…or just talk to me normally and I'll figure it out.")
+        self._add("pet", "\n".join(lines))
 
     def _standard_request(self, raw, cleaned, rec):
         questions = clarifying_questions(cleaned, rec)
