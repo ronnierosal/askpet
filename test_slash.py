@@ -18,6 +18,9 @@ assert pm.parse_slash("hello world") is None             # no leading slash
 assert pm.parse_slash("rewrite this /thing") is None     # slash not at start
 assert pm.parse_slash("") is None
 assert pm.parse_slash("/") is None                       # bare slash, no command word
+# library-template commands have underscores/digits in the name
+assert pm.parse_slash("/incident_rca email is down") == ("incident_rca", "email is down")
+assert pm.parse_slash("/codex_execution build a thing") == ("codex_execution", "build a thing")
 print("parse_slash OK")
 
 # --- registry ----------------------------------------------------------------
@@ -44,5 +47,14 @@ assert pm.SLASH_BY_NAME["fpv"][1] == "knowledge"
 assert pm.SLASH_BY_NAME["prompt"][1] == "prompt"
 assert pm.SLASH_BY_NAME["help"][1] == "help"
 print("dispatch mapping OK")
+
+# --- library templates surface as commands ----------------------------------
+# A template name is NOT a core command but IS a valid PROMPT_TEMPLATES key,
+# which is how _run_slash routes it to a forced-template build.
+cmd, _ = pm.parse_slash("/codex_execution build a thing")
+assert cmd not in pm.SLASH_BY_NAME and cmd in pm.PROMPT_TEMPLATES
+assert pm.PROMPT_TEMPLATES["codex_execution"].get("destination")  # has a destination
+assert len(pm.PROMPT_TEMPLATES) >= 20, len(pm.PROMPT_TEMPLATES)
+print("library templates OK")
 
 print("SLASH TEST PASSED")

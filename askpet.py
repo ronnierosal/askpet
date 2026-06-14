@@ -32,7 +32,7 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 APP_NAME = "AskPet"
-APP_VERSION = "0.25.0"
+APP_VERSION = "0.26.0"
 CONTENT_VERSION = "2026.06.17"
 
 # ---------------------------------------------------------------------------
@@ -5979,8 +5979,9 @@ SLASH_BY_NAME = {name[1:]: (desc, action) for name, desc, action in SLASH_COMMAN
 
 def parse_slash(raw: str):
     """(command, argument) when a message opens with a /command, else None.
-    "/rewrite make this shorter" -> ("rewrite", "make this shorter")."""
-    m = re.match(r"\s*/([a-zA-Z]+)\b[ \t]*(.*)$", raw or "", re.S)
+    Command names allow underscores/digits so library templates work too:
+    "/incident_rca email is down" -> ("incident_rca", "email is down")."""
+    m = re.match(r"\s*/([a-zA-Z][a-zA-Z0-9_]*)[ \t]*(.*)$", raw or "", re.S)
     if not m:
         return None
     return m.group(1).lower(), m.group(2).strip()
@@ -6099,7 +6100,7 @@ class SlashCommands:
     def _typed(self):
         """The leading '/word' being typed (caret still inside it), else None."""
         before = self.entry.get("1.0", "insert")
-        m = re.match(r"\s*(/[a-zA-Z]*)$", before)
+        m = re.match(r"\s*(/[a-zA-Z0-9_]*)$", before)
         return m.group(1).lower() if m else None
 
     def _on_key(self, event):
@@ -6110,8 +6111,14 @@ class SlashCommands:
         typed = self._typed()
         if typed is None:
             return self.menu.hide()
+        # Core action commands always; library-template commands surface once
+        # you've typed at least one letter (so bare "/" stays the short list).
         items = [f"{name}   {desc}" for name, desc, _ in SLASH_COMMANDS
                  if name.startswith(typed)]
+        if len(typed) >= 2:
+            items += [f"/{key}   {tmpl['name']}"
+                      for key, tmpl in sorted(PROMPT_TEMPLATES.items())
+                      if ("/" + key).startswith(typed)][:16]
         return self.menu.show(items)
 
     def _on_nav(self, event):
@@ -6134,7 +6141,7 @@ class SlashCommands:
     def _accept(self, item):
         name = item.split()[0]  # "/rewrite   desc" -> "/rewrite"
         before = self.entry.get("1.0", "insert")
-        m = re.search(r"/[a-zA-Z]*$", before)
+        m = re.search(r"/[a-zA-Z0-9_]*$", before)
         if m:
             self.entry.delete(f"insert - {len(m.group(0))} chars", "insert")
         self.entry.insert("insert", name + " ")
@@ -7556,6 +7563,16 @@ class ChatWindow:
         name, arg = parsed
         entry = SLASH_BY_NAME.get(name)
         if entry is None:
+            # A library-template command? "/incident_rca <task>" forces that
+            # template instead of letting recommend() guess one.
+            if name in PROMPT_TEMPLATES:
+                if not arg:
+                    tname = PROMPT_TEMPLATES[name]["name"]
+                    self._add("pet", f"Add the task after /{name} (the "
+                                     f"“{tname}” template) — e.g. “/{name} …”.")
+                    return
+                self._build_template_prompt(arg, name)
+                return
             self._add("pet", f"I don't know /{name}. Type /help to see what I can do.")
             return
         action = entry[1]
@@ -7578,10 +7595,38 @@ class ChatWindow:
                                  "building you a prompt instead.")
             self._standard_request(arg, cleaned, rec)
 
+    def _build_template_prompt(self, task, template_key):
+        """Build a prompt with a specific template forced (used by the
+        /<template> library commands). Mirrors _generate but pins the template
+        + its destination instead of recompute-and-guess."""
+        tmpl = PROMPT_TEMPLATES.get(template_key)
+        if tmpl is None:  # defensive: only ever called for a known key
+            return
+        cleaned = clean_text(task, self.spell)
+        rec = recommend(cleaned)
+        rec["template"] = template_key
+        rec["destination"] = tmpl.get("destination", rec["destination"])
+        # The user explicitly picked this template, so ITS topics drive the
+        # office-vs-codex constraint flavor in build_prompt — not whatever
+        # recommend() inferred from the task wording. (Generic templates have
+        # no topics; keep the task's so office flavor still applies sensibly.)
+        rec["topics"] = tmpl.get("topics") or rec["topics"]
+        # Keep the shown reason coherent with the template the user picked
+        # (recommend()'s reason was for whatever it had guessed).
+        rec["reason"] = f"Using the “{tmpl['name']}” template you picked."
+        prompt = build_prompt(cleaned, rec, rec["modules"], rec["skills"], [])
+        self.last = (task, cleaned, rec, prompt)
+        save_history_entry(task, cleaned, rec, prompt)
+        self._show_typing()
+        self.win.after(random.randint(500, 900),
+                       lambda: self._deliver_reply(cleaned, rec, prompt))
+
     def _show_help(self):
         lines = ["Here's what I can do — type / then a command:"]
         lines += [f"  {name}  —  {desc}" for name, desc, _ in SLASH_COMMANDS]
-        lines.append("…or just talk to me normally and I'll figure it out.")
+        lines.append(f"…plus a command for each of my {len(PROMPT_TEMPLATES)} IT "
+                     f"prompt templates — type / and a few letters to find one.")
+        lines.append("Or just talk to me normally and I'll figure it out.")
         self._add("pet", "\n".join(lines))
 
     def _standard_request(self, raw, cleaned, rec):
