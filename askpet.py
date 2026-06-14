@@ -32,7 +32,7 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 APP_NAME = "AskPet"
-APP_VERSION = "0.31.0"
+APP_VERSION = "0.31.1"
 CONTENT_VERSION = "2026.06.17"
 
 # ---------------------------------------------------------------------------
@@ -6079,7 +6079,6 @@ SLASH_COMMANDS = [
     ("/review", "Review writing and suggest improvements", "review"),
     ("/email", "Draft a workplace email", "email"),
     ("/ask", "Answer a quick question, locally", "answer"),
-    ("/fpv", "Answer a micro-drone (FPV) question", "knowledge"),
     ("/fix-prompt", "Build a best-practice prompt for an AI/IT task", "prompt"),
     ("/help", "Show what AskPet can do", "help"),
 ]
@@ -8157,7 +8156,8 @@ class ChatWindow:
         if action == "prompt":
             self._standard_request(arg, cleaned, rec)
             return
-        # The writing/answer/knowledge lanes need the local model.
+        # The writing/answer lanes need the local model. (FPV/knowledge is no
+        # longer a slash command — it's auto-detected from the message.)
         if self.pet.local_ai_ready() and not self._ai_busy:
             self._local_ai_request(action, arg, cleaned, rec)
         else:

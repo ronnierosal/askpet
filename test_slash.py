@@ -42,13 +42,14 @@ for _, _, action in pm.SLASH_COMMANDS:
     if action in ("rewrite", "email", "summarize", "review", "answer"):
         assert action in pm.LOCAL_AI_LANES, action
 # the core commands are present (general-chat-first: /fix-prompt builds prompts)
-assert {"rewrite", "summarize", "review", "email", "ask", "fpv",
+assert {"rewrite", "summarize", "review", "email", "ask",
         "fix-prompt", "help"} <= set(pm.SLASH_BY_NAME)
+# /fpv was removed — FPV questions are auto-detected, not a slash command
+assert "fpv" not in pm.SLASH_BY_NAME
 print("registry OK")
 
 # --- dispatch mapping (what _run_slash will look up) -------------------------
 assert pm.SLASH_BY_NAME["rewrite"][1] == "rewrite"
-assert pm.SLASH_BY_NAME["fpv"][1] == "knowledge"
 assert pm.SLASH_BY_NAME["review"][1] == "review"
 assert pm.SLASH_BY_NAME["fix-prompt"][1] == "prompt"   # /fix-prompt builds prompts
 assert pm.SLASH_BY_NAME["prompt"][1] == "prompt"       # back-compat alias
