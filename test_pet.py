@@ -166,6 +166,13 @@ saved = pm.load_json(pm.SETTINGS_FILE, {})
 assert saved["pet_scale"] == pet.scale == 2, saved.get("pet_scale")
 print("settings save uses live state OK")
 
+# the once-per-version update nudge must persist across launches (it lives in
+# the _save_settings allowlist, else the prompt re-fires on every startup)
+pet.settings["update_seen"] = "v9.9.9"
+pet._save_settings()
+assert pm.load_json(pm.SETTINGS_FILE, {}).get("update_seen") == "v9.9.9"
+print("update_seen persists OK")
+
 # Sleepy animation must crawl, not cycle (distinct poses, not a loop)
 assert pet.FRAME_HOLD.get("sleepy", 1) >= 10
 print("sleepy frame hold OK")

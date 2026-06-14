@@ -18,6 +18,7 @@ import os
 import random
 import re
 import shutil
+import subprocess
 import sys
 import threading
 import time
@@ -32,7 +33,7 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 APP_NAME = "AskPet"
-APP_VERSION = "0.32.2"
+APP_VERSION = "0.33.0"
 CONTENT_VERSION = "2026.06.17"
 
 # ---------------------------------------------------------------------------
@@ -5063,6 +5064,7 @@ class AskPetApp:
 
         self._build_ui()
         self._load_settings()
+        self.root.after(2500, self._check_updates)
 
     # ---- UI construction -------------------------------------------------
 
@@ -5072,8 +5074,8 @@ class AskPetApp:
 
         ttk.Label(top, text="🐾 AskPet", font=("Segoe UI", 14, "bold")).pack(side="left")
 
-        self.update_label = ttk.Label(top, text=f"App v{APP_VERSION} · Content {CONTENT_VERSION} · Up to date",
-                                      foreground="#2a7a2a")
+        self.update_label = ttk.Label(top, text=f"App v{APP_VERSION} · Content {CONTENT_VERSION} · Checking for updates…",
+                                      foreground="#888888")
         self.update_label.pack(side="right")
 
         ttk.Button(top, text="Help", command=self._show_help).pack(side="right", padx=8)
@@ -5350,6 +5352,31 @@ class AskPetApp:
         self._save_settings()
         self.root.destroy()
 
+    def _check_updates(self):
+        """Resolve the header's update label against GitHub, off the UI thread."""
+        def worker():
+            rel = available_update()
+            try:
+                self.root.after(0, lambda: self._show_update_status(rel))
+            except tk.TclError:
+                pass  # editor window closed mid-check
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _show_update_status(self, rel):
+        if not self.update_label.winfo_exists():
+            return
+        if rel:
+            self.update_label.config(
+                text=f"App v{APP_VERSION} · Update {rel['tag']} available ▸",
+                foreground="#b85c00", cursor="hand2")
+            self.update_label.bind(
+                "<Button-1>",
+                lambda e: webbrowser.open(rel.get("page_url", RELEASES_PAGE)))
+        else:
+            self.update_label.config(
+                text=f"App v{APP_VERSION} · Content {CONTENT_VERSION} · Up to date",
+                foreground="#2a7a2a")
+
 
 # ---------------------------------------------------------------------------
 # Desktop pet: sprite library, always-on-top overlay, chat window
@@ -5419,6 +5446,173 @@ def fetch_pet_page(page: int = 1) -> list:
 def fetch_pet_info(pet_id: str) -> dict:
     data = json.loads(_http_get(f"{CODEX_PETS_BASE}/api/pets/{pet_id}"))
     return data.get("pet", data)
+
+
+# ---------------------------------------------------------------------------
+# Self-update: check GitHub Releases for a newer signed build and, on request,
+# download + verify + run the installer. Network access happens only when the
+# user asks (or a quiet check shortly after launch); nothing is sent but the
+# request itself. The installer is executed ONLY after its Authenticode
+# signature is confirmed Valid AND issued to the expected publisher, and only
+# when the download came from this project's GitHub release assets over HTTPS.
+# ---------------------------------------------------------------------------
+
+GITHUB_REPO = "ronnierosal/askpet"
+GITHUB_API_LATEST = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
+RELEASES_PAGE = f"https://github.com/{GITHUB_REPO}/releases/latest"
+# Update installers are accepted only from this project's release-asset URLs.
+RELEASE_ASSET_PREFIX = f"https://github.com/{GITHUB_REPO}/releases/download/"
+# The downloaded installer must be Authenticode-signed by this publisher.
+EXPECTED_SIGNER_CN = "Ronnie Deoferio Rosal"
+
+
+def parse_version(text: str) -> tuple:
+    """'v0.32.2' or '0.32.2' -> (0, 32, 2). A leading 'v' and any non-numeric
+    suffix on a part are ignored; returns () for unparseable input so callers
+    can treat junk as "no version" rather than crash."""
+    parts = []
+    for token in (text or "").strip().lstrip("vV").split("."):
+        digits = ""
+        for ch in token:
+            if ch.isdigit():
+                digits += ch
+            else:
+                break
+        if not digits:
+            break
+        parts.append(int(digits))
+    return tuple(parts)
+
+
+def _is_release_asset_url(url) -> bool:
+    """True only for an HTTPS download URL under this project's releases."""
+    return isinstance(url, str) and url.startswith(RELEASE_ASSET_PREFIX)
+
+
+def fetch_latest_release(timeout: int = 8) -> dict:
+    """Latest published release from GitHub, or None on any failure.
+
+    Returns {tag, version, page_url, asset_url, asset_name, asset_size}; the
+    asset_* fields describe the signed Windows installer when one is attached
+    (and its download URL is a trusted GitHub release asset).
+    """
+    try:
+        data = json.loads(_http_get(GITHUB_API_LATEST, timeout=timeout))
+    except (urllib.error.URLError, OSError, ValueError):
+        return None
+    tag = data.get("tag_name") or ""
+    if not parse_version(tag):
+        return None
+    asset = None
+    for a in data.get("assets") or []:
+        name = (a.get("name") or "").lower()
+        url = a.get("browser_download_url") or ""
+        if name.endswith(".exe") and _is_release_asset_url(url):
+            asset = a
+            break
+    return {
+        "tag": tag,
+        "version": parse_version(tag),
+        "page_url": data.get("html_url") or RELEASES_PAGE,
+        "asset_url": (asset or {}).get("browser_download_url"),
+        "asset_name": (asset or {}).get("name"),
+        "asset_size": (asset or {}).get("size"),
+    }
+
+
+def available_update(local_version: str = APP_VERSION, timeout: int = 8) -> dict:
+    """The latest-release dict if GitHub has a newer version, else None."""
+    rel = fetch_latest_release(timeout=timeout)
+    if rel and rel["version"] > parse_version(local_version):
+        return rel
+    return None
+
+
+def _ps_quote(value) -> str:
+    """Single-quote a value for safe inlining into a PowerShell command."""
+    return "'" + str(value).replace("'", "''") + "'"
+
+
+def verify_signed_installer(path, expected_cn: str = EXPECTED_SIGNER_CN) -> bool:
+    """True only if `path` carries a Valid Authenticode signature issued to the
+    expected publisher. Windows-only; any error, absence, or mismatch -> False.
+    This is the gate that must pass before a downloaded installer is run."""
+    if sys.platform != "win32" or not Path(path).exists():
+        return False
+    # Compare the certificate's CN (simple name) for an EXACT match — not a
+    # substring of the full Distinguished Name, which would also accept e.g.
+    # CN="<name>indo" or O="<name> LLC" from a different, CA-validated signer.
+    script = (
+        f"$s = Get-AuthenticodeSignature -LiteralPath {_ps_quote(path)};"
+        "if ($s.Status -ne 'Valid') { exit 2 };"
+        "if ($null -eq $s.SignerCertificate) { exit 3 };"
+        "$cn = $s.SignerCertificate.GetNameInfo("
+        "[System.Security.Cryptography.X509Certificates.X509NameType]::SimpleName, $false);"
+        f"if ($cn -cne {_ps_quote(expected_cn)}) {{ exit 4 }};"
+        "exit 0"
+    )
+    try:
+        proc = subprocess.run(
+            ["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
+            capture_output=True, timeout=60,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        return proc.returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+def download_release_asset(url: str, dest, expected_size: int = None,
+                           timeout: int = 120, progress=None,
+                           cancel: "threading.Event" = None):
+    """Stream a release asset to `dest` atomically. Refuses untrusted URLs,
+    verifies the final size when known, and reports progress(fraction 0..1).
+    Returns the destination Path; raises on any failure (incl. cancellation)."""
+    if not _is_release_asset_url(url):
+        raise ValueError("refusing to download an update from an untrusted URL")
+    dest = Path(dest)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    part = dest.with_name(dest.name + ".part")
+    req = urllib.request.Request(url, headers={"User-Agent": f"{APP_NAME}/{APP_VERSION}"})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp, open(part, "wb") as f:
+            total = int(resp.headers.get("Content-Length") or expected_size or 0)
+            read = 0
+            while True:
+                if cancel is not None and cancel.is_set():
+                    raise RuntimeError("update cancelled")
+                chunk = resp.read(65536)
+                if not chunk:
+                    break
+                f.write(chunk)
+                read += len(chunk)
+                if progress and total:
+                    progress(min(1.0, read / total))
+        if expected_size and part.stat().st_size != expected_size:
+            raise RuntimeError("downloaded update has an unexpected size")
+        os.replace(part, dest)
+    except BaseException:
+        # Cancel, network error, or size mismatch: don't leave a partial file.
+        part.unlink(missing_ok=True)
+        raise
+    # Keep the cache to just this installer (prune older downloads/leftovers).
+    for old in dest.parent.iterdir():
+        if old != dest and old.is_file():
+            try:
+                old.unlink()
+            except OSError:
+                pass
+    return dest
+
+
+def launch_installer_and_exit(path):
+    """Spawn the signed installer for a silent self-update, detached so it
+    survives this process exiting. The installer (CloseApplications=yes) closes
+    the running AskPet, installs over it, and relaunches it (Check: WizardSilent).
+    """
+    flags = (getattr(subprocess, "DETACHED_PROCESS", 0)
+             | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0))
+    subprocess.Popen([str(path), "/VERYSILENT", "/NORESTART"],
+                     close_fds=True, creationflags=flags)
 
 
 # ---------------------------------------------------------------------------
@@ -6604,6 +6798,47 @@ class SpriteLibrary:
             return None
 
 
+class UpdateProgressDialog:
+    """Small always-on-top window shown while a self-update downloads/installs.
+
+    Its setters are called on the UI thread (the worker marshals via
+    root.after); each guards against the window having been closed.
+    """
+
+    def __init__(self, parent, tag, on_cancel=None):
+        self.win = tk.Toplevel(parent)
+        self.win.title("Updating AskPet")
+        self.win.resizable(False, False)
+        self.win.wm_attributes("-topmost", True)
+        frame = ttk.Frame(self.win, padding=16)
+        frame.pack(fill="both", expand=True)
+        ttk.Label(frame, text=f"Updating to AskPet {tag}",
+                  font=("Segoe UI", 11, "bold")).pack(anchor="w")
+        self._status = ttk.Label(frame, text="Starting…")
+        self._status.pack(anchor="w", pady=(6, 6))
+        self._bar = ttk.Progressbar(frame, length=320, mode="determinate",
+                                    maximum=1.0)
+        self._bar.pack(fill="x")
+        if on_cancel:
+            ttk.Button(frame, text="Cancel",
+                       command=on_cancel).pack(anchor="e", pady=(10, 0))
+        self.win.update_idletasks()
+
+    def set_status(self, text):
+        if self.win.winfo_exists():
+            self._status.config(text=text)
+            self.win.update_idletasks()
+
+    def set_progress(self, fraction):
+        if self.win.winfo_exists():
+            self._bar["value"] = fraction
+            self.win.update_idletasks()
+
+    def close(self):
+        if self.win.winfo_exists():
+            self.win.destroy()
+
+
 class PetOverlay:
     """Kogi the desktop pet: borderless, transparent, always on top.
 
@@ -6694,6 +6929,11 @@ class PetOverlay:
         self.behavior_ticks = len(self.anim_frames()) * 2
         self.wander = bool(self.settings.get("pet_wander", True))
         self.idle_ticks = 0  # ticks since the user last interacted
+
+        # Self-update: quiet check a few seconds after launch (off the UI
+        # thread). Populates the right-click menu and nudges once per version.
+        self._update_info = None
+        self.root.after(4000, lambda: self._check_for_updates_bg(manual=False))
 
         self._tick()
 
@@ -6939,6 +7179,13 @@ class PetOverlay:
         label = "Stop wandering" if self.wander else "Allow wandering"
         menu.add_command(label=f"🐾 {label}", command=self._toggle_wander)
         menu.add_separator()
+        if self._update_info:
+            menu.add_command(
+                label=f"⬆ Update to {self._update_info['tag']}…",
+                command=lambda r=self._update_info: self._prompt_update(r))
+        else:
+            menu.add_command(label="⬆ Check for updates",
+                             command=lambda: self._check_for_updates_bg(manual=True))
         menu.add_command(label="❌ Exit AskPet", command=self.quit)
         # Hold the chat open while this menu is up (it owns the theme toggle);
         # the chat's click-outside-closes check skips while _menu_open is set.
@@ -7163,11 +7410,109 @@ class PetOverlay:
         disk["pet_wander"] = self.wander
         for key in ("pet_x", "pet_y", "history_retention_hours",
                     "chat_retention_hours", "local_ai_enabled",
-                    "local_ai_model", "local_ai_intro_shown", "chat_theme"):
+                    "local_ai_model", "local_ai_intro_shown", "chat_theme",
+                    "update_seen"):
             if key in self.settings:
                 disk[key] = self.settings[key]
         disk["app_version"] = APP_VERSION
         save_json(SETTINGS_FILE, disk)
+
+    # ---- self-update -----------------------------------------------------------
+
+    def _check_for_updates_bg(self, manual: bool = False):
+        """Look for a newer release off the UI thread, then report back."""
+        def worker():
+            rel = available_update()
+            try:
+                self.root.after(0, lambda: self._on_update_checked(rel, manual))
+            except tk.TclError:
+                pass  # window closed mid-check
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _on_update_checked(self, rel, manual):
+        self._update_info = rel  # right-click menu reads this
+        if not rel:
+            if manual:
+                messagebox.showinfo(
+                    "You're up to date",
+                    f"AskPet v{APP_VERSION} is the latest version.",
+                    parent=self.root)
+            return
+        # Auto-check nudges once per version; a manual check always prompts.
+        if manual or self.settings.get("update_seen") != rel["tag"]:
+            self.settings["update_seen"] = rel["tag"]
+            self._save_settings()
+            self._prompt_update(rel)
+
+    def _prompt_update(self, rel):
+        tag = rel.get("tag", "a new version")
+        if not rel.get("asset_url"):
+            # No installer asset published — fall back to the download page.
+            if messagebox.askyesno(
+                    "Update available",
+                    f"AskPet {tag} is available (you have v{APP_VERSION}).\n\n"
+                    "Open the download page?", parent=self.root):
+                webbrowser.open(rel.get("page_url", RELEASES_PAGE))
+            return
+        if messagebox.askyesno(
+                "Update available",
+                f"AskPet {tag} is available — you have v{APP_VERSION}.\n\n"
+                "Download and install it now? AskPet will close briefly and "
+                "reopen when the update is finished.", parent=self.root):
+            self._run_update(rel)
+
+    def _run_update(self, rel):
+        cancel = threading.Event()
+        dialog = UpdateProgressDialog(self.root, rel["tag"], on_cancel=cancel.set)
+
+        def to_ui(fn, *a):
+            try:
+                self.root.after(0, lambda: fn(*a))
+            except tk.TclError:
+                pass
+
+        def worker():
+            try:
+                dest = DATA_DIR / "updates" / rel["asset_name"]
+                to_ui(dialog.set_status, "Downloading…")
+                download_release_asset(
+                    rel["asset_url"], dest, expected_size=rel.get("asset_size"),
+                    progress=lambda f: to_ui(dialog.set_progress, f),
+                    cancel=cancel)
+                to_ui(dialog.set_status, "Verifying signature…")
+                if not verify_signed_installer(dest):
+                    raise RuntimeError(
+                        "the downloaded installer isn't signed by the "
+                        "expected publisher")
+                to_ui(self._install_update, dialog, dest)
+            except Exception as exc:  # noqa: BLE001 — report any failure to the user
+                to_ui(self._update_failed, dialog, rel, cancel, exc)
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _install_update(self, dialog, dest):
+        dialog.set_progress(1.0)
+        dialog.set_status("Installing… AskPet will reopen shortly.")
+        try:
+            launch_installer_and_exit(dest)
+        except OSError as exc:
+            dialog.close()
+            messagebox.showerror(
+                "Update failed", f"Couldn't start the installer:\n{exc}",
+                parent=self.root)
+            return
+        # Give the installer a moment to take over, then exit so it can replace
+        # files; its silent-install step relaunches AskPet.
+        self.root.after(1200, self.quit)
+
+    def _update_failed(self, dialog, rel, cancel, exc):
+        dialog.close()
+        if cancel.is_set():
+            return  # user cancelled — stay quiet
+        if messagebox.askyesno(
+                "Update failed",
+                f"The update couldn't be completed automatically:\n{exc}\n\n"
+                "Open the download page to update manually?", parent=self.root):
+            webbrowser.open(rel.get("page_url", RELEASES_PAGE))
 
     def quit(self):
         self._save_position()
