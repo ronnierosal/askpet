@@ -32,7 +32,7 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 APP_NAME = "AskPet"
-APP_VERSION = "0.24.0"
+APP_VERSION = "0.24.1"
 CONTENT_VERSION = "2026.06.17"
 
 # ---------------------------------------------------------------------------
@@ -5959,10 +5959,16 @@ class CompletionMenu:
         self._list.selection_set(0)
         self._list.activate(0)
         self._list.config(height=min(len(items), 8))
-        # The entry is already laid out when a keystroke reaches it, so its
-        # screen geometry is valid without an idle flush.
+        # Open UPWARD by default: the chat input sits at the bottom of the
+        # window, so a downward menu gets clipped off-screen. Needs the menu's
+        # real height, so flush layout once (cheap; only when showing).
+        self._win.update_idletasks()
         x = self.entry.winfo_rootx()
-        y = self.entry.winfo_rooty() + self.entry.winfo_height() + 1
+        h = self._win.winfo_reqheight()
+        top = self.entry.winfo_rooty()
+        y = top - h - 1
+        if y < 0:  # no room above (window near the top) -> fall back below
+            y = top + self.entry.winfo_height() + 1
         self._win.wm_geometry(f"+{x}+{y}")
         self._win.deiconify()
         self._win.lift()
