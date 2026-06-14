@@ -12,6 +12,10 @@ atexit.register(lambda: pm.SETTINGS_FILE.write_bytes(_settings_backup)
 
 root = tk.Tk()
 pet = pm.PetOverlay(root)
+# The chat default is now general chat (local AI). Disable local AI so the
+# prompt-builder assertions below exercise the deterministic no-Ollama
+# fall-back path instead of making live model calls.
+pet.local_ai_enabled = False
 assert pet.sprites.ok, "spritesheet failed to load"
 print("sprites loaded:", sorted(pet.sprites.frames))
 print("frame counts:", {k: len(v) for k, v in sorted(pet.sprites.frames.items())})
@@ -22,6 +26,20 @@ for _ in range(8):
     root.update()
     root.after(10)
 print("anim after ticks:", pet.anim, "frame", pet.frame_i)
+
+# General-chat-by-default routing: local_ai_lane() returns a lane for
+# everything (general chat = "answer"), with specialized lanes still winning.
+def _lane(msg):
+    return pm.local_ai_lane(msg, pm.recommend(pm.clean_text(msg, pet.spell)))
+assert _lane("what's the capital of France?") == "answer"
+assert _lane("tell me a joke") == "answer"
+# execution-flavored tasks are NO LONGER auto-routed to the prompt builder
+assert _lane("write a powershell script to deploy an intune app") == "answer"
+assert _lane("summarize this: the migration ran long and we rolled back twice") == "summarize"
+assert _lane("review this draft: Dear team, the rollout is on track this week") == "review"
+assert _lane("rewrite this to be more professional: hey can u send the file") == "rewrite"
+assert _lane("write an email to the vendor about the late shipment") == "email"
+print("general-chat routing OK (default=answer; specialized lanes still win)")
 
 # Open chat and run a full send cycle
 pet.toggle_chat()

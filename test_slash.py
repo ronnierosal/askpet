@@ -21,30 +21,37 @@ assert pm.parse_slash("/") is None                       # bare slash, no comman
 # library-template commands have underscores/digits in the name
 assert pm.parse_slash("/incident_rca email is down") == ("incident_rca", "email is down")
 assert pm.parse_slash("/codex_execution build a thing") == ("codex_execution", "build a thing")
+# hyphenated command names parse (e.g. /fix-prompt)
+assert pm.parse_slash("/fix-prompt make a deploy prompt") == ("fix-prompt", "make a deploy prompt")
 print("parse_slash OK")
 
 # --- registry ----------------------------------------------------------------
-VALID_ACTIONS = {"rewrite", "email", "summarize", "answer", "knowledge",
-                 "prompt", "help"}
+VALID_ACTIONS = {"rewrite", "email", "summarize", "review", "answer",
+                 "knowledge", "prompt", "help"}
 names = [n for n, _, _ in pm.SLASH_COMMANDS]
 assert all(n.startswith("/") for n in names), names
 assert len(names) == len(set(names)), "duplicate command names"
-assert set(pm.SLASH_BY_NAME) == {n[1:] for n in names}
+# every command name is in the lookup; plus the back-compat "prompt" alias
+assert {n[1:] for n in names} <= set(pm.SLASH_BY_NAME)
+assert "prompt" in pm.SLASH_BY_NAME  # alias for /fix-prompt
 for name, desc, action in pm.SLASH_COMMANDS:
     assert action in VALID_ACTIONS, (name, action)
     assert desc and isinstance(desc, str)
-# the writing/answer lanes a command forces must actually exist
+# the writing/answer/review lanes a command forces must actually exist
 for _, _, action in pm.SLASH_COMMANDS:
-    if action in ("rewrite", "email", "summarize", "answer"):
+    if action in ("rewrite", "email", "summarize", "review", "answer"):
         assert action in pm.LOCAL_AI_LANES, action
-# the core commands are present
-assert {"rewrite", "email", "summarize", "ask", "fpv", "prompt", "help"} <= set(pm.SLASH_BY_NAME)
+# the core commands are present (general-chat-first: /fix-prompt builds prompts)
+assert {"rewrite", "summarize", "review", "email", "ask", "fpv",
+        "fix-prompt", "help"} <= set(pm.SLASH_BY_NAME)
 print("registry OK")
 
 # --- dispatch mapping (what _run_slash will look up) -------------------------
 assert pm.SLASH_BY_NAME["rewrite"][1] == "rewrite"
 assert pm.SLASH_BY_NAME["fpv"][1] == "knowledge"
-assert pm.SLASH_BY_NAME["prompt"][1] == "prompt"
+assert pm.SLASH_BY_NAME["review"][1] == "review"
+assert pm.SLASH_BY_NAME["fix-prompt"][1] == "prompt"   # /fix-prompt builds prompts
+assert pm.SLASH_BY_NAME["prompt"][1] == "prompt"       # back-compat alias
 assert pm.SLASH_BY_NAME["help"][1] == "help"
 print("dispatch mapping OK")
 

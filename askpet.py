@@ -32,7 +32,7 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 APP_NAME = "AskPet"
-APP_VERSION = "0.27.2"
+APP_VERSION = "0.28.0"
 CONTENT_VERSION = "2026.06.17"
 
 # ---------------------------------------------------------------------------
@@ -4901,10 +4901,13 @@ Kogi the pet floats above all your windows:
 - Drag Kogi to move it (position is remembered).
 - Right-click Kogi for the menu (chat, full editor, wandering, exit).
 
-In the chat, just describe your task and Kogi replies with a copy-ready
-prompt for Codex, Claude Code, ChatGPT, or Claude.
+In the chat, just type — Kogi can answer questions, rewrite or summarize
+text, review writing, or draft an email (answered on-device by local AI when
+it's set up). Want a copy-ready prompt for Codex, Claude Code, ChatGPT, or
+Claude instead? Type "/fix-prompt" and your task.
 
-The full editor (below) gives you fine-grained control:
+The full editor (below) is the dedicated prompt builder, with fine-grained
+control:
 
 1. Pick your team (IT for now — more teams later).
 2. Type what you're trying to do in the chat box. Messy input is fine —
@@ -5367,13 +5370,22 @@ LOCAL_AI_LANES = {
         "names, dates, and numbers exactly. Reply with ONLY the summary."
     ),
     "answer": (
-        "You are AskPet's local assistant, a small model running "
-        "fully offline on the user's own PC. Answer directly and "
-        "concisely — a few sentences, short bullets only if listing. "
-        "General and how-to questions never need web access or live "
-        "data: answer them from what you know, and never reply that "
-        "you lack access to information. If you are genuinely unsure, "
-        "say so plainly rather than guessing. No filler, no preamble."
+        "You are AskPet's local assistant, a small model running fully "
+        "offline on the user's own PC. Help with whatever the user asks — "
+        "answer questions, explain, brainstorm, draft, or just chat. Be "
+        "direct and concise: a few sentences, short bullets only when "
+        "listing. General and how-to questions never need web access or "
+        "live data — answer from what you know, and never reply that you "
+        "lack access to information. If you are genuinely unsure, say so "
+        "plainly rather than guessing. No filler, no preamble."
+    ),
+    "review": (
+        "You are a thoughtful writing reviewer. Review the user's text and "
+        "give brief, specific, actionable feedback on clarity, tone, "
+        "structure, grammar, and word choice. Lead with one line on what "
+        "works, then a short bulleted list of concrete suggestions — quote "
+        "the phrase you'd change and show the fix. Don't rewrite the whole "
+        "piece unless asked, and never invent facts. Keep it tight."
     ),
     # Knowledge-pack topic matched but retrieval found nothing — still a
     # hobby question, so answer it; "I don't have access to that
@@ -5585,13 +5597,15 @@ EMBEDDED_QUESTION = re.compile(
 
 
 def local_ai_lane(raw: str, rec: dict):
-    """Which local-AI lane should answer this message, or None to use the
-    standard prompt-building flow. Pure routing — checks nothing about
-    whether a model is actually available."""
+    """Which local-AI lane should answer this message. General chat ("answer")
+    is the DEFAULT; specialized lanes (rewrite/summarize/review/email/knowledge)
+    win when the message clearly calls for them. Pure routing — it checks
+    nothing about whether a model is actually available; when none is, the
+    caller falls back to the prompt builder instead. Prompt-building itself is
+    no longer a default — it's reached explicitly via /fix-prompt."""
     lw = raw.strip().lower()
-    # Rewrite/summarize need the actual text in the message; a bare
-    # "summarize this" should fall through so the clarifying question
-    # asks for the material.
+    # Rewrite/summarize/review need the actual text in the message; a bare
+    # "summarize this" still works (it just gets a general reply asking for it).
     has_payload = len(lw.split()) > 12 or ":" in raw or "\n" in raw
     instruction = lw.split(":", 1)[0] if ":" in lw else lw
     if has_payload and any(instruction.startswith(v) or f" {v}" in instruction
@@ -5603,23 +5617,23 @@ def local_ai_lane(raw: str, rec: dict):
                            ("summarize", "summarise", "key points", "tldr",
                             "tl;dr")):
         return "summarize"
-    # Knowledge-pack questions (e.g. FPV) answer locally even when words
-    # like "fix" or "motor" trip execution signals — it's a hobby
-    # question, not an IT task.
+    # Writing review: "review this …", "critique …", "feedback on …". Must
+    # START with the review verb so a task that merely mentions it (e.g.
+    # "email asking for feedback on my proposal") isn't hijacked to review.
+    if has_payload and instruction.startswith(
+            ("review", "critique", "feedback on", "feedback for")):
+        return "review"
+    # Knowledge-pack questions (e.g. FPV) answer from the pack.
     question_shaped = (lw.endswith("?") or lw.startswith(QUESTION_STARTERS)
                        or bool(EMBEDDED_QUESTION.search(lw)))
     if (question_shaped or len(lw.split()) <= 14) and knowledge_pack_for(lw):
         return "knowledge"
-    # And for email drafting: "write an email asking the landlord to fix
-    # the AC" is an email no matter what the email is about.
+    # Email drafting: "write an email asking the landlord to fix the AC"
+    # is an email no matter what the email is about.
     first_words = lw.split()[:5]
     if (first_words and first_words[0] in ("write", "draft", "compose", "send")
             and any("email" in w for w in first_words)):
         return "email"
-    # Anything execution-flavored gets a prompt, not a small-model answer.
-    # "Both" means execution is part of the job, so it's excluded too.
-    if rec["destination"] != "ChatGPT web" or rec["codex_score"] >= 2:
-        return None
     topics = set(rec["topics"])
     if "email_drafting" in topics and any(v in lw for v in EMAIL_DRAFT_VERBS):
         return "email"
@@ -5627,9 +5641,8 @@ def local_ai_lane(raw: str, rec: dict):
         return "summarize"
     if "writing" in topics and has_payload:
         return "rewrite"
-    if question_shaped:
-        return "answer"
-    return None
+    # Everything else is general chat — the new default.
+    return "answer"
 
 
 # ---------------------------------------------------------------------------
@@ -5976,21 +5989,24 @@ class CompletionMenu:
 # IT prompt builder), or "help".
 SLASH_COMMANDS = [
     ("/rewrite", "Rewrite text — clearer, shorter, or more professional", "rewrite"),
-    ("/email", "Draft a workplace email", "email"),
     ("/summarize", "Summarize text into the key points", "summarize"),
+    ("/review", "Review writing and suggest improvements", "review"),
+    ("/email", "Draft a workplace email", "email"),
     ("/ask", "Answer a quick question, locally", "answer"),
     ("/fpv", "Answer a micro-drone (FPV) question", "knowledge"),
-    ("/prompt", "Build a best-practice prompt for an IT task", "prompt"),
+    ("/fix-prompt", "Build a best-practice prompt for an AI/IT task", "prompt"),
     ("/help", "Show what AskPet can do", "help"),
 ]
 SLASH_BY_NAME = {name[1:]: (desc, action) for name, desc, action in SLASH_COMMANDS}
+# Back-compat alias: /prompt still routes to the prompt builder (now /fix-prompt).
+SLASH_BY_NAME["prompt"] = SLASH_BY_NAME["fix-prompt"]
 
 
 def parse_slash(raw: str):
     """(command, argument) when a message opens with a /command, else None.
     Command names allow underscores/digits so library templates work too:
     "/incident_rca email is down" -> ("incident_rca", "email is down")."""
-    m = re.match(r"\s*/([a-zA-Z][a-zA-Z0-9_]*)[ \t]*(.*)$", raw or "", re.S)
+    m = re.match(r"\s*/([a-zA-Z][a-zA-Z0-9_-]*)[ \t]*(.*)$", raw or "", re.S)
     if not m:
         return None
     return m.group(1).lower(), m.group(2).strip()
@@ -6109,7 +6125,7 @@ class SlashCommands:
     def _typed(self):
         """The leading '/word' being typed (caret still inside it), else None."""
         before = self.entry.get("1.0", "insert")
-        m = re.match(r"\s*(/[a-zA-Z0-9_]*)$", before)
+        m = re.match(r"\s*(/[a-zA-Z0-9_-]*)$", before)
         return m.group(1).lower() if m else None
 
     def _on_key(self, event):
@@ -6150,7 +6166,7 @@ class SlashCommands:
     def _accept(self, item):
         name = item.split()[0]  # "/rewrite   desc" -> "/rewrite"
         before = self.entry.get("1.0", "insert")
-        m = re.search(r"/[a-zA-Z0-9_]*$", before)
+        m = re.search(r"/[a-zA-Z0-9_-]*$", before)
         if m:
             self.entry.delete(f"insert - {len(m.group(0))} chars", "insert")
         self.entry.insert("insert", name + " ")
@@ -7177,12 +7193,11 @@ class PetBrowser:
 
 
 CHAT_GREETING = (
-    "Hi! Tell me what you're working on — even just a sentence, typos and "
-    "shorthand are fine. I might ask a question or two to fill in the gaps, "
-    "then I'll build you a copy-ready prompt for Codex, Claude Code, "
-    "ChatGPT, or Claude.\n\nYou can also ask me questions — like “what makes "
-    "a good prompt?”, “how do I do a handoff?”, or “when should I start a "
-    "fresh chat?”"
+    "Hi! I'm your assistant — ask me anything, or have me rewrite, "
+    "summarize, review, or draft something. Just type and I'll help.\n\n"
+    "Need a sharper prompt for Codex, Claude, or ChatGPT? Type “/fix-prompt” "
+    "and your task and I'll build a copy-ready one. Type “/” to see every "
+    "command."
 )
 
 SKIP_WORDS = {"skip", "idk", "i dont know", "i don't know", "not sure",
@@ -7365,6 +7380,7 @@ class ChatWindow:
         self._resize_job = None
         self._placeholder_on = False
         self._bulk = False     # True during a full reflow: defer the gradient
+        self._localai_note_shown = False  # one-time "no Ollama -> prompt" note
 
         win = tk.Toplevel(pet.root)
         self.win = win
@@ -7868,13 +7884,19 @@ class ChatWindow:
         if not self._ai_busy and deckside_data_lane(raw):
             self._deckside_request(raw, cleaned, rec)
             return
-        # Light asks (rewrites, summaries, emails, quick questions) get
-        # answered right here by the local model when one is available.
+        # General chat is the default: the local model answers, rewrites,
+        # summarizes, reviews, drafts — local_ai_lane() always returns a lane.
         if self.pet.local_ai_ready() and not self._ai_busy:
             lane = local_ai_lane(raw, rec)
             if lane:
                 self._local_ai_request(lane, raw, cleaned, rec)
                 return
+        # No local model (Ollama absent or turned off): fall back to building a
+        # prompt, and say so once so it isn't a silent surprise.
+        if not self.pet.local_ai_ready() and not self._localai_note_shown:
+            self._localai_note_shown = True
+            self._add("caption", "Local AI (Ollama) isn't running — I'll build "
+                                 "you a prompt instead. Right-click me → Local AI.")
         self._standard_request(raw, cleaned, rec)
 
     def _run_slash(self, parsed, raw):
@@ -7941,11 +7963,12 @@ class ChatWindow:
                        lambda: self._deliver_reply(cleaned, rec, prompt))
 
     def _show_help(self):
-        lines = ["Here's what I can do — type / then a command:"]
+        lines = ["Just type to chat — I can answer, explain, rewrite, "
+                 "summarize, review, or draft. For specific jobs, type / then "
+                 "a command:"]
         lines += [f"  {name}  —  {desc}" for name, desc, _ in SLASH_COMMANDS]
-        lines.append(f"…plus a command for each of my {len(PROMPT_TEMPLATES)} IT "
+        lines.append(f"…plus a command for each of my {len(PROMPT_TEMPLATES)} "
                      f"prompt templates — type / and a few letters to find one.")
-        lines.append("Or just talk to me normally and I'll figure it out.")
         self._add("pet", "\n".join(lines))
 
     def _standard_request(self, raw, cleaned, rec):

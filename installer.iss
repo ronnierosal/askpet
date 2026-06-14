@@ -6,7 +6,7 @@
 ; is never touched (and is preserved on uninstall).
 
 #define AppName "AskPet"
-#define AppVersion "0.27.2"
+#define AppVersion "0.28.0"
 #define AppPublisher "SLDD IT"
 #define AppExeName "AskPet.exe"
 

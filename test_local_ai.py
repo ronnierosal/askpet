@@ -17,11 +17,14 @@ def lane_for(msg):
 
 # --- offline: lane routing -------------------------------------------------
 CASES = [
-    # light asks the local model should answer
+    # specialized lanes still win when the message clearly calls for them
     ("rewrite this to sound more professional: hey boss im out sick today", "rewrite"),
     ("proofread this: We was going to send the report on monday but it slipped", "rewrite"),
     ("summarize this: the meeting covered budget overruns, the new vendor "
      "contract, and a hiring freeze starting in november", "summarize"),
+    ("review this draft: Dear team, the rollout is on track and we are confident", "review"),
+    ("critique this opening: It was a dark and stormy night, again, as always", "review"),
+    ("feedback on this paragraph: the rollout went smoothly and finished on time", "review"),
     ("draft an email to decline a vendor meeting politely", "email"),
     ("write an email asking finance for the budget numbers", "email"),
     # content words must not disqualify the ask (gemma-battery findings)
@@ -34,22 +37,23 @@ CASES = [
     ("what does dns actually do?", "answer"),
     ("whats the difference between ram and storage", "answer"),
     ("how does mfa stop phishing?", "answer"),
-    # NOT local: rewrite/summarize asks without the text to work on -
-    # the clarifying-question flow should ask for it instead
-    ("proofread this paragraph for me", None),
-    ("make this sound friendlier", None),
-    ("summarize this meeting transcript", None),
-    ("tldr of this article", None),
-    # NOT local: email topic without a drafting verb (inbox management)
-    ("triage an inbox with 800 unread emails", None),
-    # NOT local: execution work, even when question-shaped
-    ("write a powershell script to disable inactive accounts", None),
-    ("how do i write a python script to parse these logs?", None),
-    ("fix the deckside announcer pdf parsing bug", None),
-    ("bulk update ad groups from a csv", None),
-    # NOT local: plain task descriptions without a light-lane topic
-    ("plan our migration from okta to entra", None),
-    ("intune compliance policy for new laptops", None),
+    # General chat is the DEFAULT now: a bare rewrite/summarize ask with no
+    # text to work on just becomes a general reply (which asks for the text),
+    # NOT the prompt builder.
+    ("proofread this paragraph for me", "answer"),
+    ("make this sound friendlier", "answer"),
+    ("summarize this meeting transcript", "answer"),
+    ("tldr of this article", "answer"),
+    # email topic without a drafting verb (inbox management) -> general chat
+    ("triage an inbox with 800 unread emails", "answer"),
+    # execution work is no longer auto-routed to the prompt builder; it's
+    # general chat by default (use /fix-prompt to build a prompt instead)
+    ("write a powershell script to disable inactive accounts", "answer"),
+    ("how do i write a python script to parse these logs?", "answer"),
+    ("fix the deckside announcer pdf parsing bug", "answer"),
+    ("bulk update ad groups from a csv", "answer"),
+    ("plan our migration from okta to entra", "answer"),
+    ("intune compliance policy for new laptops", "answer"),
 ]
 failed = 0
 for msg, expected in CASES:
@@ -59,6 +63,12 @@ for msg, expected in CASES:
         failed += 1
 assert not failed, f"{failed} lane cases wrong"
 print(f"lane routing OK ({len(CASES)} cases)")
+
+# review detection is START-anchored: "feedback on" must lead the instruction,
+# so a payload message that only mentions it mid-sentence is NOT a review.
+assert lane_for("feedback on this paragraph: the rollout went smoothly on time") == "review"
+assert lane_for("send the vendor my feedback on their quote: pricing looks high") != "review"
+print("review start-anchor OK")
 
 # help KB still wins over the answer lane (checked at the chat layer, but
 # the KB must keep matching so _start_request short-circuits first)

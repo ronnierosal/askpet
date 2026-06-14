@@ -127,10 +127,12 @@ assert lane_for("my laptop battery dies in an hour, fix it") != "knowledge"
 assert lane_for("why does my laptop battery drain so fast?") != "knowledge"
 # non-pack questions keep their lanes
 assert lane_for("what does dns actually do?") == "answer"
-assert lane_for("write a powershell script to clean temp files") is None
-# long task-shaped FPV messages still build prompts (not question, >14 words)
+# execution / long task-shaped messages are no longer auto-routed to the
+# prompt builder — general chat ("answer") is the default now (use /fix-prompt
+# to build a prompt). Knowledge-pack matches above still win.
+assert lane_for("write a powershell script to clean temp files") == "answer"
 assert lane_for("plan a complete build guide for a 75mm whoop including all "
-                "parts list prices and assembly steps for beginners") is None
+                "parts list prices and assembly steps for beginners") == "answer"
 print("lane routing OK")
 
 print("KNOWLEDGE TEST PASSED")
