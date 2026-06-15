@@ -272,6 +272,39 @@ pet.set_chat_theme("light")
 assert chat.t is pm.CHAT_THEMES["light"]
 print("chat theme switch OK (resolve + live apply + persist)")
 
+# Chat text size: persists, clamps, and live-applies (font accessor + reflow)
+n_msgs = len(chat.messages)
+pet.set_chat_text_size(16)
+assert pm.load_json(pm.SETTINGS_FILE, {}).get("chat_text_size") == 16
+assert chat.chat_text_size == 16 and chat._bubble_font() == ("Segoe UI", 16)
+assert chat._caption_font() == ("Segoe UI", 14)
+assert len(chat.messages) == n_msgs, "text-size reflow lost messages"
+pet.set_chat_text_size(999)   # clamps to the max
+assert chat.chat_text_size == 18
+pet.set_chat_text_size(10)    # restore default
+print("chat text size OK (persist + clamp + live reflow)")
+
+# Games: /games menu, /play start, in-game move routing, quit, win clears.
+chat.active_game = None
+n = len(chat.messages)
+chat.entry.insert("1.0", "/games"); chat.send()
+assert chat.active_game is None
+assert any("/play" in (t or "") for k, t in chat.messages[n:]), "games menu not shown"
+chat.entry.insert("1.0", "/play hangman"); chat.send()
+assert isinstance(chat.active_game, pm.Hangman), "hangman didn't start"
+_g = chat.active_game
+chat.entry.insert("1.0", "e"); chat.send()        # a plain move routes to the game
+assert chat.active_game is _g, "a move shouldn't end the game"
+assert chat.messages[-1][0] == "pet", "game should reply as the pet"
+chat.entry.insert("1.0", "quit"); chat.send()     # 'quit' returns to normal chat
+assert chat.active_game is None, "quit should end the game"
+chat.entry.insert("1.0", "/play dragons"); chat.send()   # unknown -> menu, no game
+assert chat.active_game is None
+chat.active_game = pm.NumberGuess(); chat.active_game.secret = 42
+chat.entry.insert("1.0", "42"); chat.send()       # winning clears the game
+assert chat.active_game is None, "a finished game should clear itself"
+print("games integration OK (/games, /play, moves, quit, win clears)")
+
 # Slim custom scrollbar replaced the ttk one and speaks the scrollbar protocol
 assert isinstance(chat._scroll, pm.SlimScrollbar), type(chat._scroll)
 chat._scroll.set(0.0, 0.5)   # partial view -> thumb drawn

@@ -83,6 +83,45 @@ assert pm.pick_local_model(["llama3:8b", "gemma3:1b"], "llama3:8b") == "llama3:8
 assert pm.pick_local_model(["gemma3:1b"], "gone:1b") == "gemma3:1b"
 print("model picking OK")
 
+# --- offline: per-lane sampling presets ------------------------------------
+# persona/general chat samples livelier; editing + grounded lanes stay faithful
+assert pm.local_ai_options("answer") is pm.LOCAL_AI_CHAT_OPTIONS
+for _lane in ("rewrite", "email", "summarize", "review", "knowledge", "hobby"):
+    assert pm.local_ai_options(_lane) is pm.LOCAL_AI_EDIT_OPTIONS, _lane
+# num_ctx is set on BOTH so long persona+memory+history prompts aren't truncated
+assert pm.LOCAL_AI_CHAT_OPTIONS["num_ctx"] == pm.LOCAL_AI_EDIT_OPTIONS["num_ctx"] == 8192
+assert pm.LOCAL_AI_CHAT_OPTIONS["temperature"] > pm.LOCAL_AI_EDIT_OPTIONS["temperature"]
+print("local-AI sampling presets OK")
+
+# the options actually reach Ollama in the request body (capture, no network)
+import json as _json
+_captured = {}
+class _FakeResp:
+    def __init__(self, lines): self._lines = lines
+    def __enter__(self): return self
+    def __exit__(self, *a): return False
+    def __iter__(self): return iter(self._lines)
+def _fake_urlopen(req, timeout=None):
+    _captured["body"] = _json.loads(req.data.decode("utf-8"))
+    return _FakeResp([_json.dumps({"message": {"content": "hi"}, "done": True}).encode()])
+_real_urlopen = pm.urllib.request.urlopen
+try:
+    pm.urllib.request.urlopen = _fake_urlopen
+    out = pm.ollama_chat_stream("m", "sys", "user", on_chunk=lambda p: None,
+                                options=pm.local_ai_options("answer"))
+    assert out == "hi"
+    o = _captured["body"]["options"]
+    assert o["num_ctx"] == 8192 and o["temperature"] == 0.8
+    assert o["top_p"] == 0.95 and o["top_k"] == 64
+    pm.ollama_chat_stream("m", "sys", "user", on_chunk=lambda p: None,
+                          options=pm.local_ai_options("rewrite"))
+    assert _captured["body"]["options"]["temperature"] == 0.3
+    pm.ollama_chat_stream("m", "sys", "user", on_chunk=lambda p: None)  # default
+    assert _captured["body"]["options"]["num_ctx"] == 8192  # default preset still sets it
+finally:
+    pm.urllib.request.urlopen = _real_urlopen
+print("local-AI options reach Ollama OK (num_ctx + per-lane sampling in body)")
+
 # --- live: requires Ollama ---------------------------------------------------
 models = pm.ollama_models()
 if not models:

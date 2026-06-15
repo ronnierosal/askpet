@@ -27,7 +27,7 @@ print("parse_slash OK")
 
 # --- registry ----------------------------------------------------------------
 VALID_ACTIONS = {"rewrite", "email", "summarize", "review", "answer",
-                 "knowledge", "prompt", "help"}
+                 "knowledge", "prompt", "help", "games", "play"}
 names = [n for n, _, _ in pm.SLASH_COMMANDS]
 assert all(n.startswith("/") for n in names), names
 assert len(names) == len(set(names)), "duplicate command names"
@@ -54,6 +54,9 @@ assert pm.SLASH_BY_NAME["review"][1] == "review"
 assert pm.SLASH_BY_NAME["fix-prompt"][1] == "prompt"   # /fix-prompt builds prompts
 assert pm.SLASH_BY_NAME["prompt"][1] == "prompt"       # back-compat alias
 assert pm.SLASH_BY_NAME["help"][1] == "help"
+assert pm.SLASH_BY_NAME["games"][1] == "games"   # /games opens the arcade menu
+assert pm.SLASH_BY_NAME["play"][1] == "play"     # /play <name> starts a game
+assert pm.start_game("hangman") is not None and pm.start_game("zzz") is None
 print("dispatch mapping OK")
 
 # --- library templates surface as commands ----------------------------------

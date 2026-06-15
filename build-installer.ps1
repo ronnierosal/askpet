@@ -46,6 +46,7 @@ Write-Host "== 1/4 Running tests =="
 & $python test_slash.py | Select-Object -Last 1
 & $python test_gui.py | Select-Object -Last 1
 & $python test_pet.py | Select-Object -Last 1
+& $python test_games.py | Select-Object -Last 1
 
 Write-Host "== 2/4 Building AskPet.exe (PyInstaller) =="
 & $pyinstaller --noconfirm --clean --windowed --name AskPet `

@@ -33,7 +33,7 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 APP_NAME = "AskPet"
-APP_VERSION = "0.33.0"
+APP_VERSION = "0.34.0"
 CONTENT_VERSION = "2026.06.17"
 
 # ---------------------------------------------------------------------------
@@ -5644,9 +5644,27 @@ def pick_local_model(models: list, preferred: str = None) -> str:
     return models[0] if models else ""
 
 
+# Sampling presets for the local model. Small models (gemma3:4b included)
+# silently truncate when the prompt outgrows the context window, so num_ctx is
+# set explicitly to leave room for the persona prompt + remembered facts +
+# recent turns. The persona/chat lane samples livelier (closer to Gemma's
+# recommended temp/top_p/top_k) so the pet has personality; the editing and
+# grounded lanes stay low-temp so they don't invent or drift from the source.
+LOCAL_AI_BASE_OPTIONS = {"num_ctx": 8192, "repeat_penalty": 1.1}
+LOCAL_AI_EDIT_OPTIONS = {**LOCAL_AI_BASE_OPTIONS, "temperature": 0.3, "num_predict": 600}
+LOCAL_AI_CHAT_OPTIONS = {**LOCAL_AI_BASE_OPTIONS, "temperature": 0.8,
+                         "top_p": 0.95, "top_k": 64, "num_predict": 400}
+
+
+def local_ai_options(lane: str) -> dict:
+    """Sampling options for a lane: livelier for the persona/general-chat lane
+    ('answer'), faithful low-temp for the editing/grounded lanes."""
+    return LOCAL_AI_CHAT_OPTIONS if lane == "answer" else LOCAL_AI_EDIT_OPTIONS
+
+
 def ollama_chat_stream(model: str, system: str, user: str, on_chunk,
                        timeout: int = 300, cancel: "threading.Event" = None,
-                       history: list = None) -> str:
+                       history: list = None, options: dict = None) -> str:
     """Stream a chat response; on_chunk(text) fires per token batch.
 
     `history` (optional) is a list of prior {role, content} turns inserted
@@ -5667,9 +5685,10 @@ def ollama_chat_stream(model: str, system: str, user: str, on_chunk,
         "messages": messages,
         "stream": True,
         "keep_alive": "30m",
-        # Low temperature: editing and factual lanes want faithful output,
-        # and small models invent details when sampling runs hot.
-        "options": {"temperature": 0.3, "num_predict": 600},
+        # Per-lane sampling (see local_ai_options); defaults to the faithful
+        # editing preset so existing callers keep low-temp behavior — now with
+        # num_ctx set so long prompts aren't silently truncated.
+        "options": options or LOCAL_AI_EDIT_OPTIONS,
     }).encode("utf-8")
     req = urllib.request.Request(OLLAMA_BASE + "/api/chat", data=body,
                                  headers={"Content-Type": "application/json"})
@@ -6369,6 +6388,8 @@ SLASH_COMMANDS = [
     ("/email", "Draft a workplace email", "email"),
     ("/ask", "Answer a quick question, locally", "answer"),
     ("/fix-prompt", "Build a best-practice prompt for an AI/IT task", "prompt"),
+    ("/games", "See the games we can play", "games"),
+    ("/play", "Start a game — e.g. /play hangman", "play"),
     ("/help", "Show what AskPet can do", "help"),
 ]
 SLASH_BY_NAME = {name[1:]: (desc, action) for name, desc, action in SLASH_COMMANDS}
@@ -7113,6 +7134,14 @@ class PetOverlay:
             theme_menu.add_command(label=label + check,
                                    command=lambda v=val: self.set_chat_theme(v))
         menu.add_cascade(label="🎨 Chat theme", menu=theme_menu)
+        text_menu = tk.Menu(menu, tearoff=0)
+        current_text_size = self.settings.get("chat_text_size", 10)
+        for label, size in (("Small", 8), ("Normal", 10), ("Large", 13),
+                            ("Extra Large", 16)):
+            check = " ✓" if size == current_text_size else ""
+            text_menu.add_command(label=label + check,
+                                  command=lambda sz=size: self.set_chat_text_size(sz))
+        menu.add_cascade(label="🔤 Chat text size", menu=text_menu)
         hist_menu = tk.Menu(menu, tearoff=0)
         current = history_retention_hours(self.settings)
         for label, hours in HISTORY_RETENTION_CHOICES:
@@ -7379,6 +7408,14 @@ class PetOverlay:
         if self.chat and self.chat.is_open():
             self.chat.apply_theme()
 
+    def set_chat_text_size(self, size):
+        """Persist the chat text size and, if the chat is open, apply it live."""
+        size = max(7, min(18, int(size)))
+        self.settings["chat_text_size"] = size
+        self._save_settings()
+        if self.chat and self.chat.is_open():
+            self.chat.set_chat_text_size(size)
+
     def open_editor(self, prefill: str = ""):
         if self.editor and self.editor.root.winfo_exists():
             self.editor.root.deiconify()
@@ -7411,7 +7448,7 @@ class PetOverlay:
         for key in ("pet_x", "pet_y", "history_retention_hours",
                     "chat_retention_hours", "local_ai_enabled",
                     "local_ai_model", "local_ai_intro_shown", "chat_theme",
-                    "update_seen"):
+                    "chat_text_size", "update_seen"):
             if key in self.settings:
                 disk[key] = self.settings[key]
         disk["app_version"] = APP_VERSION
@@ -7997,6 +8034,596 @@ class SlimScrollbar(tk.Canvas):
         self._yview("moveto", max(0.0, min(1.0, top / h)))
 
 
+# ---------------------------------------------------------------------------
+# Games: a little arcade the pet runs inside the chat. Everything here is
+# DETERMINISTIC and offline — rules, scoring, and answers resolve instantly in
+# Python so a kid never waits on the model to learn whether a guess was right.
+# Content is hand-authored and G-rated. Games are pure (no Tkinter): the chat
+# layer calls start()/handle()/is_over and shows the returned text. Difficulty
+# spans a range so siblings of mixed ages can all play.
+# ---------------------------------------------------------------------------
+
+SCRAMBLE_WORDS = [
+    "apple", "banana", "rocket", "puppy", "dragon", "castle", "rainbow",
+    "planet", "cookie", "turtle", "wizard", "guitar", "pirate", "jungle",
+    "dolphin", "pumpkin", "monster", "balloon", "penguin", "treasure",
+    "butterfly", "dinosaur", "elephant", "sandwich",
+]
+
+# (category, word) — a spread of lengths/difficulty for mixed ages.
+HANGMAN_WORDS = [
+    ("Animal", "tiger"), ("Animal", "giraffe"), ("Animal", "octopus"),
+    ("Animal", "kangaroo"), ("Animal", "penguin"),
+    ("Space", "planet"), ("Space", "comet"), ("Space", "galaxy"),
+    ("Space", "astronaut"), ("Space", "telescope"),
+    ("Food", "pizza"), ("Food", "pancake"), ("Food", "spaghetti"),
+    ("Food", "strawberry"),
+    ("Things", "rocket"), ("Things", "castle"), ("Things", "umbrella"),
+    ("Things", "treasure"), ("Things", "dragon"), ("Things", "rainbow"),
+]
+
+# (thing, [true attributes]). 20 Questions answers "yes" when a question word
+# is one of the tags, "no" otherwise — so tags list everything TRUE about it.
+TWENTYQ_THINGS = [
+    ("dog", ["animal", "alive", "pet", "furry", "fur", "legs", "tail",
+             "bark", "land", "eat", "cute", "friendly", "soft"]),
+    ("cat", ["animal", "alive", "pet", "furry", "fur", "legs", "tail",
+             "small", "land", "soft", "cute", "whiskers", "meow"]),
+    ("elephant", ["animal", "alive", "big", "huge", "grey", "gray", "legs",
+                  "trunk", "land", "ears", "heavy", "wild"]),
+    ("fish", ["animal", "alive", "water", "swim", "small", "scales", "fins",
+              "pet", "ocean", "wet"]),
+    ("bird", ["animal", "alive", "fly", "wings", "feathers", "small", "eggs",
+              "beak", "sky", "sing"]),
+    ("apple", ["food", "fruit", "red", "green", "sweet", "round", "small",
+               "eat", "tree", "healthy", "plant", "crunchy"]),
+    ("banana", ["food", "fruit", "yellow", "sweet", "long", "eat", "peel",
+                "soft", "plant", "healthy"]),
+    ("sun", ["hot", "big", "round", "yellow", "bright", "sky", "star",
+             "space", "light", "day", "warm"]),
+    ("car", ["machine", "fast", "wheels", "metal", "drive", "road",
+             "loud", "big", "doors", "vehicle"]),
+    ("rocket", ["machine", "fast", "tall", "metal", "fly", "space", "loud",
+                "fire", "vehicle", "pointy"]),
+    ("tree", ["plant", "alive", "tall", "green", "wood", "leaves", "big",
+              "land", "outside", "brown"]),
+    ("ball", ["toy", "round", "bounce", "small", "play", "throw", "fun",
+              "roll"]),
+]
+
+TRIVIA_PACKS = {
+    "animals": [
+        {"q": "Which animal is the tallest in the world?",
+         "options": ["Giraffe", "Elephant", "Horse", "Camel"], "answer": 0},
+        {"q": "How many legs does a spider have?",
+         "options": ["6", "8", "10", "4"], "answer": 1},
+        {"q": "Which animal is known as the King of the Jungle?",
+         "options": ["Tiger", "Bear", "Lion", "Wolf"], "answer": 2},
+        {"q": "What do you call a baby kangaroo?",
+         "options": ["Cub", "Joey", "Calf", "Kit"], "answer": 1},
+        {"q": "Which sea animal has eight arms?",
+         "options": ["Octopus", "Shark", "Dolphin", "Crab"], "answer": 0},
+        {"q": "What is the fastest land animal?",
+         "options": ["Lion", "Cheetah", "Horse", "Rabbit"], "answer": 1},
+    ],
+    "space": [
+        {"q": "Which planet do we live on?",
+         "options": ["Mars", "Venus", "Earth", "Jupiter"], "answer": 2},
+        {"q": "What is the closest star to Earth?",
+         "options": ["The Moon", "The Sun", "Mars", "Pluto"], "answer": 1},
+        {"q": "Which planet is known as the Red Planet?",
+         "options": ["Mars", "Saturn", "Neptune", "Mercury"], "answer": 0},
+        {"q": "What do astronauts wear in space?",
+         "options": ["Raincoats", "Spacesuits", "Pajamas", "Armor"], "answer": 1},
+        {"q": "Which planet is the biggest in our solar system?",
+         "options": ["Earth", "Saturn", "Jupiter", "Mars"], "answer": 2},
+        {"q": "What is the name of our galaxy?",
+         "options": ["Andromeda", "Milky Way", "Big Dipper", "Orion"], "answer": 1},
+    ],
+    "dinosaurs": [
+        {"q": "Which dinosaur had a long neck to reach tall trees?",
+         "options": ["T-Rex", "Brachiosaurus", "Raptor", "Stegosaurus"], "answer": 1},
+        {"q": "What does 'T-Rex' stand for?",
+         "options": ["Tiny Rex", "Tyrannosaurus Rex", "Triceratops", "Turbo Rex"],
+         "answer": 1},
+        {"q": "Which dinosaur had three horns on its head?",
+         "options": ["Triceratops", "Velociraptor", "Diplodocus", "Ankylosaurus"],
+         "answer": 0},
+        {"q": "What did big dinosaurs like Brachiosaurus eat?",
+         "options": ["Meat", "Plants", "Rocks", "Fish"], "answer": 1},
+        {"q": "What are dinosaur bones called when found in rock?",
+         "options": ["Crystals", "Fossils", "Gems", "Shells"], "answer": 1},
+    ],
+}
+
+
+def _strip_article(s):
+    return re.sub(r"^(?:the|a|an)\s+", "", (s or "").strip().lower())
+
+
+class NumberGuess:
+    name = "Number Guess"
+    blurb = "I think of a number 1–100; you guess higher/lower."
+
+    def __init__(self, rng=None, lo=1, hi=100):
+        self.lo, self.hi = lo, hi
+        self.secret = (rng or random).randint(lo, hi)
+        self.tries = 0
+        self.over = False
+
+    def start(self):
+        return (f"🔢 I'm thinking of a number from {self.lo} to {self.hi}.\n"
+                "Type a guess and I'll say higher or lower! (say 'quit' to stop)")
+
+    def handle(self, text):
+        m = re.search(r"-?\d+", text)
+        if not m:
+            return "Type a number for me to check! 🙂"
+        g = int(m.group())
+        self.tries += 1
+        if g == self.secret:
+            self.over = True
+            tries = f"{self.tries} tr" + ("y" if self.tries == 1 else "ies")
+            return f"🎉 YES! It was {self.secret} — you got it in {tries}! 🌟"
+        return f"{g}? Try {'higher ⬆️' if g < self.secret else 'lower ⬇️'}!"
+
+    @property
+    def is_over(self):
+        return self.over
+
+
+class WordScramble:
+    name = "Word Scramble"
+    blurb = "Unscramble the mixed-up word."
+
+    def __init__(self, rng=None):
+        r = rng or random
+        self.word = r.choice(SCRAMBLE_WORDS)
+        self.scrambled = self._scramble(self.word, r)
+        self.over = False
+
+    @staticmethod
+    def _scramble(word, r):
+        letters = list(word)
+        for _ in range(30):
+            r.shuffle(letters)
+            if "".join(letters) != word:
+                break
+        return "".join(letters)
+
+    def start(self):
+        return (f"🪢 Unscramble this word ({len(self.word)} letters):\n"
+                f"   {self.scrambled.upper()}\n"
+                "Type your answer, or 'hint' for a clue! (say 'quit' to stop)")
+
+    def handle(self, text):
+        t = text.strip().lower()
+        if t in ("hint", "clue", "help"):
+            return f"Clue: it starts with '{self.word[0].upper()}' 🔎"
+        if t == self.word:
+            self.over = True
+            return f"🎉 YES! The word was {self.word.upper()} — word wizard! ✨"
+        return f"Not quite — keep trying!\n   {self.scrambled.upper()}"
+
+    @property
+    def is_over(self):
+        return self.over
+
+
+class Hangman:
+    name = "Hangman"
+    blurb = "Guess the word letter by letter before the hearts run out."
+    MAX_WRONG = 6
+
+    def __init__(self, rng=None):
+        self.category, self.word = (rng or random).choice(HANGMAN_WORDS)
+        self.word = self.word.lower()
+        self.guessed = set()
+        self.wrong = 0
+        self.over = False
+        self.won = False
+
+    def _mask(self):
+        return " ".join(c.upper() if c in self.guessed else "_" for c in self.word)
+
+    def _lives(self):
+        return "❤️" * (self.MAX_WRONG - self.wrong) + "🤍" * self.wrong
+
+    def _status(self):
+        return f"{self._mask()}    {self._lives()}"
+
+    def start(self):
+        return (f"🔤 Hangman! Category: {self.category}.\n{self._status()}\n"
+                "Guess a letter! (say 'quit' to stop)")
+
+    def handle(self, text):
+        t = text.strip().lower()
+        if len(t) > 1:  # whole-word guess (never echoed back, for safety)
+            if t == self.word:
+                self.guessed |= set(self.word)
+                self.over = self.won = True
+                return f"🎉 YES! The word was {self.word.upper()} — brilliant! ✨"
+            self.wrong += 1
+            return self._after_wrong("That's not the word.")
+        if not t.isalpha():
+            return "Pick one letter, A–Z! 🙂"
+        if t in self.guessed:
+            return f"You already tried '{t.upper()}'. Pick a new letter!"
+        self.guessed.add(t)
+        if t in self.word:
+            if all(c in self.guessed for c in self.word):
+                self.over = self.won = True
+                return f"🎉 YES! {self.word.upper()} — you spelled it! ✨"
+            return f"Yes, there's a '{t.upper()}'!\n{self._status()}"
+        self.wrong += 1
+        return self._after_wrong(f"No '{t.upper()}'.")
+
+    def _after_wrong(self, prefix):
+        if self.wrong >= self.MAX_WRONG:
+            self.over = True
+            return (f"{prefix} Out of hearts! 🐭 The word was "
+                    f"{self.word.upper()}. Want to play again?")
+        return f"{prefix}\n{self._status()}"
+
+    @property
+    def is_over(self):
+        return self.over
+
+
+class TwentyQuestions:
+    name = "20 Questions"
+    blurb = "I think of something; ask yes/no questions to guess it."
+    START = 20
+
+    def __init__(self, rng=None):
+        self.secret, tags = (rng or random).choice(TWENTYQ_THINGS)
+        self.tags = set(tags)
+        self.left = self.START
+        self.over = False
+        self.won = False
+
+    def start(self):
+        return ("❓ I'm thinking of something! Ask me yes/no questions "
+                "(like 'is it an animal?'), or guess with 'is it a ___?'.\n"
+                f"You have {self.left} questions. (say 'quit' to stop)")
+
+    NEGATIONS = {"not", "no", "never", "isn", "isnt", "doesn", "doesnt",
+                 "dont", "aren", "arent", "cant", "wont", "wasn"}
+
+    def handle(self, text):
+        t = text.strip().lower().rstrip("?")
+        self.left -= 1
+        words = set(re.findall(r"[a-z]+", t))
+        negated = bool(words & self.NEGATIONS)
+        # A correct guess: the secret appears as a whole word (so "is it a dog
+        # by any chance" wins), but not inside a negated question.
+        m = re.search(r"\bis it (?:a |an |the )?(.+)$", t)
+        guess = m.group(1).strip() if m else None
+        if guess and not negated and re.search(rf"\b{re.escape(self.secret)}\b", guess):
+            self.over = self.won = True
+            return f"🎉 YES! It was a {self.secret.upper()} — you guessed it! 🌟"
+        # Yes/no by tag match, flipped when the question is negated.
+        match = bool(words & self.tags)
+        if negated:
+            match = not match
+        ans = "Yes! 👍" if match else "Nope! 👎"
+        if self.left <= 0:
+            self.over = True
+            return (f"{ans} ...and that was your last question! It was a "
+                    f"{self.secret.upper()}. Great game! 🎈")
+        return f"{ans}  ({self.left} left)"
+
+    @property
+    def is_over(self):
+        return self.over
+
+
+class Trivia:
+    name = "Trivia"
+    blurb = "Kid-friendly quiz — animals, space, and dinosaurs."
+
+    def __init__(self, rng=None, pack=None, n=5):
+        r = rng or random
+        names = [pack] if pack in TRIVIA_PACKS else list(TRIVIA_PACKS)
+        pool = [dict(q) for name in names for q in TRIVIA_PACKS[name]]
+        r.shuffle(pool)
+        self.questions = pool[:n]
+        self.i = 0
+        self.score = 0
+        self.over = not self.questions
+
+    def _ask(self):
+        q = self.questions[self.i]
+        opts = "\n".join(f"   {chr(65 + j)}) {o}"
+                         for j, o in enumerate(q["options"]))
+        return f"Q{self.i + 1}/{len(self.questions)}: {q['q']}\n{opts}"
+
+    def start(self):
+        if not self.questions:
+            return "I don't have any trivia loaded right now!"
+        return ("🧠 Trivia time! Type the letter (A/B/C/D) of your answer.\n\n"
+                + self._ask())
+
+    def handle(self, text):
+        q = self.questions[self.i]
+        t = text.strip().lower()
+        correct_idx = q["answer"]
+        correct = q["options"][correct_idx].lower()
+        picked = None
+        if len(t) == 1 and t.isalpha():        # the instructed A/B/C/D path
+            j = ord(t) - 97
+            if 0 <= j < len(q["options"]):
+                picked = q["options"][j].lower()
+        if picked is not None:
+            right = picked == correct
+        else:
+            # Text answers: accept the exact answer or its key word (so "sun"
+            # matches "The Sun"), but on a WHOLE-WORD basis so "18" != "8".
+            nt, nc = _strip_article(t), _strip_article(correct)
+            right = bool(nt) and (nt == nc or nt in nc.split() or nc in nt.split())
+        if right:
+            self.score += 1
+            verdict = f"✅ Correct! {q['options'][correct_idx]}."
+        else:
+            verdict = f"❌ It was {chr(65 + correct_idx)}) {q['options'][correct_idx]}."
+        self.i += 1
+        if self.i >= len(self.questions):
+            self.over = True
+            return (f"{verdict}\n\n🏁 Final score: {self.score}/"
+                    f"{len(self.questions)}! {self._grade()}")
+        return f"{verdict}\n\n{self._ask()}"
+
+    def _grade(self):
+        pct = self.score / max(1, len(self.questions))
+        if pct == 1:
+            return "Perfect! 🌟"
+        if pct >= 0.6:
+            return "Great job! 🎉"
+        return "Good try — play again! 💪"
+
+    @property
+    def is_over(self):
+        return self.over
+
+
+# The Cozy Critter Dungeon: a gentle MUD-style room graph. The kid types
+# interactive-fiction verbs (go/look/take/use/talk/inventory) and the engine
+# resolves them in code — instantly and always winnable, with no death. The
+# puzzle is to befriend critters (never fight): get the KEY from the mole,
+# unlock the door, share the BERRY with the hedgehog, and bring the SUNSTONE
+# home. "courage" stars are gentle encouragement and never cause a loss.
+DUNGEON_ROOMS = {
+    "entrance": {
+        "name": "Mossy Doorway",
+        "desc": "A soft mossy doorway twinkles with friendly fireflies. A little "
+                "LANTERN rests on a rock. A cozy passage leads NORTH.",
+        "exits": {"north": "hall"},
+        "items": ["lantern"],
+    },
+    "hall": {
+        "name": "Glowing Hall",
+        "desc": "A round hall lit by glowworms. A library is EAST, a little "
+                "wooden DOOR leads NORTH, and SOUTH goes back outside.",
+        "exits": {"south": "entrance", "east": "library", "north": "garden"},
+        "locked": {"north": "key"},
+    },
+    "library": {
+        "name": "Cozy Library",
+        "desc": "Stacks of acorn books! A sleepy MOLE in a nightcap dozes by a "
+                "warm lamp. A red BERRY sits on a low shelf. WEST is the hall.",
+        "exits": {"west": "hall"},
+        "items": ["berry"],
+        "mob": {"name": "mole",
+                "talk": "The mole yawns: “Off to the garden, little one? Here, "
+                        "take my KEY.”",
+                "gives": "key"},
+    },
+    "garden": {
+        "name": "Moonlit Garden",
+        "desc": "A gentle garden under big friendly stars. A shy HEDGEHOG sits "
+                "on a little bridge to the NORTH. SOUTH returns to the hall.",
+        "exits": {"south": "hall", "north": "burrow"},
+        "dark": True,
+        "block": {"north": {"need": "berry",
+                            "ok": "You share the BERRY. The hedgehog beams and "
+                                  "scoots aside — the bridge NORTH is clear! ⭐",
+                            "no": "A shy hedgehog gently blocks the bridge NORTH. "
+                                  "Maybe it would like a snack…"}},
+    },
+    "burrow": {
+        "name": "Starlit Burrow",
+        "desc": "A warm burrow twinkling with starlight. The lost SUNSTONE glows "
+                "softly here, ready to come home!",
+        "exits": {"south": "garden"},
+        "items": ["sunstone"],
+        "goal_item": "sunstone",
+    },
+}
+
+_DIRS = {"n": "north", "s": "south", "e": "east", "w": "west"}
+
+
+class CozyDungeon:
+    name = "Cozy Critter Dungeon"
+    blurb = "A gentle adventure — explore, make critter friends, find the Sunstone."
+    START_ROOM = "entrance"
+
+    def __init__(self, rng=None, narrator=None):
+        # Per-game copy so taking items doesn't mutate the shared map.
+        self.rooms = {rid: {**r, "items": list(r.get("items", []))}
+                      for rid, r in DUNGEON_ROOMS.items()}
+        self.loc = self.START_ROOM
+        self.inventory = []
+        self.flags = set()
+        self.courage = 3
+        self.moves = 0
+        self.over = False
+        self.won = False
+        self.narrator = narrator       # optional callable(room_dict) -> str|None
+        self._visited = {self.START_ROOM}
+
+    def start(self):
+        return ("🗺️ Welcome to the COZY CRITTER DUNGEON! Help the lost Sunstone "
+                "find its way home, and make critter friends along the way.\n"
+                "Try things like: go north · look · take lantern · talk to mole · "
+                "use key · give berry · inventory.  (say 'quit' to stop)\n\n"
+                + self._describe(self.loc, first=True))
+
+    def _describe(self, rid, first=False):
+        r = self.rooms[rid]
+        line = f"⭐{self.courage}   📍 {r['name']}\n{r['desc']}"
+        if r.get("items"):
+            line += "\nYou see: " + ", ".join(i.upper() for i in r["items"]) + "."
+        if first and self.narrator:
+            try:
+                extra = self.narrator(r)
+            except Exception:
+                extra = None
+            if extra:
+                line += "\n" + extra
+        return line
+
+    def handle(self, text):
+        self.moves += 1
+        words = text.strip().lower().split()
+        if not words:
+            return "Tell me what to do! Try: go north, look, take lantern, inventory."
+        verb, rest = words[0], " ".join(words[1:]).strip()
+        if verb in _DIRS or verb in ("north", "south", "east", "west"):
+            return self._go(_DIRS.get(verb, verb))
+        if verb in ("go", "move", "walk", "run", "head"):
+            return self._go(_DIRS.get(rest, rest))
+        if verb in ("look", "l", "where"):
+            return self._describe(self.loc)
+        if verb in ("take", "get", "grab", "pick"):
+            return self._take(rest.replace("up ", "").strip())
+        if verb in ("inventory", "inv", "i", "bag"):
+            return ("Your bag: " + ", ".join(i.upper() for i in self.inventory)
+                    if self.inventory else "Your bag is empty right now.")
+        if verb in ("use", "give", "open", "unlock"):
+            return self._use(rest)
+        if verb in ("talk", "speak", "hi", "hello", "say"):
+            return self._talk()
+        if verb in ("help", "?", "commands"):
+            return ("Try: go north/south/east/west · look · take <thing> · "
+                    "use <thing> · give <thing> · talk · inventory.")
+        return ("Hmm, I'm not sure how to do that. Try: go north, look, take, "
+                "use, give, talk, or inventory.")
+
+    def _go(self, d):
+        r = self.rooms[self.loc]
+        if d not in r.get("exits", {}):
+            # Never echo the kid's raw word back — name the real exits instead.
+            ways = ", ".join(w.upper() for w in r.get("exits", {}))
+            return (f"You can't go that way. Paths from here: {ways}. (try 'look')"
+                    if ways else "There's nowhere to go from here just yet.")
+        if d in r.get("locked", {}) and f"open:{self.loc}:{d}" not in self.flags:
+            return f"The {d.upper()} door is locked. Maybe a KEY would open it."
+        if d in r.get("block", {}) and f"clear:{self.loc}:{d}" not in self.flags:
+            return r["block"][d]["no"]
+        dest = r["exits"][d]
+        self.loc = dest
+        first = dest not in self._visited
+        self._visited.add(dest)
+        msg = ""
+        if first and self.rooms[dest].get("dark"):
+            if "lantern" in self.inventory:
+                msg = "You hold up the LANTERN and the room turns cozy and bright! ✨\n"
+            else:
+                self.courage = max(0, self.courage - 1)
+                msg = ("It's a little dark and spooky… you take a brave breath. "
+                       f"(courage {self.courage}⭐)\n")
+        return msg + self._describe(dest, first=first)
+
+    def _take(self, item):
+        r = self.rooms[self.loc]
+        for it in list(r.get("items", [])):
+            if it == item or (item and (item in it or it in item)):
+                r["items"].remove(it)
+                self.inventory.append(it)
+                if it == r.get("goal_item"):
+                    self.courage += 1
+                    self.over = self.won = True
+                    return (f"✨ You found the {it.upper()}! The Sunstone is going "
+                            f"home! 🌟 You explored bravely and made wonderful "
+                            f"critter friends. (courage {self.courage}⭐)\n🏆 You win!")
+                return f"You pop the {it.upper()} into your bag. 🎒"
+        # Never echo the kid's raw word back — name what's actually here.
+        here = ", ".join(i.upper() for i in r.get("items", []))
+        return ("You don't see that here. " + (f"You could take: {here}."
+                if here else "There's nothing to take here right now."))
+
+    def _use(self, rest):
+        item = next((i for i in self.inventory if i in rest), None)
+        if item is None and not rest.strip() and len(self.inventory) == 1:
+            item = self.inventory[0]   # "use it" with one thing in the bag
+        if item is None:
+            if rest.strip():
+                return ("You don't have that in your bag yet. Try 'inventory' to "
+                        "see what you're carrying.")
+            return "Use what? Try 'use key' or 'give berry' — once it's in your bag."
+        r = self.rooms[self.loc]
+        if item == "key":
+            for d, need in r.get("locked", {}).items():
+                if need == "key" and f"open:{self.loc}:{d}" not in self.flags:
+                    self.flags.add(f"open:{self.loc}:{d}")
+                    return f"🔑 Click! The {d.upper()} door swings open. You can go {d.upper()} now!"
+            return "There's nothing to unlock with the key here."
+        for d, info in r.get("block", {}).items():
+            if info.get("need") == item and f"clear:{self.loc}:{d}" not in self.flags:
+                self.flags.add(f"clear:{self.loc}:{d}")
+                if item in self.inventory:
+                    self.inventory.remove(item)
+                self.courage += 1
+                return info["ok"]
+        return f"You can't use the {item.upper()} here right now."
+
+    def _talk(self):
+        mob = self.rooms[self.loc].get("mob")
+        if not mob:
+            return "There's no critter to talk to here right now."
+        line = mob["talk"]
+        gift = mob.get("gives")
+        if gift and f"gave:{self.loc}" not in self.flags:
+            self.flags.add(f"gave:{self.loc}")
+            self.inventory.append(gift)
+            line += f"  🎁 (You got the {gift.upper()}!)"
+        return line
+
+    @property
+    def is_over(self):
+        return self.over
+
+
+# Play-name -> game class. Aliases let kids type the obvious thing.
+GAMES = {
+    "number": NumberGuess, "numbers": NumberGuess, "guess": NumberGuess,
+    "scramble": WordScramble, "word": WordScramble, "unscramble": WordScramble,
+    "hangman": Hangman,
+    "20questions": TwentyQuestions, "20q": TwentyQuestions,
+    "questions": TwentyQuestions,
+    "trivia": Trivia, "quiz": Trivia,
+    "dungeon": CozyDungeon, "adventure": CozyDungeon, "rpg": CozyDungeon,
+    "explore": CozyDungeon,
+}
+
+# Ordered menu shown by /games: (canonical play-name, emoji, class).
+GAME_MENU = [
+    ("dungeon", "🗺️", CozyDungeon),
+    ("number", "🔢", NumberGuess),
+    ("scramble", "🪢", WordScramble),
+    ("hangman", "🔤", Hangman),
+    ("20questions", "❓", TwentyQuestions),
+    ("trivia", "🧠", Trivia),
+]
+
+
+def start_game(name):
+    """Instantiate a game by play-name (or alias); None if unknown."""
+    cls = GAMES.get((name or "").strip().lower())
+    return cls() if cls else None
+
+
 class ChatWindow:
     """iMessage-style chat window opened by clicking the pet.
 
@@ -8007,9 +8634,11 @@ class ChatWindow:
     def __init__(self, pet: PetOverlay):
         self.pet = pet
         self.t = resolve_chat_theme(pet.settings.get("chat_theme", "auto"))
+        self.chat_text_size = pet.settings.get("chat_text_size", 10)
         self.spell = pet.spell
         self.last = None       # (raw, cleaned, rec, prompt)
         self.pending = None    # active follow-up Q&A state
+        self.active_game = None  # a running game (NumberGuess/Hangman/…), or None
         self.messages = []     # (kind, text) history, re-flowed on resize
         self._frames = []      # embedded button frames, destroyed on re-flow
         self._typing = False
@@ -8455,14 +9084,31 @@ class ChatWindow:
             text += "\n" + "\n".join(f"{i}. {s}" for i, s in enumerate(obj["steps"], 1))
         self._add("pet", text)
 
+    # ---- text size (user-adjustable chat font) ---------------------------------
+
+    def _bubble_font(self):
+        return ("Segoe UI", self.chat_text_size)
+
+    def _caption_font(self):
+        return ("Segoe UI", max(7, self.chat_text_size - 2))
+
+    def set_chat_text_size(self, size):
+        """Live-apply a new chat text size and reflow the whole transcript."""
+        self.chat_text_size = max(7, min(18, int(size)))
+        self._render_all()
+
     def _draw_caption(self, text):
         item = self.canvas.create_text(self._cw // 2, self._y + 4, text=text,
-                                       fill=self.t["CAPTION"], font=("Segoe UI", 8),
+                                       fill=self.t["CAPTION"], font=self._caption_font(),
                                        anchor="n", width=max(120, self._cw - 60),
                                        justify="center")
         self._finish(self.canvas.bbox(item)[3])
 
-    def _draw_bubble(self, text, side, fill, fg, font=("Segoe UI", 10), pad=10):
+    def _draw_bubble(self, text, side, fill, fg, font=None, pad=10):
+        # font=None -> the user-adjustable chat size; callers that pass an
+        # explicit font (the fixed-width prompt block) keep their own size.
+        if font is None:
+            font = self._bubble_font()
         maxw = max(180, int(self._cw * 0.74))
         tmp = self.canvas.create_text(0, -10000, text=text, font=font,
                                       width=maxw, anchor="nw")
@@ -8516,7 +9162,7 @@ class ChatWindow:
         self._round_rect(12, self._y, 64, self._y + 30, r=15,
                          fill=self.t["PET_BUBBLE"], outline=self.t["PET_BUBBLE"])
         self.canvas.create_text(38, self._y + 15, text="• • •",
-                                fill=self.t["CAPTION"], font=("Segoe UI", 9))
+                                fill=self.t["CAPTION"], font=self._bubble_font())
         self._finish(self._y + 30)
 
     def _show_typing(self):
@@ -8555,6 +9201,10 @@ class ChatWindow:
         self.pet.idle_ticks = 0
         if self.pending:
             self._handle_answer(raw)
+        elif self.active_game is not None and parse_slash(raw) is None:
+            # While a game is running, plain messages are moves; a /command
+            # (e.g. /games) still routes normally, and plain 'quit' exits.
+            self._handle_game_input(raw)
         else:
             self._start_request(raw)
 
@@ -8626,6 +9276,12 @@ class ChatWindow:
         if action == "help":
             self._show_help()
             return
+        if action == "games":
+            self._show_games_menu()
+            return
+        if action == "play":
+            self._start_game(arg)
+            return
         if not arg:
             self._add("pet", f"Add your text after /{name} — e.g. “/{name} …”.")
             return
@@ -8676,7 +9332,48 @@ class ChatWindow:
         lines += [f"  {name}  —  {desc}" for name, desc, _ in SLASH_COMMANDS]
         lines.append(f"…plus a command for each of my {len(PROMPT_TEMPLATES)} "
                      f"prompt templates — type / and a few letters to find one.")
+        lines.append("And we can play games! Type /games. 🎮")
         self._add("pet", "\n".join(lines))
+
+    # ---- games ----------------------------------------------------------------
+
+    def _show_games_menu(self):
+        lines = ["🎮 Let's play! Pick a game with /play and its name:"]
+        for key, emoji, cls in GAME_MENU:
+            lines.append(f"  {emoji}  /play {key}  —  {cls.name}: {cls.blurb}")
+        lines.append("While we play, just type your moves. Say 'quit' to stop. 🐾")
+        self._add("pet", "\n".join(lines))
+
+    def _start_game(self, arg):
+        game = start_game(arg)
+        if game is None:
+            if arg:
+                self._add("pet", f"I don't know the game “{arg}”. "
+                                 "Here's what we can play:")
+            self._show_games_menu()
+            return
+        self.active_game = game
+        self._add("pet", game.start())
+
+    def _handle_game_input(self, raw):
+        """Route a move to the running game; 'quit' returns to normal chat."""
+        if raw.strip().lower() in ("quit", "stop", "exit", "done"):
+            self.active_game = None
+            self._add("pet", "Okay, game over for now — that was fun! "
+                             "Say /games anytime to play again. 🐾")
+            return
+        game = self.active_game
+        try:
+            reply = game.handle(raw)
+        except Exception:  # a game bug must never break the chat
+            self.active_game = None
+            self._add("pet", "Oops, that game got muddled — let's pick another! "
+                             "Say /games. 🐾")
+            return
+        self._add("pet", reply)
+        if game.is_over:
+            self.active_game = None
+            self._add("caption", "Game over — say /games to play again.")
 
     def _standard_request(self, raw, cleaned, rec):
         questions = clarifying_questions(cleaned, rec)
@@ -8735,11 +9432,13 @@ class ChatWindow:
         # lanes (rewrite/summarize/review/email) and knowledge are one-shot —
         # past chatter must not bleed into a transform or a grounded answer.
         history = self._recent_history() if lane == "answer" else None
+        # Persona chat samples livelier; editing/grounded lanes stay faithful.
+        options = local_ai_options(lane)
         self._ai_busy = True
         req = {
             "lane": lane, "raw": raw, "cleaned": cleaned, "rec": rec,
             "model": model, "system": system, "source_note": source_note,
-            "history": history,
+            "history": history, "options": options,
             "events": [], "cancel": threading.Event(),
             "msg_index": None, "caption_index": None, "buffer": "",
             "idle_ticks": 0,
@@ -8764,7 +9463,8 @@ class ChatWindow:
                 text = ollama_chat_stream(
                     model, req["system"], raw,
                     on_chunk=lambda p: req["events"].append(("chunk", p)),
-                    cancel=req["cancel"], history=req["history"])
+                    cancel=req["cancel"], history=req["history"],
+                    options=req["options"])
                 req["events"].append(("done", text))
             except Exception as e:  # any failure falls back to prompt flow
                 req["events"].append(("error", str(e)))
