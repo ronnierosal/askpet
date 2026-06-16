@@ -11940,135 +11940,247 @@ WORLD_READING = [
 
 
 def _world_tile_grids():
-    """Original 16x16 placeholder tiles as char grids (pure data; the GUI turns
-    these into tk.PhotoImages). Swappable later for hand-drawn GB art."""
-    def grid(fill):
-        return [[fill] * WORLD_TILE for _ in range(WORLD_TILE)]
-
-    def rect(gr, x, y, w, h, c):
-        for j in range(y, y + h):
-            for i in range(x, x + w):
-                if 0 <= i < WORLD_TILE and 0 <= j < WORLD_TILE:
-                    gr[j][i] = c
-
-    def dot(gr, x, y, c):
-        if 0 <= x < WORLD_TILE and 0 <= y < WORLD_TILE:
-            gr[y][x] = c
-
-    T = {}
-    gr = grid("1")
-    for (x, y) in [(2, 3), (11, 6), (6, 11), (14, 13), (9, 8)]:
-        dot(gr, x, y, "0")
-    for (x, y) in [(8, 2), (3, 9), (13, 8), (5, 14), (12, 2)]:
-        dot(gr, x, y, "2")
-    T["g"] = gr
-
-    fl = [row[:] for row in gr]
-    for (x, y) in [(7, 6), (7, 7), (8, 7), (7, 8)]:
-        dot(fl, x, y, "0")
-    dot(fl, 8, 8, "3")
-    T["f"] = fl
-
-    p = grid("0")
-    rect(p, 0, 0, 16, 1, "1"); rect(p, 0, 15, 16, 1, "1")
-    rect(p, 0, 0, 1, 16, "1"); rect(p, 15, 0, 1, 16, "1")
-    for (x, y) in [(3, 3), (8, 4), (12, 6), (5, 9), (10, 11), (3, 13), (13, 13)]:
-        dot(p, x, y, "2")
-    T["p"] = p
-
-    w = grid("2")
-    for y in (3, 8, 12):
-        rect(w, 2, y, 4, 1, "1"); rect(w, 9, y, 4, 1, "1")
-    T["w"] = w
-
-    b = grid("2")
-    rect(b, 0, 0, 16, 2, "3"); rect(b, 0, 14, 16, 2, "3")
-    for x in (3, 7, 11):
-        rect(b, x, 2, 1, 12, "3")
-    rect(b, 1, 5, 2, 1, "1"); rect(b, 8, 9, 2, 1, "1")
-    T["b"] = b
-
-    t = grid("1")
-    rect(t, 3, 1, 10, 10, "2"); rect(t, 8, 6, 5, 5, "3")
-    dot(t, 4, 2, "0"); dot(t, 5, 2, "0"); dot(t, 4, 3, "0")
-    rect(t, 7, 11, 2, 4, "3")
-    T["T"] = t
-
-    wl = grid("1")
-    rect(wl, 0, 0, 16, 3, "0")
-    rect(wl, 0, 6, 16, 1, "2"); rect(wl, 0, 11, 16, 1, "2")
-    rect(wl, 5, 3, 1, 3, "2"); rect(wl, 11, 7, 1, 4, "2"); rect(wl, 7, 12, 1, 4, "2")
-    rect(wl, 0, 14, 16, 2, "3")
-    T["W"] = wl
-
-    r = grid("2")
-    rect(r, 0, 0, 16, 2, "3"); rect(r, 0, 2, 16, 1, "1")
-    for y in (5, 9, 13):
-        rect(r, 0, y, 16, 1, "3")
-    T["R"] = r
-
-    h = grid("0")
-    rect(h, 0, 0, 16, 1, "3"); rect(h, 0, 15, 16, 1, "3")
-    rect(h, 0, 0, 1, 16, "3"); rect(h, 15, 0, 1, 16, "3")
-    rect(h, 6, 8, 4, 8, "3")
-    rect(h, 2, 3, 3, 3, "1"); rect(h, 11, 3, 3, 3, "1")
-    T["H"] = h
-
-    s = grid("1")
-    rect(s, 4, 1, 8, 13, "2")
-    rect(s, 4, 1, 8, 1, "3"); rect(s, 4, 13, 8, 1, "3")
-    rect(s, 4, 1, 1, 13, "3"); rect(s, 11, 1, 1, 13, "3")
-    dot(s, 6, 4, "3"); dot(s, 9, 4, "3"); dot(s, 6, 8, "3"); dot(s, 9, 8, "3")
-    rect(s, 3, 13, 10, 2, "0")
-    T["S"] = s
-
-    return {k: ["".join(row) for row in v] for k, v in T.items()}
+    """Hand-drawn 16x16 GB-style tiles as explicit char grids ('0' lightest ->
+    '3' darkest, per WORLD_PAL). Drawn so the world reads as a cozy top-down RPG;
+    swappable later for other art. Flowers are grass plus a few little blooms."""
+    tiles = {
+        "g": [   # grass: soft mid-tone with tiny blades + light flecks
+            "1111111111111111",
+            "1111011111111111",
+            "1111111111210111",
+            "1101111111111111",
+            "1111111101111121",
+            "1112111111111111",
+            "1111111111110111",
+            "0111111121111111",
+            "1111111111111110",
+            "1111210111111111",
+            "1111111111121111",
+            "1101111111111111",
+            "1111111111110111",
+            "1211111101111111",
+            "1111111111111111",
+            "1111111121110111",
+        ],
+        "p": [   # moss path: cream cobbles, tan grout grid, a few moss specks
+            "1111111111111111",
+            "1000100010001000",
+            "1000100010001000",
+            "1111111121111111",
+            "0010001000100010",
+            "0010001000100012",
+            "1111111111111111",
+            "1000100010001000",
+            "2000100010001000",
+            "1111111111111111",
+            "0010001000100010",
+            "0010001000100010",
+            "1111121111111111",
+            "1000100010001000",
+            "1000100010001000",
+            "1111111111111111",
+        ],
+        "w": [   # stream: dark water with ripple lines and bright sparkles
+            "2222222222222222",
+            "2202222222122222",
+            "2222222222222222",
+            "2222122222222212",
+            "2222222222222222",
+            "1222222212222222",
+            "2222222222222222",
+            "2222222022222221",
+            "2222222222222222",
+            "2022222222221222",
+            "2222222222222222",
+            "2222221222222222",
+            "2222222222222222",
+            "2212222222122222",
+            "2222222222222222",
+            "2222222222222221",
+        ],
+        "b": [   # bridge: light wooden planks (horizontal) with side rails
+            "3222222222222223",
+            "2111111111111112",
+            "2122222222222212",
+            "2111111111111112",
+            "2122222222222212",
+            "2111111111111112",
+            "2122222222222212",
+            "2111111111111112",
+            "2122222222222212",
+            "2111111111111112",
+            "2122222222222212",
+            "2111111111111112",
+            "2122222222222212",
+            "2111111111111112",
+            "2122222222222212",
+            "3222222222222223",
+        ],
+        "T": [   # tree: round canopy with a top-left highlight and a trunk
+            "1111111111111111",
+            "1111122222111111",
+            "1112222222221111",
+            "1122200002222111",
+            "1220000012222211",
+            "1220001112222221",
+            "1222011122222221",
+            "1222211222222221",
+            "1222221222222221",
+            "1122222222222211",
+            "1122222222222111",
+            "1112222222221111",
+            "1111222222211111",
+            "1111113311111111",
+            "1111113311111111",
+            "1111111111111111",
+        ],
+        "W": [   # stone wall: brick courses, light cap, shadowed base
+            "0000000000000000",
+            "1111111111111111",
+            "1112111121112111",
+            "1112111121112111",
+            "2222222222222222",
+            "1211112111121111",
+            "1211112111121111",
+            "2222222222222222",
+            "1112111121112111",
+            "1112111121112111",
+            "2222222222222222",
+            "1211112111121111",
+            "1211112111121111",
+            "2222222222222222",
+            "3333333333333333",
+            "3333333333333333",
+        ],
+        "R": [   # cottage roof: banded shingles
+            "3333333333333333",
+            "2222222222222222",
+            "1111111111111111",
+            "2222222222222222",
+            "3333333333333333",
+            "2222222222222222",
+            "1111111111111111",
+            "2222222222222222",
+            "3333333333333333",
+            "2222222222222222",
+            "1111111111111111",
+            "2222222222222222",
+            "3333333333333333",
+            "2222222222222222",
+            "1111111111111111",
+            "3333333333333333",
+        ],
+        "H": [   # cottage wall: cream plaster with a framed window
+            "3333333333333333",
+            "3000000000000003",
+            "3000000000000003",
+            "3000222222000003",
+            "3000211112000003",
+            "3000212212000003",
+            "3000211112000003",
+            "3000222222000003",
+            "3000000000000003",
+            "3000000000000003",
+            "3000000000000003",
+            "3000000000000003",
+            "3000000000000003",
+            "3000000000000003",
+            "3000000000000003",
+            "3333333333333333",
+        ],
+        "S": [   # Wayshrine: a standing stone with a glowing rune (two = a gate)
+            "1111111111111111",
+            "1112222222221111",
+            "1122222222222111",
+            "1222233332222211",
+            "1222330033222211",
+            "1222303303222211",
+            "1222330033222211",
+            "1222233332222211",
+            "1222222222222211",
+            "1222222222222211",
+            "1122222222222111",
+            "1122222222222111",
+            "1112222222221111",
+            "1111233332111111",
+            "1111133331111111",
+            "1111111111111111",
+        ],
+    }
+    fl = [list(r) for r in tiles["g"]]
+    for (cx, cy) in [(3, 3), (11, 8), (7, 12)]:
+        for (px, py, c) in [(cx, cy - 1, "0"), (cx - 1, cy, "0"),
+                            (cx + 1, cy, "0"), (cx, cy + 1, "0"), (cx, cy, "3")]:
+            if 0 <= px < WORLD_TILE and 0 <= py < WORLD_TILE:
+                fl[py][px] = c
+    tiles["f"] = ["".join(r) for r in fl]
+    return tiles
 
 
 def _world_sprite_grids():
-    """Original sprite art as char grids ('.' = transparent)."""
-    def grid(w, h):
-        return [["."] * w for _ in range(h)]
-
-    def rect(gr, x, y, w, h, c):
-        for j in range(y, y + h):
-            for i in range(x, x + w):
-                if 0 <= j < len(gr) and 0 <= i < len(gr[0]):
-                    gr[j][i] = c
-
-    def dot(gr, x, y, c):
-        if 0 <= y < len(gr) and 0 <= x < len(gr[0]):
-            gr[y][x] = c
-
-    S = {}
-    p = grid(10, 14)
-    rect(p, 2, 0, 6, 4, "3"); rect(p, 1, 1, 8, 2, "3")     # hair
-    rect(p, 2, 4, 6, 4, "0")                               # face
-    dot(p, 3, 5, "3"); dot(p, 6, 5, "3")                   # eyes
-    rect(p, 2, 8, 6, 4, "2"); rect(p, 2, 8, 6, 1, "0")     # body + collar
-    dot(p, 1, 9, "0"); dot(p, 8, 9, "0")                   # arms
-    rect(p, 3, 12, 2, 2, "3"); rect(p, 5, 12, 2, 2, "3")   # legs
-    S["hero"] = p
-
-    fly = grid(4, 4)
-    rect(fly, 1, 1, 2, 2, "0"); dot(fly, 0, 1, "1"); dot(fly, 3, 2, "1")
-    S["fly"] = fly
-
-    od = grid(8, 8)
-    rect(od, 2, 2, 4, 4, "1"); rect(od, 3, 3, 2, 2, "0")
-    S["orb0"] = od
-    ob = grid(8, 8)
-    rect(ob, 2, 2, 4, 4, "0"); rect(ob, 1, 3, 6, 2, "0"); rect(ob, 3, 1, 2, 6, "0")
-    S["orb1"] = ob
-
-    c = grid(12, 12)
-    rect(c, 2, 3, 8, 8, "2"); rect(c, 4, 6, 4, 4, "1")
-    rect(c, 3, 5, 2, 2, "0"); rect(c, 7, 5, 2, 2, "0")     # eyes
-    dot(c, 4, 6, "3"); dot(c, 8, 6, "3")                   # pupils
-    dot(c, 6, 1, "0"); dot(c, 6, 2, "2")                   # antenna
-    rect(c, 3, 11, 2, 1, "2"); rect(c, 7, 11, 2, 1, "2")   # feet
-    S["critter"] = c
-    return {k: ["".join(row) for row in v] for k, v in S.items()}
+    """Hand-drawn sprite art as explicit char grids ('.' = transparent, '0'
+    lightest -> '3' darkest per WORLD_PAL)."""
+    return {
+        "hero": [   # chibi adventurer (12x16): big head, tunic, little boots
+            "....3333....",
+            "...333333...",
+            "..33333333..",
+            "..30000003..",
+            "..30000003..",
+            "..30300303..",
+            "..30000003..",
+            "..33000033..",
+            "...322223...",
+            "..32222223..",
+            ".3222222223.",
+            ".3022222203.",
+            "..32222223..",
+            "..32222223..",
+            "..33....33..",
+            "..33....33..",
+        ],
+        "fly": [    # firefly: a bright point with a soft halo (5x5)
+            ".....",
+            "..1..",
+            ".101.",
+            "..1..",
+            ".....",
+        ],
+        "orb0": [   # Wayshrine glow, dim frame (8x8)
+            "........",
+            "..1111..",
+            ".100001.",
+            ".100001.",
+            ".100001.",
+            ".100001.",
+            "..1111..",
+            "........",
+        ],
+        "orb1": [   # Wayshrine glow, bright (8x8)
+            "..1111..",
+            ".100001.",
+            "10000001",
+            "10000001",
+            "10000001",
+            "10000001",
+            ".100001.",
+            "..1111..",
+        ],
+        "critter": [   # a cute wandering companion (12x12)
+            "...3....3...",
+            "...2....2...",
+            "..22222222..",
+            ".2222222222.",
+            ".2200220022.",
+            ".2203223022.",
+            ".2222222222.",
+            ".2222222222.",
+            ".2222222222.",
+            "..22222222..",
+            "..33....33..",
+            "............",
+        ],
+    }
 
 
 class EldermarkWorldLogic:
@@ -12876,26 +12988,34 @@ class ChatWindow:
         self._finish(by2)
 
     def _draw_game_screen(self, text):
-        """A wide, fixed-width, NO-WRAP retro 'screen' for ASCII game art. The
+        """A big, fixed-width, NO-WRAP retro 'screen' for ASCII game art. The
         normal bubbles word-wrap in a proportional font (which mangles art and
-        health bars); this uses a monospace font and width=0 so columns line
-        up. Dark green-on-near-black panel for the arcade look."""
-        size = max(13, min(self.chat_text_size + 4, 18))
-        font = ("Consolas", size)
-        pad, bg, fg, border = 14, "#0e1a12", "#a9e6a0", "#244a30"
-        tmp = self.canvas.create_text(0, -10000, text=text, font=font,
-                                      width=0, anchor="nw")
-        bb = self.canvas.bbox(tmp)
-        self.canvas.delete(tmp)
-        tw, th = bb[2] - bb[0], bb[3] - bb[1]
-        # Hug the content and CENTER the console in the window (so the art reads
-        # as the centerpiece), falling back to full width if content is huge.
-        panel_w = min(self._cw - 24, max(360, tw + 2 * pad))
+        health bars); this uses a monospace font and width=0 so columns line up.
+        The console FILLS the window (no wasted margins) with the largest font
+        that still fits, and the text block is centered so art reads as the
+        centerpiece. Dark green-on-near-black panel for the arcade look."""
+        pad, bg, fg, border = 18, "#0e1a12", "#a9e6a0", "#244a30"
+        avail = max(320, self._cw - 24)        # the console spans the window
+        # Pick the LARGEST comfortable monospace size whose widest line still
+        # fits the window — a big, immersive screen instead of a narrow box.
+        size = max(13, min(self.chat_text_size + 6, 24))
+        while True:
+            font = ("Consolas", size)
+            tmp = self.canvas.create_text(0, -10000, text=text, font=font,
+                                          width=0, anchor="nw")
+            bb = self.canvas.bbox(tmp)
+            self.canvas.delete(tmp)
+            tw, th = bb[2] - bb[0], bb[3] - bb[1]
+            if tw + 2 * pad <= avail or size <= 13:
+                break
+            size -= 1
+        panel_w = avail                        # fill the window width
         x1 = max(12, (self._cw - panel_w) // 2)
         x2 = x1 + panel_w
         by2 = self._y + th + 2 * pad
-        self._round_rect(x1, self._y, x2, by2, r=10, fill=bg, outline=border)
-        self.canvas.create_text(x1 + pad, self._y + pad, text=text, font=font,
+        self._round_rect(x1, self._y, x2, by2, r=12, fill=bg, outline=border)
+        text_x = x1 + max(pad, (panel_w - tw) // 2)   # center the whole block
+        self.canvas.create_text(text_x, self._y + pad, text=text, font=font,
                                 fill=fg, width=0, anchor="nw")
         self._finish(by2)
 
