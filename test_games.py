@@ -1,9 +1,19 @@
 #!/usr/bin/env python3
 """Game-engine tests for the AskPet arcade — pure logic, no GUI, no Ollama.
 Run: python test_games.py"""
+import os
 import random
+import tempfile
 
-import askpet as pm
+# Redirect AskPet's data dir to a throwaway temp dir BEFORE import so winning a
+# game (which records an RPG completion to games-state.json) never touches real
+# user state.
+_TMP = tempfile.mkdtemp()
+os.environ["LOCALAPPDATA"] = _TMP
+os.environ["HOME"] = _TMP
+os.environ["XDG_DATA_HOME"] = os.path.join(_TMP, ".local", "share")
+
+import askpet as pm  # noqa: E402
 
 # every registered game obeys the start()/handle()/is_over contract
 for name, cls in pm.GAMES.items():

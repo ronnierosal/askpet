@@ -33,7 +33,7 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 APP_NAME = "AskPet"
-APP_VERSION = "0.34.0"
+APP_VERSION = "0.36.0"
 CONTENT_VERSION = "2026.06.17"
 
 # ---------------------------------------------------------------------------
@@ -8446,6 +8446,7 @@ _DIRS = {"n": "north", "s": "south", "e": "east", "w": "west"}
 class CozyDungeon:
     name = "Cozy Critter Dungeon"
     blurb = "A gentle adventure — explore, make critter friends, find the Sunstone."
+    rpg = True          # a gentle RPG adventure — always unlocked, counts to unlock
     START_ROOM = "entrance"
 
     def __init__(self, rng=None, narrator=None):
@@ -8544,6 +8545,9 @@ class CozyDungeon:
                 if it == r.get("goal_item"):
                     self.courage += 1
                     self.over = self.won = True
+                    if not getattr(self, "_recorded", False):
+                        self._recorded = True          # counts toward unlocking
+                        record_rpg_completion()
                     return (f"✨ You found the {it.upper()}! The Sunstone is going "
                             f"home! 🌟 You explored bravely and made wonderful "
                             f"critter friends. (courage {self.courage}⭐)\n🏆 You win!")
@@ -8595,27 +8599,2873 @@ class CozyDungeon:
         return self.over
 
 
+# ============================================================================
+# Story-driven game layer (0.35.0): player profiles, atomic saves, a gentle
+# dynamic-difficulty combat engine, and ELDERMARK — an original-world RPG.
+#
+# Everything is DETERMINISTIC + fully offline, reuses the app's DATA_DIR and
+# save helpers (one source of truth — not a forked appdata path), and obeys
+# the SAME start()/handle()/is_over contract as the quick games above, so each
+# one drops straight into ChatWindow.active_game and inherits its crash
+# isolation. Worlds, critters and stories are 100% original (own IP).
+# ============================================================================
+
+GAME_PROFILES_DIR = DATA_DIR / "games" / "profiles"
+GAME_SCHEMA_VERSION = 1
+
+# ---------------------------------------------------------------------------
+# Arcade-wide state: the player's age band (sets baseline difficulty for every
+# game) and how many RPG quests have been completed (other game modes stay
+# LOCKED until a few RPG adventures are finished). One small JSON, family-wide.
+# ---------------------------------------------------------------------------
+GAMES_STATE_FILE = DATA_DIR / "games-state.json"
+RPG_UNLOCK_THRESHOLD = 2        # finish this many RPG quests to unlock the rest
+
+# (key, label, hint) — chosen once on first /play; scales difficulty everywhere.
+AGE_BANDS = [
+    ("little", "Little Explorer", "ages 4–6 · gentlest"),
+    ("kid", "Big Kid", "ages 7–9 · just right"),
+    ("pro", "Junior Pro", "ages 10+ · a bit tougher"),
+]
+# Difficulty multiplier per band (smaller = easier enemies / simpler problems).
+AGE_DIFFICULTY = {"little": 0.7, "kid": 1.0, "pro": 1.25}
+
+
+def load_games_state():
+    d = load_json(GAMES_STATE_FILE, {})
+    if not isinstance(d, dict):
+        d = {}
+    d.setdefault("age_band", None)
+    d.setdefault("rpg_completed", 0)
+    return d
+
+
+def save_games_state(d):
+    return save_json(GAMES_STATE_FILE, d)
+
+
+def games_age_band():
+    return load_games_state().get("age_band")
+
+
+def set_games_age_band(band):
+    d = load_games_state()
+    d["age_band"] = band
+    save_games_state(d)
+
+
+def age_difficulty():
+    """Baseline difficulty multiplier from the chosen age band (1.0 if unset)."""
+    return AGE_DIFFICULTY.get(games_age_band(), 1.0)
+
+
+def rpg_completed_count():
+    try:
+        return int(load_games_state().get("rpg_completed", 0) or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def record_rpg_completion():
+    """Call when an RPG quest is finished; returns the new total."""
+    d = load_games_state()
+    d["rpg_completed"] = rpg_completed_count() + 1
+    save_games_state(d)
+    return d["rpg_completed"]
+
+
+def games_unlocked():
+    """True once enough RPG quests are done to open the other game modes."""
+    return rpg_completed_count() >= RPG_UNLOCK_THRESHOLD
+
+
+def _game_default_state():
+    """Per-game state for a fresh profile. Add a key here to reserve a seam
+    for a new mode; old saves deep-fill to it on load without losing data."""
+    return {
+        "eldermark": {
+            "scene": 0, "level": 1, "xp": 0, "hp": 30, "hp_max": 30,
+            "abilities": ["strike", "guard"], "inventory": [],
+            "dda": {"recent": [], "tier": "normal"}, "flags": [],
+        },
+        # Seams reserved for the scaffolded modes (they slot in next):
+        "critters": {}, "spin": {}, "wild": {}, "math": {}, "science": {},
+    }
+
+
+def _game_now():
+    return datetime.now().isoformat(timespec="seconds")
+
+
+def _game_slug(name):
+    s = re.sub(r"[^a-z0-9]+", "-", (name or "").strip().lower()).strip("-")
+    return s or "scout"
+
+
+def _new_profile_dict(pid, name):
+    now = _game_now()
+    return {
+        "schema_version": GAME_SCHEMA_VERSION,
+        "profile_id": pid, "display_name": name,
+        "created": now, "last_played": now,
+        "points": 0, "achievements": [],
+        "games": _game_default_state(),
+    }
+
+
+# --- atomic save + crash recovery -------------------------------------------
+# Fix vs. the review: snapshot the current main to .bak ONLY when it actually
+# parses, so a corrupt main can never clobber the last-good backup.
+
+def _read_profile_file(path):
+    try:
+        with open(path, "r", encoding="utf-8-sig") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+
+def _deep_fill(defaults, saved):
+    """Recursively fill keys missing from `saved` using `defaults`, without
+    overwriting any value the save already has. So a field added in a newer
+    version (e.g. hp_max) gets its default on load instead of crashing later."""
+    if not isinstance(saved, dict) or not isinstance(defaults, dict):
+        return saved
+    out = dict(saved)
+    for k, dv in defaults.items():
+        if k not in out:
+            out[k] = dv
+        elif isinstance(dv, dict):
+            out[k] = _deep_fill(dv, out[k])
+    return out
+
+
+def save_game_profile(prof):
+    """Durable, atomic save with a rotating .bak. Called on game beats
+    (scene change, battle end, rest) — NOT every turn — to avoid UI jank."""
+    prof["last_played"] = _game_now()
+    pid = prof.get("profile_id") or "scout"
+    path = GAME_PROFILES_DIR / f"{pid}.json"
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return False
+    if path.exists() and _read_profile_file(path) is not None:
+        try:
+            shutil.copy2(path, path.with_name(path.name + ".bak"))
+        except OSError:
+            pass
+    tmp = path.with_name(path.name + ".tmp")
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(prof, f, indent=2, ensure_ascii=False)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)          # atomic on the same filesystem
+        return True
+    except OSError:
+        try:
+            if tmp.exists():
+                tmp.unlink()
+        except OSError:
+            pass
+        return False
+
+
+def load_game_profile(pid):
+    path = GAME_PROFILES_DIR / f"{pid}.json"
+    data = _read_profile_file(path)
+    if data is None:                                   # fall back to backup
+        data = _read_profile_file(path.with_name(path.name + ".bak"))
+    if not isinstance(data, dict):
+        return None
+    data["games"] = _deep_fill(_game_default_state(), data.get("games") or {})
+    data.setdefault("schema_version", GAME_SCHEMA_VERSION)
+    data.setdefault("points", 0)
+    data.setdefault("achievements", [])
+    data.setdefault("display_name", pid)
+    return data
+
+
+def list_game_profiles():
+    """(profile_id, display_name, eldermark_level) for the picker. Skips any
+    stray/partial/corrupt JSON instead of crashing the first screen kids hit."""
+    out = []
+    try:
+        names = sorted(p.name for p in GAME_PROFILES_DIR.glob("*.json"))
+    except OSError:
+        return out
+    for fn in names:
+        d = _read_profile_file(GAME_PROFILES_DIR / fn)
+        if not isinstance(d, dict):
+            continue
+        pid = d.get("profile_id")
+        if not pid:
+            continue
+        lvl = ((d.get("games") or {}).get("eldermark") or {}).get("level", 1)
+        out.append((pid, d.get("display_name", pid), lvl))
+    return out
+
+
+def create_game_profile(name):
+    base = _game_slug(name)
+    pid, n = base, 2
+    while (GAME_PROFILES_DIR / f"{pid}.json").exists():
+        pid = f"{base}-{n}"
+        n += 1
+    prof = _new_profile_dict(pid, name)
+    save_game_profile(prof)
+    return prof
+
+
+# --- dice + gentle dynamic difficulty ---------------------------------------
+DDA_WINDOW = 6
+DDA_FLOOR = 0.34          # below this win-rate, ease off; we never go HARDER
+
+
+def _roll(sides=4, n=1, rng=random):
+    return sum(rng.randint(1, sides) for _ in range(n))
+
+
+def record_result(dda, won):
+    r = dda.setdefault("recent", [])
+    r.append(1 if won else 0)
+    del r[:-DDA_WINDOW]
+    if len(r) >= 3:
+        rate = sum(r) / len(r)
+        # Kid-gentle: only easy or normal — a struggling child is never
+        # ratcheted into a harder tier.
+        dda["tier"] = "easy" if rate < DDA_FLOOR else "normal"
+
+
+def difficulty_mult(dda):
+    return {"easy": 0.7, "normal": 1.0}.get(dda.get("tier", "normal"), 1.0)
+
+
+def award(prof, aid, name, desc):
+    """Unlock an achievement once; returns True only the first time."""
+    achs = prof.setdefault("achievements", [])
+    if any(a.get("id") == aid for a in achs):
+        return False
+    achs.append({"id": aid, "name": name, "desc": desc, "unlocked": _game_now()})
+    return True
+
+
+# --- Eldermark content (original world) -------------------------------------
+ELDER_ABILITIES = {
+    "strike": {"label": "Strike", "power": 6},
+    "focus":  {"label": "Focus Beam", "power": 10},     # learned at level 2
+    "rally":  {"label": "Rally Burst", "power": 14},    # learned at level 4
+    "guard":  {"label": "Guard", "power": 0},
+}
+ELDER_UNLOCKS = {2: "focus", 4: "rally"}
+
+# Critters never get hurt — they tire out and scatter into friendly light.
+ELDER_ENEMIES = {
+    "gloomling": {"name": "Gloomling", "hp": 16, "atk": 4, "xp": 22,
+                  "win": "The Gloomling yawns, puffs into a swirl of friendly "
+                         "motes, and drifts off for a nap. ✨"},
+    "thistlewisp": {"name": "Thistlewisp", "hp": 24, "atk": 6, "xp": 32,
+                    "win": "The Thistlewisp giggles, shakes loose its prickles, "
+                           "and bounces away glowing softly. 🌼"},
+    "mire-warden": {"name": "Mire Warden", "hp": 42, "atk": 8, "xp": 60,
+                    "boss": True,
+                    "win": "The big, grumpy Mire Warden finally smiles, sighs a "
+                           "warm breath of starlight, and steps gently aside. 🌟"},
+}
+
+ELDER_SCENES = [
+    {"name": "Mosslight Gate",
+     "desc": "A soft mossy archway twinkles with fireflies. The path into the "
+             "Hollow glows ahead. A sleepy MOSSBACK dozes on a warm stone.",
+     "critter": {"line": "The Mossback blinks: “Off to relight the Wayshrines? "
+                         "Here, take a GLOW-BERRY — it'll keep you bright.”",
+                 "gives": "glow-berry"}},
+    {"name": "Whisperwood",
+     "desc": "Tall, whispery trees lean close. Something shy rustles in the "
+             "shadows — it doesn't want to scare you, it just wants to play.",
+     "enemy": "gloomling"},
+    {"name": "Lantern Glade",
+     "desc": "A calm glade strung with paper lanterns. A kindly HEDGE-PIXIE "
+             "tends a basket of berries and waves you over.",
+     "critter": {"line": "The Hedge-Pixie smiles: “You're doing wonderfully! "
+                         "Take another GLOW-BERRY for the road.”",
+                 "gives": "glow-berry"}},
+    {"name": "Hollow Steps",
+     "desc": "Old stone steps spiral down toward a warm glow. A prickly little "
+             "Thistlewisp bounces in your way, daring you to keep going.",
+     "enemy": "thistlewisp"},
+    {"name": "The Dimmed Wayshrine",
+     "desc": "The great Wayshrine stands dark and quiet. The grumpy MIRE WARDEN "
+             "guards it — not mean, just lonely and a little sad.",
+     "enemy": "mire-warden"},
+]
+
+
+# --- ASCII "game screen" art + builders (rendered in the big monospace panel)
+ELDER_BANNER = (
+    "   +============================+\n"
+    "   |     E L D E R M A R K      |\n"
+    "   +============================+"
+)
+
+
+def _ascii_banner(title, inner=28):
+    """Center a title inside a fixed-width ASCII box (no hand-counting bugs)."""
+    t = title[:inner]
+    left = (inner - len(t)) // 2
+    bar = "   +" + "=" * inner + "+"
+    mid = "   |" + " " * left + t + " " * (inner - left - len(t)) + "|"
+    return f"{bar}\n{mid}\n{bar}"
+
+
+GAMES_BANNER = _ascii_banner("G A M E   A R C A D E")
+
+# Small scene/enemy motifs. Pure ASCII (no backslashes/quotes) so columns stay
+# aligned in the fixed-width screen. Kept narrow to fit the panel at any size.
+ELDER_ART = {
+    "Mosslight Gate":
+        "       .-~~~-.\n"
+        "      | () () |  zZ\n"
+        "      |  mossy |\n"
+        "    __|_______|__",
+    "Whisperwood":
+        "      ^   ^    ^   ^\n"
+        "      T   T    T   T\n"
+        "    __|___|____|___|__",
+    "Lantern Glade":
+        "      (*)   (*)   (*)\n"
+        "       |     |     |\n"
+        "    ~~~~~~~~~~~~~~~~~~~",
+    "Hollow Steps":
+        "      _\n"
+        "     |_|_\n"
+        "     | |_|_\n"
+        "     |_|_|_|  ...down",
+    "The Dimmed Wayshrine":
+        "        .==.\n"
+        "       /    .   (dark)\n"
+        "      | []   |\n"
+        "    __|======|__",
+    "trails":
+        "      *   .   *   .  *\n"
+        "    ~~~~~~~~~~~~~~~~~~~~\n"
+        "      sunny eldermark",
+    "gloomling":
+        "      .-~~-.\n"
+        "     ( o  o )   ~puff~\n"
+        "      '-..-'",
+    "thistlewisp":
+        "      *|*|*\n"
+        "     *( oo )*   *prickle*\n"
+        "      *|*|*",
+    "mire-warden":
+        "     .----------.\n"
+        "    |  >    <    |\n"
+        "    |  M I R E   |\n"
+        "    |  warden    |\n"
+        "     '----------'",
+}
+
+
+def _elder_bar(cur, mx, width=10):
+    """A monospace health bar like [#####-----] 16/24 (pure ASCII -> aligns)."""
+    cur = max(0, min(cur, mx))
+    fill = int(round(width * cur / mx)) if mx else 0
+    return "[" + "#" * fill + "-" * (width - fill) + f"] {cur}/{mx}"
+
+
+def _wrap_lines(text, width=46, indent="  "):
+    """Word-wrap to a fixed column width (the game screen draws with no wrap)."""
+    out = []
+    for para in (text or "").split("\n"):
+        if not para.strip():
+            out.append("")
+            continue
+        line = indent
+        for word in para.split():
+            if line.strip() and len(line) + 1 + len(word) > width:
+                out.append(line.rstrip())
+                line = indent + word
+            else:
+                line = (line + " " + word) if line.strip() else (indent + word)
+        out.append(line.rstrip())
+    return out
+
+
+def _elder_menu(opts):
+    """Numbered menu; two columns when labels are short, else one per line."""
+    cells = [f"  {i + 1}) {lbl}" for i, (_, lbl) in enumerate(opts)]
+    colw = (max(len(c) for c in cells) + 2) if cells else 0
+    if len(cells) > 1 and colw <= 24:
+        rows = []
+        for i in range(0, len(cells), 2):
+            if i + 1 < len(cells):
+                rows.append(f"{cells[i]:<{colw}}{cells[i + 1]}")
+            else:
+                rows.append(cells[i])
+        return rows
+    return cells
+
+
+def _elder_screen(log=None, title=None, art=None, info=None, opts=None,
+                  prompt="What will you do?", footer=True):
+    """Assemble one ASCII 'screen': banner, an optional event log, a titled
+    scene/enemy panel with art, status lines, and the numbered menu."""
+    parts = [ELDER_BANNER]
+    for line in (log or []):
+        parts.append("")
+        parts += [f"  > {x}" for x in _wrap_lines(line, 44, indent="")]
+    if title:
+        parts += ["", f"  {title}"]
+    if art:
+        parts.append(art)
+    for block in (info or []):
+        parts.append(block)
+    if opts:
+        parts += ["", f"  {prompt}"]
+        parts += _elder_menu(opts)
+    if footer:
+        parts += ["", "  (type 'quit' to stop · progress saves itself)"]
+    return "\n".join(parts)
+
+
+def _maybe_level_up(g):
+    """Level up as many times as the XP allows, carrying the remainder so no
+    earned XP is ever silently lost. Returns the level-up messages."""
+    msgs = []
+    while g["xp"] >= g["level"] * 50:
+        g["xp"] -= g["level"] * 50
+        g["level"] += 1
+        g["hp_max"] += 6
+        g["hp"] = g["hp_max"]
+        new = ELDER_UNLOCKS.get(g["level"])
+        if new and new not in g["abilities"]:
+            g["abilities"].insert(max(0, len(g["abilities"]) - 1), new)
+            msgs.append(f"⭐ Level {g['level']}! You learned "
+                        f"{ELDER_ABILITIES[new]['label']}!")
+        else:
+            msgs.append(f"⭐ Level {g['level']}! You feel stronger — full ❤.")
+    return msgs
+
+
+class EldermarkRPG:
+    """Original-world story RPG. A whole multi-step flow (pick profile → name →
+    explore → numbered-menu combat → save/resume) lives inside handle(), so the
+    existing two-state ChatWindow router never has to change."""
+
+    name = "Eldermark"
+    blurb = ("a gentle story RPG — explore, befriend critters, and relight the "
+             "Wayshrines (saves your progress)")
+    screen = True   # render in the big monospace "game screen" (expands window)
+    rpg = True      # an RPG quest — always unlocked, counts toward unlocking more
+
+    def __init__(self):
+        self.state = "profile"
+        self.prof = None
+        self.enemy = None
+        self.over = False
+        self._opts = []
+        self._profiles = []
+
+    # -- contract ------------------------------------------------------------
+    def start(self):
+        self.__init__()
+        return self._profile_menu()
+
+    def handle(self, text):
+        try:
+            if self.state == "profile":
+                return self._handle_profile(text)
+            if self.state == "naming":
+                return self._handle_naming(text)
+            if self.state == "battle":
+                return self._handle_battle(text)
+            return self._handle_play(text)
+        except Exception:
+            # The chat layer guards this too, but never let a content slip end
+            # a kid's adventure — recover to a sensible screen.
+            if self.prof and self.state != "battle":
+                return "Hmm, the path twisted for a moment — here we are:\n\n" + \
+                    self._scene_text()
+            return "Let's start again:\n\n" + self._profile_menu()
+
+    @property
+    def is_over(self):
+        return self.over
+
+    # -- profile picking -----------------------------------------------------
+    def _profile_menu(self):
+        self._profiles = list_game_profiles()
+        info = _wrap_lines("A gentle quest to relight the Wayshrines of the "
+                           "Hollow and befriend its critters.", 46)
+        opts = [("p", f"{name}  (Lv {lvl})") for _, name, lvl in self._profiles]
+        opts.append(("new", "+ New scout"))
+        return _elder_screen(title="~ Lumen Scout ~", art=ELDER_ART["trails"],
+                             info=info, opts=opts,
+                             prompt="Who's adventuring today?")
+
+    def _handle_profile(self, text):
+        n = self._parse_int(text)
+        last = len(self._profiles) + 1
+        if n is None or not (1 <= n <= last):
+            return (f"Type a number from 1 to {last} — pick your scout, or "
+                    f"{last} to start a new one.")
+        if n == last:
+            self.state = "naming"
+            return "What should I call you, brave scout? (type a name)"
+        pid = self._profiles[n - 1][0]
+        self.prof = load_game_profile(pid)
+        if self.prof is None:
+            return "I couldn't open that scout's journal — pick another?\n\n" + \
+                self._profile_menu()
+        name = self.prof.get("display_name", "scout")
+        lvl = self.prof["games"]["eldermark"]["level"]
+        return self._enter_play(f"Welcome back, {name}! ✨ (level {lvl})")
+
+    def _handle_naming(self, text):
+        name = re.sub(r"\s+", " ", (text or "").strip())[:20].strip()
+        if not name:
+            return "Tell me a name to call you! (a few letters is perfect)"
+        self.prof = create_game_profile(name)
+        award(self.prof, "first_steps", "First Steps",
+              "Began the Eldermark adventure")
+        save_game_profile(self.prof)
+        return self._enter_play(
+            f"Welcome to Eldermark, {name}! 🌟 A Lumen Scout relights the "
+            "Wayshrines and makes critter friends. No one ever gets hurt here — "
+            "if a critter bumps you, you just take a breath and try again.")
+
+    def _enter_play(self, greeting):
+        self.state = "play"
+        return self._scene_text(log=[greeting])
+
+    # -- exploration ---------------------------------------------------------
+    def _g(self):
+        return self.prof["games"]["eldermark"]
+
+    def _has(self, flag):
+        return flag in self._g()["flags"]
+
+    def _flag(self, flag):
+        g = self._g()
+        if flag not in g["flags"]:
+            g["flags"].append(flag)
+
+    def _current_scene(self):
+        g = self._g()
+        if g["scene"] >= len(ELDER_SCENES):
+            return None                              # roaming after victory
+        return ELDER_SCENES[g["scene"]]
+
+    def _scene_text(self, log=None):
+        g = self._g()
+        sc = self._current_scene()
+        if sc is None:
+            title, art = "The Sunlit Trails", ELDER_ART["trails"]
+            desc = ("The Hollow is warm and bright again. Roam as long as you "
+                    "like and meet more critters!")
+            self._opts = [("roam", "Wander the trails"),
+                          ("rest", "Rest a moment"),
+                          ("pack", "Check your pack")]
+        else:
+            title, art = sc["name"], ELDER_ART.get(sc["name"], "")
+            desc = sc["desc"]
+            self._opts = [("onward", "Press onward")]
+            if sc.get("critter") and not self._has(f"met:{g['scene']}"):
+                self._opts.append(("look", "Look around"))
+            self._opts.append(("rest", "Rest a moment"))
+            self._opts.append(("pack", "Check your pack"))
+        return _elder_screen(log=log, title=f"~ {title} ~", art=art,
+                             info=_wrap_lines(desc, 46), opts=self._opts)
+
+    def _handle_play(self, text):
+        n = self._parse_int(text)
+        if n is None or not (1 <= n <= len(self._opts)):
+            return self._scene_text(log=["Type the number of an option above."])
+        key = self._opts[n - 1][0]
+        if key == "onward":
+            return self._advance()
+        if key == "roam":
+            return self._begin_battle(random.choice(["gloomling", "thistlewisp"]))
+        if key == "look":
+            return self._look()
+        if key == "rest":
+            return self._rest()
+        if key == "pack":
+            return self._pack()
+        return self._scene_text()
+
+    def _advance(self):
+        g = self._g()
+        sc = self._current_scene()
+        if sc is None:
+            return self._begin_battle(random.choice(["gloomling", "thistlewisp"]))
+        if sc.get("enemy") and not self._has(f"cleared:{g['scene']}"):
+            return self._begin_battle(sc["enemy"])
+        g["scene"] += 1
+        save_game_profile(self.prof)
+        msg = ("You follow the glimmering path onward..."
+               if g["scene"] < len(ELDER_SCENES)
+               else "You stroll on into the sunshine...")
+        return self._scene_text(log=[msg])
+
+    def _look(self):
+        g = self._g()
+        sc = self._current_scene()
+        cr = sc.get("critter") if sc else None
+        if not cr:
+            return self._scene_text(log=["There's no one new to meet just now."])
+        self._flag(f"met:{g['scene']}")
+        log = [cr["line"]]
+        gift = cr.get("gives")
+        if gift:
+            g["inventory"].append(gift)
+            log.append(f"You receive a {gift.upper()}!")
+            if award(self.prof, "first_friend", "First Friend",
+                     "Made friends with a critter"):
+                log.append("Achievement unlocked: First Friend!")
+        save_game_profile(self.prof)
+        return self._scene_text(log=log)
+
+    def _rest(self):
+        g = self._g()
+        heal = 10
+        g["hp"] = min(g["hp_max"], g["hp"] + heal)
+        save_game_profile(self.prof)
+        return self._scene_text(log=[f"You rest by a glowing toadstool. "
+                                     f"(+{heal} HP, now {g['hp']}/{g['hp_max']})"])
+
+    def _pack(self):
+        inv = self._g()["inventory"]
+        body = ("Your pack: " + ", ".join(i.upper() for i in inv)
+                if inv else "Your pack is empty for now.")
+        return self._scene_text(log=[body])
+
+    # -- combat (numbered menu, never a loss spiral) -------------------------
+    def _begin_battle(self, enemy_key):
+        g = self._g()
+        e = ELDER_ENEMIES[enemy_key]
+        mult = difficulty_mult(g["dda"]) * age_difficulty()   # ease for younger kids
+        hp = max(1, int(e["hp"] * mult))
+        self.enemy = {"key": enemy_key, "name": e["name"], "hp": hp, "hp_max": hp,
+                      "atk": max(1, int(e["atk"] * mult)), "xp": e["xp"],
+                      "win": e["win"], "boss": bool(e.get("boss"))}
+        self.state = "battle"
+        return self._battle_text(intro=True)
+
+    def _battle_options(self):
+        g = self._g()
+        opts = [(ab, ELDER_ABILITIES[ab]["label"]) for ab in g["abilities"]]
+        if "glow-berry" in g["inventory"]:
+            opts.append(("item", "Glow-berry (heal)"))
+        opts.append(("run", "Slip away"))
+        return opts
+
+    def _battle_text(self, intro=False, log=None):
+        g, e = self._g(), self.enemy
+        self._opts = self._battle_options()
+        info = [
+            f"  {e['name']:<12}{_elder_bar(e['hp'], e['hp_max'])}",
+            f"  {'You':<12}{_elder_bar(g['hp'], g['hp_max'])}  Lv{g['level']}",
+        ]
+        title = f"~ A {e['name']} appears! ~" if intro else f"~ {e['name']} ~"
+        return _elder_screen(log=log, title=title, art=ELDER_ART.get(e["key"], ""),
+                             info=info, opts=self._opts, prompt="Your move:")
+
+    def _handle_battle(self, text):
+        n = self._parse_int(text)
+        if n is None or not (1 <= n <= len(self._opts)):
+            return self._battle_text(log=["Type the number of one of your moves."])
+        return self._battle_turn(self._opts[n - 1][0])
+
+    def _battle_turn(self, key):
+        g, e = self._g(), self.enemy
+        if key == "run":
+            self.enemy = None
+            self.state = "play"
+            record_result(g["dda"], False)
+            save_game_profile(self.prof)
+            return self._scene_text(log=["You slip quietly back down the path "
+                                         "— no harm done."])
+        log, guarding = [], False
+        if key == "item":
+            g["inventory"].remove("glow-berry")
+            heal = 12
+            g["hp"] = min(g["hp_max"], g["hp"] + heal)
+            log.append(f"You munch a GLOW-BERRY (+{heal} HP).")
+        elif key == "guard":
+            guarding = True
+            log.append("You raise a shimmering guard.")
+        else:
+            ab = ELDER_ABILITIES.get(key, ELDER_ABILITIES["strike"])
+            dmg = ab["power"] + (g["level"] - 1) + _roll(4)
+            e["hp"] -= dmg
+            log.append(f"You use {ab['label']} for {dmg}!")
+        if e["hp"] <= 0:
+            return self._win_battle(log)
+        incoming = e["atk"]
+        if guarding:
+            incoming = max(1, incoming // 2)
+        g["hp"] -= incoming
+        log.append(f"The {e['name']} bumps you for {incoming}.")
+        if g["hp"] <= 0:
+            return self._lose_battle(log)
+        return self._battle_text(log=log)
+
+    def _win_battle(self, log):
+        g, e = self._g(), self.enemy
+        log.append(e["win"])
+        log.append(f"+{e['xp']} XP")
+        g["xp"] += e["xp"]
+        self.prof["points"] = self.prof.get("points", 0) + e["xp"]
+        record_result(g["dda"], True)
+        self._flag(f"cleared:{g['scene']}")
+        if award(self.prof, "brave_heart", "Brave Heart",
+                 "Calmed your first critter"):
+            log.append("Achievement unlocked: Brave Heart!")
+        log += _maybe_level_up(g)
+        if g["level"] >= 5 and award(self.prof, "rising_star", "Rising Star",
+                                     "Reached level 5"):
+            log.append("Achievement unlocked: Rising Star!")
+        self.enemy = None
+        self.state = "play"
+        if e["boss"]:
+            first_win = not self._has("won")
+            g["scene"] = len(ELDER_SCENES)
+            self._flag("won")
+            log.append("The Wayshrine blazes back to life! The whole Hollow is "
+                       "warm and safe again. You did it!")
+            if award(self.prof, "wayshrine_relit", "Wayshrine Relit",
+                     "Relit the Dimmed Wayshrine"):
+                log.append("Achievement unlocked: Wayshrine Relit!")
+            if first_win:                        # count it toward unlocking more
+                total = record_rpg_completion()
+                if games_unlocked():
+                    log.append("You've unlocked the whole Game Arcade! 🎉 "
+                               "(type /play to see)")
+                else:
+                    left = RPG_UNLOCK_THRESHOLD - total
+                    s = "s" if left != 1 else ""
+                    log.append(f"Finish {left} more RPG quest{s} to unlock the "
+                               "other games!")
+        save_game_profile(self.prof)
+        return self._scene_text(log=log)
+
+    def _lose_battle(self, log):
+        g = self._g()
+        g["hp"] = max(1, g["hp_max"] // 2)         # patched up, never knocked out
+        record_result(g["dda"], False)
+        self.prof["points"] = self.prof.get("points", 0) + 5   # never zero
+        self.enemy = None
+        self.state = "play"
+        log.append("Oof! You stumble back, dazed but okay — a kindly critter "
+                   "helps you up. (+5 points)")
+        log.append("Take a breath and try again whenever you're ready.")
+        save_game_profile(self.prof)
+        return self._scene_text(log=log)
+
+    @staticmethod
+    def _parse_int(text):
+        m = re.search(r"-?\d+", text or "")
+        return int(m.group()) if m else None
+
+
+# ============================================================================
+# RPGQuest — a gentle, AGE-AWARE, self-easing RPG adventure engine. Subclasses
+# supply the world (BANNER/TITLE/INTRO/SCENES/ENEMIES/ABILITIES); the engine
+# handles explore + numbered-menu combat. Difficulty STARTS from the child's
+# age band and AUTO-EASES (with an encouraging hint) whenever they struggle, so
+# every quest is winnable. Finishing one calls record_rpg_completion(), which
+# is what unlocks the rest of the arcade. Session-based (quick to play); the
+# completion count itself is saved family-wide in games-state.json.
+# ============================================================================
+class RPGQuest:
+    screen = True
+    rpg = True
+    name = "Adventure"
+    blurb = "a gentle RPG quest"
+    # --- world (subclasses override) ---
+    BANNER = ""
+    TITLE = "Adventure"
+    INTRO = ""
+    START_HP = 24
+    ABILITIES = {"strike": {"label": "Strike", "power": 6},
+                 "guard": {"label": "Guard", "power": 0}}
+    START_ABILITIES = ("strike", "guard")
+    UNLOCKS = {}            # {level: ability_key}
+    HEAL_ITEM = "berry"
+    HEAL_LABEL = "Berry"
+    SCENES = ()            # [{name, desc, art, critter?{line,gives}, enemy?}]
+    ENEMIES = {}           # {key: {name, hp, atk, xp, win, art, boss?}}
+
+    def __init__(self):
+        self.over = False
+        self.state = "play"
+        self.enemy = None
+        self._opts = []
+        self.scene = 0
+        self.level = 1
+        self.xp = 0
+        self.hp_max = self.START_HP
+        self.hp = self.START_HP
+        self.abilities = list(self.START_ABILITIES)
+        self.inventory = []
+        self.flags = set()
+        self.ease = 1.0        # adaptive: shrinks (easier) when the kid struggles
+        self.losses = 0
+        self._recorded = False
+        self._intro_shown = False
+
+    # -- contract ------------------------------------------------------------
+    def start(self):
+        self.__init__()
+        return self._scene_text(intro=True)
+
+    @property
+    def is_over(self):
+        return self.over
+
+    def handle(self, text):
+        try:
+            if self.state == "battle":
+                return self._handle_battle(text)
+            return self._handle_play(text)
+        except Exception:
+            return ("The path twisted for a moment — here we are:\n\n"
+                    + self._scene_text())
+
+    # -- helpers -------------------------------------------------------------
+    @staticmethod
+    def _int(text):
+        m = re.search(r"-?\d+", text or "")
+        return int(m.group()) if m else None
+
+    def _enemy_mult(self):
+        # younger band and/or struggling -> weaker foes; clamped so it's sane.
+        return max(0.4, age_difficulty() * self.ease)
+
+    def _screen(self, log=None, title=None, art=None, info=None, opts=None,
+                prompt="What will you do?", footer="(type 'quit' to stop)"):
+        parts = [self.BANNER]
+        for line in (log or []):
+            parts.append("")
+            parts += [f"  > {x}" for x in _wrap_lines(line, 44, indent="")]
+        if title:
+            parts += ["", f"  {title}"]
+        if art:
+            parts.append(art)
+        for block in (info or []):
+            parts.append(block)
+        if opts:
+            parts += ["", f"  {prompt}"]
+            parts += _elder_menu(opts)
+        if footer:
+            parts += ["", f"  {footer}"]
+        return "\n".join(parts)
+
+    # -- exploration ---------------------------------------------------------
+    def _cur(self):
+        return self.SCENES[self.scene] if self.scene < len(self.SCENES) else None
+
+    def _roam_enemies(self):
+        keys = [k for k, e in self.ENEMIES.items() if not e.get("boss")]
+        return keys or list(self.ENEMIES)
+
+    def _scene_text(self, log=None, intro=False):
+        sc = self._cur()
+        notes = []
+        if intro and self.INTRO and not self._intro_shown:
+            self._intro_shown = True
+            notes = _wrap_lines(self.INTRO, 46)
+        if sc is None:
+            title = f"~ {self.TITLE}: all done! ~"
+            art, desc = "", ("You did it! Roam a little more to meet friends, "
+                             "or type 'quit' to rest.")
+            self._opts = [("roam", "Wander a bit"), ("rest", "Rest a moment")]
+        else:
+            title = f"~ {sc['name']} ~"
+            art, desc = sc.get("art", ""), sc["desc"]
+            self._opts = [("onward", "Press onward")]
+            if sc.get("critter") and f"met:{self.scene}" not in self.flags:
+                self._opts.append(("look", "Look around"))
+            self._opts += [("rest", "Rest a moment"), ("pack", "Check your pack")]
+        info = list(notes) + ([""] if notes else []) + _wrap_lines(desc, 46)
+        return self._screen(log=log, title=title, art=art, info=info,
+                            opts=self._opts)
+
+    def _handle_play(self, text):
+        n = self._int(text)
+        if n is None or not (1 <= n <= len(self._opts)):
+            return self._scene_text(log=["Type the number of an option above."])
+        key = self._opts[n - 1][0]
+        if key == "onward":
+            return self._advance()
+        if key == "roam":
+            return self._begin_battle(random.choice(self._roam_enemies()))
+        if key == "look":
+            return self._look()
+        if key == "rest":
+            self.hp = min(self.hp_max, self.hp + 10)
+            return self._scene_text(log=[f"You rest a while. (+10 HP, now "
+                                         f"{self.hp}/{self.hp_max})"])
+        inv = ", ".join(i.upper() for i in self.inventory) or "nothing yet"
+        return self._scene_text(log=[f"Your pack: {inv}."])
+
+    def _advance(self):
+        sc = self._cur()
+        if sc is None:
+            return self._begin_battle(random.choice(self._roam_enemies()))
+        if sc.get("enemy") and f"cleared:{self.scene}" not in self.flags:
+            return self._begin_battle(sc["enemy"])
+        self.scene += 1
+        msg = ("You follow the path onward..." if self.scene < len(self.SCENES)
+               else "You stroll on into the light...")
+        return self._scene_text(log=[msg])
+
+    def _look(self):
+        sc = self._cur()
+        cr = sc.get("critter") if sc else None
+        if not cr:
+            return self._scene_text(log=["There's no one new to meet here."])
+        self.flags.add(f"met:{self.scene}")
+        log = [cr["line"]]
+        gift = cr.get("gives")
+        if gift:
+            self.inventory.append(gift)
+            log.append(f"You receive a {gift.upper()}!")
+        return self._scene_text(log=log)
+
+    # -- combat (numbered menu; never a loss spiral) -------------------------
+    def _begin_battle(self, ekey):
+        e = self.ENEMIES[ekey]
+        mult = self._enemy_mult()
+        hp = max(1, int(e["hp"] * mult))
+        self.enemy = {"key": ekey, "name": e["name"], "hp": hp, "hp_max": hp,
+                      "atk": max(1, int(e["atk"] * mult)), "xp": e["xp"],
+                      "win": e["win"], "art": e.get("art", ""),
+                      "boss": bool(e.get("boss"))}
+        self.state = "battle"
+        log = (["Tip: GUARD when you're low, then STRIKE. You've got this!"]
+               if self.losses >= 2 else None)
+        return self._battle_text(intro=True, log=log)
+
+    def _battle_opts(self):
+        opts = [(a, self.ABILITIES[a]["label"]) for a in self.abilities]
+        if self.HEAL_ITEM in self.inventory:
+            opts.append(("item", f"{self.HEAL_LABEL} (heal)"))
+        opts.append(("run", "Slip away"))
+        return opts
+
+    def _battle_text(self, intro=False, log=None):
+        e = self.enemy
+        info = [f"  {e['name']:<12}{_elder_bar(e['hp'], e['hp_max'])}",
+                f"  {'You':<12}{_elder_bar(self.hp, self.hp_max)}  Lv{self.level}"]
+        self._opts = self._battle_opts()
+        title = (f"~ A {e['name']} appears! ~" if intro else f"~ {e['name']} ~")
+        return self._screen(log=log, title=title, art=e["art"], info=info,
+                            opts=self._opts, prompt="Your move:")
+
+    def _handle_battle(self, text):
+        n = self._int(text)
+        if n is None or not (1 <= n <= len(self._opts)):
+            return self._battle_text(log=["Type the number of one of your moves."])
+        return self._battle_turn(self._opts[n - 1][0])
+
+    def _battle_turn(self, key):
+        e = self.enemy
+        if key == "run":
+            self.enemy = None
+            self.state = "play"
+            return self._scene_text(log=["You slip back down the path — no harm "
+                                         "done."])
+        log, guarding = [], False
+        if key == "item":
+            self.inventory.remove(self.HEAL_ITEM)
+            self.hp = min(self.hp_max, self.hp + 12)
+            log.append(f"You use a {self.HEAL_LABEL.upper()} (+12 HP).")
+        elif key == "guard":
+            guarding = True
+            log.append("You raise a steady guard.")
+        else:
+            ab = self.ABILITIES.get(key, self.ABILITIES.get(
+                "strike", {"label": "Strike", "power": 6}))
+            dmg = ab["power"] + (self.level - 1) + random.randint(1, 4)
+            e["hp"] -= dmg
+            log.append(f"You use {ab['label']} for {dmg}!")
+        if e["hp"] <= 0:
+            return self._win_battle(log)
+        incoming = e["atk"]
+        if guarding:
+            incoming = max(1, incoming // 2)
+        self.hp -= incoming
+        log.append(f"The {e['name']} bumps you for {incoming}.")
+        if self.hp <= 0:
+            return self._lose_battle(log)
+        return self._battle_text(log=log)
+
+    def _level_up(self):
+        msgs = []
+        while self.xp >= self.level * 40:
+            self.xp -= self.level * 40
+            self.level += 1
+            self.hp_max += 5
+            self.hp = self.hp_max
+            new = self.UNLOCKS.get(self.level)
+            if new and new not in self.abilities:
+                self.abilities.insert(max(0, len(self.abilities) - 1), new)
+                msgs.append(f"Level {self.level}! You learned "
+                            f"{self.ABILITIES[new]['label']}!")
+            else:
+                msgs.append(f"Level {self.level}! You feel stronger.")
+        return msgs
+
+    def _win_battle(self, log):
+        e = self.enemy
+        log += [e["win"], f"+{e['xp']} XP"]
+        self.xp += e["xp"]
+        self.losses = 0
+        self.ease = min(1.0, self.ease + 0.1)      # drift back to normal on a win
+        self.flags.add(f"cleared:{self.scene}")
+        log += self._level_up()
+        boss = e["boss"]
+        self.enemy = None
+        self.state = "play"
+        if boss:
+            self.scene = len(self.SCENES)
+            self.flags.add("won")
+            log.append(f"The {self.TITLE} is saved — you did it! 🌟")
+            if not self._recorded:
+                self._recorded = True
+                total = record_rpg_completion()
+                if games_unlocked():
+                    log.append("You've unlocked the whole Game Arcade! 🎉 "
+                               "(type /play to see)")
+                else:
+                    left = RPG_UNLOCK_THRESHOLD - total
+                    s = "s" if left != 1 else ""
+                    log.append(f"Finish {left} more RPG quest{s} to unlock the "
+                               "other games!")
+        return self._scene_text(log=log)
+
+    def _lose_battle(self, log):
+        self.hp = max(1, self.hp_max // 2)         # patched up, never knocked out
+        self.losses += 1
+        self.ease = max(0.45, self.ease * 0.8)     # adaptive: easier next time
+        self.enemy = None
+        self.state = "play"
+        log.append("Oof — you stumble back, dazed but okay. A friend helps you "
+                   "up.")
+        log.append("Don't worry — I'll make this a little easier. You can do "
+                   "it!")
+        return self._scene_text(log=log)
+
+
+class TideHollowRPG(RPGQuest):
+    name = "Tide Hollow"
+    blurb = "a calm seaside quest — make sea friends, soothe the Tide-Keeper"
+    BANNER = _ascii_banner("T I D E   H O L L O W", inner=30)
+    TITLE = "Tide Hollow"
+    INTRO = ("The tide lanterns went dark and the cove is sleepy. Wade in, "
+             "make gentle sea friends, and relight the Hollow with kindness!")
+    START_HP = 26
+    ABILITIES = {
+        "splash": {"label": "Splash", "power": 6},
+        "bubble": {"label": "Bubble Beam", "power": 10},
+        "surge":  {"label": "Tide Surge", "power": 14},
+        "guard":  {"label": "Guard", "power": 0},
+    }
+    START_ABILITIES = ("splash", "guard")
+    UNLOCKS = {2: "bubble", 4: "surge"}
+    HEAL_ITEM = "kelp-snack"
+    HEAL_LABEL = "Kelp Snack"
+    SCENES = [
+        {"name": "Tide-Pool Steps",
+         "desc": "Warm little pools sparkle on the rocks. A sleepy SEAPUP "
+                 "naps in a sunbeam and waves a friendly flipper.",
+         "art": "    .-~~~-.\n   ( o   o ) zZ\n    '-~~~-'\n   ~~~~~~~~~~~",
+         "critter": {"line": "The Seapup yawns and nudges you a snack: "
+                             "'Here, take a KELP SNACK!'",
+                     "gives": "kelp-snack"}},
+        {"name": "Swaying Kelp Grove",
+         "desc": "Tall kelp ribbons sway in the gentle current. A bouncy "
+                 "DRIFTLING wants to play a bubbly game of tag.",
+         "art": "    | | | | |\n    | | | | |\n    o  o  o  o\n   ~~~~~~~~~~~",
+         "enemy": "driftling"},
+        {"name": "Glimmer Coral Glade",
+         "desc": "Soft coral glows pink and gold like tiny lanterns. A cheery "
+                 "CRABBO scuttles up to share a treat.",
+         "art": "     ( )  ( )\n    ( o    o )\n     ^^    ^^\n   ~~~~~~~~~~~",
+         "critter": {"line": "Crabbo clacks happily: 'Friends share! "
+                             "A KELP SNACK for you!'",
+                     "gives": "kelp-snack"}},
+        {"name": "Whispering Deep Current",
+         "desc": "The water tugs softly and stars shimmer below. A prickly but "
+                 "playful URCHO rolls across the path, just wanting to romp.",
+         "art": "    *  |*|  *\n   *( o   o )*\n    *  |*|  *\n   ~~~~~~~~~~~",
+         "enemy": "urcho"},
+        {"name": "The Dark Lantern Reef",
+         "desc": "The great tide lantern stands cold and dark. The lonely "
+                 "TIDE-KEEPER curls around it, missing the warm glow.",
+         "art": "     .====.\n    | *  * |\n    | T I D|\n    |==||==|\n   __|    |__",
+         "enemy": "tide-keeper"},
+    ]
+    ENEMIES = {
+        "driftling": {"name": "Driftling", "hp": 16, "atk": 4, "xp": 22,
+                      "win": "The Driftling giggles, blows a happy stream of "
+                             "bubbles, and bobs gently aside. ~",
+                      "art": "    .-~~~-.\n   ( o   o )\n    '-...-'"},
+        "urcho": {"name": "Urcho", "hp": 24, "atk": 6, "xp": 32,
+                  "win": "Urcho tires out from all the romping, softens its "
+                         "prickles, and rolls off with a sleepy smile.",
+                  "art": "    *  |*|  *\n   *( o   o )*\n    *  |*|  *"},
+        "tide-keeper": {"name": "Tide-Keeper", "hp": 40, "atk": 8, "xp": 60,
+                        "boss": True,
+                        "win": "The Tide-Keeper feels your kindness, smiles "
+                               "warmly, and sighs a breath of starlight that "
+                               "relights every lantern in the Hollow.",
+                        "art": "    .------.\n   | ~ () ~ |\n   | T I D E|\n    '------'"},
+    }
+
+class EmberPeakRPG(RPGQuest):
+    name = "Ember Peak"
+    blurb = "a snug volcano quest — befriend fire-pups, cheer the Ember Guardian"
+    BANNER = _ascii_banner("E M B E R   P E A K", inner=30)
+    TITLE = "Ember Peak"
+    INTRO = ("The warm hearth at the top of Ember Peak has gone cold and dim. "
+             "Climb up, make cozy friends, and relight the glow!")
+    START_HP = 26
+    ABILITIES = {
+        "spark":  {"label": "Spark Tap", "power": 6},
+        "glow":   {"label": "Glow Puff", "power": 10},
+        "blaze":  {"label": "Cozy Blaze", "power": 14},
+        "guard":  {"label": "Guard", "power": 0},
+    }
+    START_ABILITIES = ("spark", "guard")
+    UNLOCKS = {2: "glow", 4: "blaze"}
+    HEAL_ITEM = "cocoa-bun"
+    HEAL_LABEL = "Cocoa Bun"
+    SCENES = [
+        {"name": "Warm Trailhead",
+         "desc": "Soft red stones make a cozy path up the peak. A sleepy "
+                 "EMBERPUP naps in a patch of sunshine.",
+         "art": "      .-~~~-.\n     ( ^   ^ ) z\n      '-~~~-'",
+         "critter": {"line": "The Emberpup wiggles: 'Here, have a COCOA BUN!'",
+                     "gives": "cocoa-bun"}},
+        {"name": "Steam Gardens",
+         "desc": "Warm steam curls up between the rocks. A bouncy CINDERLING "
+                 "wants to play a hopping game with you.",
+         "art": "    ( ( ( ) ) )\n     ( o   o )\n      ~ ~ ~ ~", "enemy": "cinderling"},
+        {"name": "Lantern Ledge",
+         "desc": "Tiny glow-stones light a snug ledge. A kind PEBBLO holds "
+                 "out a warm treat.",
+         "art": "      [ o o ]\n     ( ===== )\n      *  *  *",
+         "critter": {"line": "Pebblo rumbles softly: 'A COCOA BUN, just for you!'",
+                     "gives": "cocoa-bun"}},
+        {"name": "Smoky Hollow",
+         "desc": "Puffs of cozy smoke drift by. A grumbly LAVALUMP flops in "
+                 "the way, only wanting attention.",
+         "art": "     ( =   = )\n    (  o o o  )\n     ( _____ )", "enemy": "lavalump"},
+        {"name": "The Cold Hearth",
+         "desc": "The great hearth at the peak sits dark and chilly. The "
+                 "lonely EMBER GUARDIAN waits beside it.",
+         "art": "      .-----.\n     | *   * |\n     |  ===  |\n      '--^--'", "enemy": "ember-guardian"},
+    ]
+    ENEMIES = {
+        "cinderling": {"name": "Cinderling", "hp": 16, "atk": 4, "xp": 22,
+                       "win": "The Cinderling giggles, spins, and tumbles away "
+                              "in a happy puff of warm sparks. ~",
+                       "art": "     ( o   o )\n      ( ^^^ )\n       ~ ~ ~"},
+        "lavalump": {"name": "Lavalump", "hp": 24, "atk": 6, "xp": 32,
+                     "win": "Lavalump yawns a cozy yawn, smiles, and squishes "
+                            "aside so you can pass.",
+                     "art": "    (  o o  )\n   ( ~~~~~~~ )\n    ( _____ )"},
+        "ember-guardian": {"name": "Ember Guardian", "hp": 40, "atk": 8, "xp": 60,
+                           "boss": True,
+                           "win": "The Ember Guardian's frown melts into a warm "
+                                  "smile. With a happy sigh it breathes a soft "
+                                  "golden glow and relights the hearth.",
+                           "art": "      .-----.\n     | ^   ^ |\n     |  ===  |\n      '-----'"},
+    }
+
+class FrostfallRPG(RPGQuest):
+    name = "Frostfall"
+    blurb = "a cozy winter quest — befriend snow critters, warm the shy Snow Warden"
+    BANNER = _ascii_banner("F R O S T F A L L", inner=30)
+    TITLE = "Frostfall Valley"
+    INTRO = ("The snow lanterns have dimmed and Frostfall sleeps under the drifts. "
+             "Step into the valley, make fluffy friends, and twinkle the lights awake!")
+    START_HP = 26
+    ABILITIES = {
+        "toss":   {"label": "Snow Toss", "power": 6},
+        "flurry": {"label": "Flurry Puff", "power": 10},
+        "aurora": {"label": "Aurora Glow", "power": 14},
+        "guard":  {"label": "Guard", "power": 0},
+    }
+    START_ABILITIES = ("toss", "guard")
+    UNLOCKS = {2: "flurry", 4: "aurora"}
+    HEAL_ITEM = "cocoa-cookie"
+    HEAL_LABEL = "Cocoa Cookie"
+    SCENES = [
+        {"name": "Mitten Gate",
+         "desc": "A little gate of frosted pinecones sparkles. A sleepy SNOWPUP "
+                 "naps in a cozy mitten of snow.",
+         "art": "     .-~~~-.\n    ( o   o )  zZ\n     '-~~~-'",
+         "critter": {"line": "The Snowpup wiggles: 'Brr, here, have a COCOA COOKIE!'",
+                     "gives": "cocoa-cookie"}},
+        {"name": "Pine Drift",
+         "desc": "Tall snowy pines whisper. A bouncy PUFFLING wants to have a "
+                 "friendly snowball romp with you.",
+         "art": "      .^.\n     (***)\n      |T|\n   ~~~~~~~~~~", "enemy": "puffling"},
+        {"name": "Crystal Hollow",
+         "desc": "Icicles glow soft and blue. A kind MITTENMOLE pops up with a treat.",
+         "art": "      ( oo )\n     <(    )>\n      ^^  ^^",
+         "critter": {"line": "Mittenmole squeaks: 'A warm COCOA COOKIE, just for you!'",
+                     "gives": "cocoa-cookie"}},
+        {"name": "Frozen Brook",
+         "desc": "A frosty brook crackles. A shivery FROSTNIP hops in the path, "
+                 "only wanting to play.",
+         "art": "     *  .  *\n    .( o o ).\n     *  .  *", "enemy": "frostnip"},
+        {"name": "The Dim Lantern",
+         "desc": "The great snow lantern has gone dark. The shy, chilly SNOW "
+                 "WARDEN curls beside it, all alone.",
+         "art": "      .====.\n     | *  * |\n     | snow |\n   __|====|__", "enemy": "snow-warden"},
+    ]
+    ENEMIES = {
+        "puffling": {"name": "Puffling", "hp": 16, "atk": 4, "xp": 22,
+                     "win": "The Puffling laughs, poofs into a swirl of soft "
+                            "snowflakes, and drifts away happy. *",
+                     "art": "     .-~~-.\n    ( o  o )\n     '~~~~'"},
+        "frostnip": {"name": "Frostnip", "hp": 24, "atk": 6, "xp": 32,
+                     "win": "Frostnip shakes the frost off its ears, gives a "
+                            "tiny smile, and hops aside to let you pass.",
+                     "art": "     *  .  *\n    .( o o ).\n     *  .  *"},
+        "snow-warden": {"name": "Snow Warden", "hp": 40, "atk": 8, "xp": 60,
+                        "boss": True,
+                        "win": "The Snow Warden feels your warm cocoa kindness, "
+                               "stops shivering, and smiles — the lanterns "
+                               "twinkle awake and Frostfall yawns hello!",
+                        "art": "     .------.\n    | *    * |\n    | warden |\n     '------'"},
+    }
+
+
+# ---- CRITTER KEEPERS: an original creature-collector (catch / raise / evolve)
+# All critters, types and art are 100% original (own IP). Pure logic; the chat
+# renders every returned string in the green monospace "arcade screen".
+
+CRITTERS_BANNER = _ascii_banner("C R I T T E R   K E E P E R S", inner=32)
+
+# Each critter line is a 2-3 stage evolution: a list of forms (low -> high).
+# A "form" is (name, ascii_art). Evolutions trigger at fixed level thresholds.
+# Types are gentle, made-up flavors — never used to hurt, only for color.
+CRITTERS_EVO_LEVELS = (4, 8)   # evolve when active level reaches these
+
+CRITTERS_DEX = {
+    "emberkit": {
+        "type": "Cozy Flame",
+        "moves": ["Warm Nuzzle", "Spark Hop", "Cinder Spin"],
+        "forms": [
+            ("Emberkit",
+             "       (\\__/)\n"
+             "       (=^.^=)  *flick*\n"
+             "        (\")(\")  ~ember~"),
+            ("Blazewhisk",
+             "      /\\___/\\\n"
+             "     ( >ww< )  *crackle*\n"
+             "      (  ^^  )\n"
+             "       ~~^^~~"),
+            ("Solarynx",
+             "     \\  *  /\n"
+             "    -- (oo) --  *radiant*\n"
+             "     /( SUN )\\\n"
+             "       ~vv~"),
+        ],
+    },
+    "dewpup": {
+        "type": "Dewy Splash",
+        "moves": ["Bubble Boop", "Puddle Roll", "Mist Veil"],
+        "forms": [
+            ("Dewpup",
+             "       .---.\n"
+             "      ( o o )  *drip*\n"
+             "       > ~ <\n"
+             "        \"\""),
+            ("Tidewag",
+             "      ~.---.~\n"
+             "     ( ^   ^ )  *splash*\n"
+             "      \\  v  /\n"
+             "       ~~~~~"),
+            ("Lagoonix",
+             "     ~~~~~~~~~\n"
+             "    ( O     O )  *wave*\n"
+             "     \\  ___  /\n"
+             "      ~~~~~~~"),
+        ],
+    },
+    "sproutling": {
+        "type": "Leafy Sprout",
+        "moves": ["Petal Pat", "Vine Wiggle", "Sun Soak"],
+        "forms": [
+            ("Sproutling",
+             "        \\|/\n"
+             "       ( o o )  *rustle*\n"
+             "        \\_-_/\n"
+             "         \"\""),
+            ("Bloomkin",
+             "       @ \\|/ @\n"
+             "      ( ^   ^ )  *bloom*\n"
+             "       \\  o  /\n"
+             "        |||||"),
+            ("Verdantle",
+             "     @@ \\|/ @@\n"
+             "    (  O   O  )  *flourish*\n"
+             "     \\ \\___/ /\n"
+             "       |||||"),
+        ],
+    },
+    "pebblo": {
+        "type": "Pebbly Stone",
+        "moves": ["Tumble Tap", "Boulder Hug", "Quartz Gleam"],
+        "forms": [
+            ("Pebblo",
+             "       [=^=]\n"
+             "      [ o o ]  *clack*\n"
+             "       [___]"),
+            ("Cragmole",
+             "      [=====]\n"
+             "     [ ^   ^ ]  *rumble*\n"
+             "     [  ___  ]\n"
+             "      [=====]"),
+            ("Geodome",
+             "     /=====\\\n"
+             "    [ *   * ]  *sparkle*\n"
+             "    [ <DIA> ]\n"
+             "     \\=====/"),
+        ],
+    },
+    "zephyrkit": {
+        "type": "Breezy Air",
+        "moves": ["Feather Flit", "Gust Glide", "Cloud Curl"],
+        "forms": [
+            ("Zephyrkit",
+             "       ~v~v~\n"
+             "      ( -   - )  *flutter*\n"
+             "       \\  w  /\n"
+             "        ~~~~"),
+            ("Galewing",
+             "      \\~v~v~/\n"
+             "     ( o   o )  *whoosh*\n"
+             "      \\__w__/\n"
+             "       /   \\"),
+            ("Stratosoar",
+             "    \\~~v~v~~/\n"
+             "   (  O   O  )  *soar*\n"
+             "    \\___w___/\n"
+             "     //   \\\\"),
+        ],
+    },
+    "glimmoth": {
+        "type": "Glowy Spark",
+        "moves": ["Twinkle Tap", "Glow Pulse", "Star Dust"],
+        "forms": [
+            ("Glimmoth",
+             "       .*.*.\n"
+             "      ( -.- )  *glow*\n"
+             "       \\_v_/"),
+            ("Lumifly",
+             "      *.*.*.*\n"
+             "     ( o   o )  *shimmer*\n"
+             "      \\__v__/\n"
+             "       *. .*"),
+            ("Aurorath",
+             "    *.*.*.*.*\n"
+             "   (  *   *  )  *dazzle*\n"
+             "    \\___v___/\n"
+             "     *.* *.*"),
+        ],
+    },
+    "frostnib": {
+        "type": "Snowy Chill",
+        "moves": ["Snow Pat", "Frost Skip", "Icicle Twirl"],
+        "forms": [
+            ("Frostnib",
+             "       *. .*\n"
+             "      ( o.o )  *brr*\n"
+             "       \\_-_/"),
+            ("Snowlsey",
+             "      *.* *.*\n"
+             "     ( ^   ^ )  *flurry*\n"
+             "      \\__-__/\n"
+             "       *. .*"),
+            ("Glacien",
+             "    *.*.*.*.*\n"
+             "   (  o   o  )  *crystal*\n"
+             "    \\ <ICE> /\n"
+             "     *.* *.*"),
+        ],
+    },
+}
+
+# Wild critters you can meet while exploring (keys into the dex above).
+CRITTERS_WILD_KEYS = list(CRITTERS_DEX.keys())
+# Three original starters offered at the very beginning.
+CRITTERS_STARTERS = ["emberkit", "dewpup", "sproutling"]
+
+# Gentle befriend choices (both ALWAYS work — kindness never fails).
+CRITTERS_BEFRIEND = [
+    ("berry", "Offer a sweet sunberry"),
+    ("play", "Play a game of tag"),
+]
+CRITTERS_BEFRIEND_FLAVOR = {
+    "berry": "nibbles the sunberry, gives a happy wiggle",
+    "play": "chases your hand, then tumbles over giggling",
+}
+
+
+def _critters_form_index(level):
+    """Which evolution stage (0,1,2) a critter shows at a given level."""
+    idx = 0
+    for thr in CRITTERS_EVO_LEVELS:
+        if level >= thr:
+            idx += 1
+    return min(idx, 2)
+
+
+def _critters_make(key, level=1):
+    """Build a fresh critter dict from the dex (no shared mutable state)."""
+    return {"key": key, "level": level, "xp": 0}
+
+
+def _critters_name(c):
+    forms = CRITTERS_DEX[c["key"]]["forms"]
+    return forms[_critters_form_index(c["level"])][0]
+
+
+def _critters_art(c):
+    forms = CRITTERS_DEX[c["key"]]["forms"]
+    return forms[_critters_form_index(c["level"])][1]
+
+
+def _critters_bar(level):
+    """A friendly level progress bar toward the next evolution (or 'FINAL')."""
+    nxt = None
+    for thr in CRITTERS_EVO_LEVELS:
+        if level < thr:
+            nxt = thr
+            break
+    if nxt is None:
+        return "  Form: FINAL  [##########] top form!"
+    prev = 0
+    for thr in CRITTERS_EVO_LEVELS:
+        if thr <= level:
+            prev = thr
+    span = nxt - prev
+    done = level - prev
+    fill = int(round(10 * done / span)) if span else 0
+    fill = max(0, min(10, fill))
+    return ("  Next form at Lv " + str(nxt) + "  [" + "#" * fill
+            + "-" * (10 - fill) + "]")
+
+
+class CritterKeepers:
+    """Catch, raise and EVOLVE a team of original critters. Explore to befriend
+    new friends (kindness always works), Train to level up and evolve, Spar in
+    gentle matches where critters just get sleepy — never hurt. Endless, offline,
+    deterministic; renders in the green monospace screen."""
+
+    name = "Critter Keepers"
+    blurb = "tame, train, and EVOLVE a team of original critters (collect-em-all)"
+    screen = True
+
+    def __init__(self):
+        self.over = False
+        self.state = "starter"     # starter -> hub -> explore/spar/team_back
+        self.team = []
+        self.active = 0            # index into team
+        # explore scratch
+        self.wild = None
+        # spar scratch
+        self.foe = None
+        self.foe_sleep = 0         # 0..3 (tuckered out at 3)
+        self.mine_sleep = 0
+
+    # ---- contract ----------------------------------------------------------
+    def start(self):
+        return self._starter_screen()
+
+    @property
+    def is_over(self):
+        return self.over
+
+    def handle(self, text):
+        if self.state == "starter":
+            return self._pick_starter(text)
+        if self.state == "explore":
+            return self._do_befriend(text)
+        if self.state == "spar":
+            return self._do_spar(text)
+        if self.state == "team_back":
+            self.state = "hub"          # any input returns from the team view
+            return self._hub_screen()
+        return self._hub_pick(text)     # state == "hub"
+
+    # ---- starter -----------------------------------------------------------
+    def _starter_screen(self, note=None):
+        parts = [CRITTERS_BANNER, ""]
+        if note:
+            parts += [f"  > {note}", ""]
+        parts += _wrap_lines("Welcome, Keeper! Pick your very first critter "
+                             "friend. They will grow and EVOLVE as you play!", 50)
+        parts += [""]
+        for i, key in enumerate(CRITTERS_STARTERS, 1):
+            d = CRITTERS_DEX[key]
+            nm = d["forms"][0][0]
+            parts += [f"  {i}) {nm}  ({d['type']})"]
+            parts += [d["forms"][0][1], ""]
+        parts += ["  Type 1, 2 or 3 to choose.",
+                  "", "  (type 'quit' to leave)"]
+        return "\n".join(parts)
+
+    def _pick_starter(self, text):
+        m = re.search(r"\d+", text or "")
+        if not m or not (1 <= int(m.group()) <= len(CRITTERS_STARTERS)):
+            return self._starter_screen(note="Type 1, 2 or 3 to pick a friend.")
+        key = CRITTERS_STARTERS[int(m.group()) - 1]
+        self.team = [_critters_make(key)]
+        self.active = 0
+        self.state = "hub"
+        nm = _critters_name(self.team[0])
+        return self._hub_screen(log=[f"{nm} bounces to your side. You are now a "
+                                     "Critter Keeper!"])
+
+    # ---- hub ---------------------------------------------------------------
+    def _active(self):
+        if not self.team:
+            return None
+        self.active = max(0, min(self.active, len(self.team) - 1))
+        return self.team[self.active]
+
+    def _hub_screen(self, log=None):
+        parts = [CRITTERS_BANNER]
+        for line in (log or []):
+            parts.append("")
+            parts += [f"  > {x}" for x in _wrap_lines(line, 46, indent="")]
+        c = self._active()
+        parts += [""]
+        if c:
+            d = CRITTERS_DEX[c["key"]]
+            parts += [f"  Active: {_critters_name(c)}  Lv {c['level']}"
+                      f"  ({d['type']})"]
+            parts += [_critters_art(c)]
+            parts += ["", _critters_bar(c["level"]),
+                      f"  XP to next level: {self._xp_need(c) - c['xp']}",
+                      f"  Team size: {len(self.team)}"]
+        parts += ["", "  What would you like to do?"]
+        parts += _elder_menu([
+            ("explore", "Explore"),
+            ("train", "Train"),
+            ("team", "Team"),
+            ("spar", "Spar"),
+            ("swap", "Swap active"),
+        ])
+        parts += ["", "  (type 'quit' to leave)"]
+        return "\n".join(parts)
+
+    def _hub_pick(self, text):
+        m = re.search(r"\d+", text or "")
+        choice = int(m.group()) if m else 0
+        if choice == 1:
+            return self._begin_explore()
+        if choice == 2:
+            return self._train()
+        if choice == 3:
+            return self._team_screen()
+        if choice == 4:
+            return self._begin_spar()
+        if choice == 5:
+            return self._swap()
+        return self._hub_screen(log=["Type a number from 1 to 5 to choose."])
+
+    # ---- leveling / evolution ---------------------------------------------
+    def _xp_need(self, c):
+        return 8 + c["level"] * 4     # gentle, predictable curve
+
+    def _grant_xp(self, c, amount):
+        """Add XP; return a list of celebratory log lines for any level-ups /
+        evolutions. Never fails, never raises."""
+        log = []
+        c["xp"] += max(0, amount)
+        while c["xp"] >= self._xp_need(c):
+            c["xp"] -= self._xp_need(c)
+            before = _critters_form_index(c["level"])
+            c["level"] += 1
+            after = _critters_form_index(c["level"])
+            nm = _critters_name(c)
+            log.append(f"{nm} grew to Lv {c['level']}!  Great job!")
+            if after > before:
+                log.append("")
+                log.append("*  *  *  EVOLUTION!  *  *  *")
+                log.append(f"Your critter evolved into {nm}!")
+        return log
+
+    def _train(self):
+        c = self._active()
+        if not c:
+            return self._hub_screen(log=["Befriend a critter first!"])
+        gain = random.randint(4, 7)
+        moves = CRITTERS_DEX[c["key"]]["moves"]
+        move = random.choice(moves)
+        log = [f"You practice {move} together. (+{gain} XP)"]
+        log += self._grant_xp(c, gain)
+        return self._hub_screen(log=log)
+
+    # ---- team --------------------------------------------------------------
+    def _team_screen(self):
+        parts = [CRITTERS_BANNER, "", "  ~ Your Critter Team ~", ""]
+        for i, c in enumerate(self.team):
+            d = CRITTERS_DEX[c["key"]]
+            star = "*" if i == self.active else " "
+            parts += [f" {star}{i + 1}) {_critters_name(c)}  Lv {c['level']}"
+                      f"  ({d['type']})"]
+        parts += [""]
+        parts += _wrap_lines("(* marks your active critter. Use Swap from the "
+                             "menu to change who you train and spar with.)", 48)
+        parts += ["", "  Type any key, then Enter, to go back.",
+                  "", "  (type 'quit' to leave)"]
+        # next input returns to the hub
+        self.state = "team_back"
+        return "\n".join(parts)
+
+    def _swap(self):
+        if len(self.team) <= 1:
+            return self._hub_screen(log=["You need more than one critter to "
+                                         "swap. Try Explore to meet more!"])
+        self.active = (self.active + 1) % len(self.team)
+        return self._hub_screen(log=[f"{_critters_name(self._active())} is now "
+                                     "your active critter!"])
+
+    # ---- explore / befriend ------------------------------------------------
+    def _begin_explore(self):
+        key = random.choice(CRITTERS_WILD_KEYS)
+        self.wild = _critters_make(key, level=1)
+        self.state = "explore"
+        d = CRITTERS_DEX[key]
+        return self._explore_screen(
+            log=[f"You spot a wild {d['forms'][0][0]} in the meadow!"])
+
+    def _explore_screen(self, note=None, log=None):
+        parts = [CRITTERS_BANNER]
+        for line in (log or []):
+            parts.append("")
+            parts += [f"  > {x}" for x in _wrap_lines(line, 46, indent="")]
+        if note:
+            parts += ["", f"  > {note}"]
+        w = self.wild
+        d = CRITTERS_DEX[w["key"]]
+        parts += ["", f"  A wild {d['forms'][0][0]}  ({d['type']})",
+                  _critters_art(w), "", "  How will you say hello?"]
+        parts += _elder_menu([(k, lbl) for k, lbl in CRITTERS_BEFRIEND])
+        parts += ["", "  (type 'quit' to leave)"]
+        return "\n".join(parts)
+
+    def _do_befriend(self, text):
+        m = re.search(r"\d+", text or "")
+        if not m or not (1 <= int(m.group()) <= len(CRITTERS_BEFRIEND)):
+            return self._explore_screen(
+                note="Type 1 or 2 to greet your new friend.")
+        key, _label = CRITTERS_BEFRIEND[int(m.group()) - 1]
+        flavor = CRITTERS_BEFRIEND_FLAVOR[key]
+        w = self.wild
+        d = CRITTERS_DEX[w["key"]]
+        nm = d["forms"][0][0]
+        # kindness ALWAYS works — the critter joins the team.
+        self.team.append(w)
+        self.wild = None
+        self.state = "hub"
+        return self._hub_screen(log=[
+            f"The {nm} {flavor}.",
+            f"{nm} happily joins your team!  (Team size {len(self.team)})"])
+
+    # ---- spar --------------------------------------------------------------
+    def _begin_spar(self):
+        c = self._active()
+        if not c:
+            return self._hub_screen(log=["Befriend a critter first!"])
+        key = random.choice(CRITTERS_WILD_KEYS)
+        self.foe = _critters_make(key, level=max(1, c["level"]))
+        self.foe_sleep = 0
+        self.mine_sleep = 0
+        self.state = "spar"
+        return self._spar_screen(log=[
+            f"A friendly {_critters_name(self.foe)} wants to play a match!"])
+
+    def _sleep_bar(self, n):
+        n = max(0, min(3, n))
+        return "[" + "z" * n + "-" * (3 - n) + "]"
+
+    def _spar_screen(self, note=None, log=None):
+        parts = [CRITTERS_BANNER]
+        for line in (log or []):
+            parts.append("")
+            parts += [f"  > {x}" for x in _wrap_lines(line, 46, indent="")]
+        if note:
+            parts += ["", f"  > {note}"]
+        c = self._active()
+        f = self.foe
+        moves = CRITTERS_DEX[c["key"]]["moves"]
+        parts += ["",
+                  f"  You: {_critters_name(c)} Lv {c['level']}   "
+                  f"sleepy {self._sleep_bar(self.mine_sleep)}",
+                  f"  Foe: {_critters_name(f)} Lv {f['level']}   "
+                  f"sleepy {self._sleep_bar(self.foe_sleep)}",
+                  _critters_art(f),
+                  "", "  Pick a playful move:"]
+        parts += _elder_menu([(mv, mv) for mv in moves])
+        parts += ["", "  (type 'quit' to leave)"]
+        return "\n".join(parts)
+
+    def _do_spar(self, text):
+        c = self._active()
+        moves = CRITTERS_DEX[c["key"]]["moves"]
+        m = re.search(r"\d+", text or "")
+        if not m or not (1 <= int(m.group()) <= len(moves)):
+            return self._spar_screen(note="Type 1, 2 or 3 to pick a move.")
+        move = moves[int(m.group()) - 1]
+        log = [f"{_critters_name(c)} uses {move}!"]
+        # your move makes the foe a little sleepier
+        self.foe_sleep += random.randint(1, 2)
+        if self.foe_sleep >= 3:
+            self.foe_sleep = 3
+            # YOU WIN — foe is tuckered out, you gain XP
+            gain = random.randint(5, 8)
+            log.append(f"The {_critters_name(self.foe)} yawns a big happy "
+                       "yawn — all tuckered out! You win the match!")
+            log.append(f"(+{gain} XP)")
+            log += self._grant_xp(c, gain)
+            self.foe = None
+            self.state = "hub"
+            return self._hub_screen(log=log)
+        # foe gently plays back; your critter may get a little sleepy too
+        log.append(f"The {_critters_name(self.foe)} bounces back playfully.")
+        self.mine_sleep += random.randint(0, 1)
+        if self.mine_sleep >= 3:
+            self.mine_sleep = 3
+            # you "lose" -> just a nap; still get a little XP, try again
+            gain = random.randint(2, 4)
+            log.append(f"{_critters_name(c)} curls up for a happy little nap. "
+                       "What a fun match!")
+            log.append(f"You both had fun. (+{gain} XP) Try another match anytime!")
+            log += self._grant_xp(c, gain)
+            self.foe = None
+            self.state = "hub"
+            return self._hub_screen(log=log)
+        return self._spar_screen(log=log)
+
+
+
+SPIN_BANNER = _ascii_banner("S P I N   L E A G U E")
+SPIN_ART = ("        .-~~~-.\n       ( o   o )   *whirrr*\n        |  ^  |\n        '-._.-'\n      ===[ ARENA ]===")
+SPIN_STARTERS = [("Blaze Comet", 7, 4, 5, "a fierce attacker that loves to charge"), ("Iron Aegis", 4, 7, 5, "a sturdy wall that shrugs off hits"), ("Steady Gyro", 5, 4, 7, "a tireless spinner that just keeps going")]
+SPIN_RIVALS = [("Pebble Pip", 3, 3, 4), ("Coil Sprout", 4, 4, 5), ("Dusty Dervish", 5, 5, 6), ("Frost Whirl", 6, 5, 7), ("Volt Vortex", 6, 7, 7), ("Titan Maelstrom", 8, 7, 9)]
+SPIN_PARTS = [("Razor Rim (+2 Attack)", 0, 2), ("Bulwark Ring (+2 Guard)", 1, 2), ("Flywheel Core (+2 Stamina)", 2, 2)]
+SPIN_MOVES = [("a", "Attack"), ("g", "Guard"), ("s", "Special Spin")]
+
+
+def _spin_bar(cur, mx, width=14):
+    cur = max(0, min(cur, mx))
+    fill = int(round(width * cur / mx)) if mx else 0
+    return "[" + "#" * fill + "-" * (width - fill) + f"] {cur}/{mx}"
+
+
+class SpinLeague:
+    name = "Spin League"
+    blurb = "build a top and climb a friendly tournament ladder (battle game)"
+    screen = True
+
+    def __init__(self):
+        self.over = False
+        self.state = "pick"
+        self.tname = ""
+        self.stats = [0, 0, 0]
+        self.rung = self.wins = 0
+        self.lap = 1
+        self.you = self.you_mx = self.foe = self.foe_mx = 0
+        self.rname = ""
+        self.rs = [0, 0, 0]
+        self._lost = False
+
+    def start(self):
+        return self._pick()
+
+    @property
+    def is_over(self):
+        return self.over
+
+    def handle(self, text):
+        if self.state == "pick":
+            return self._do_pick(text)
+        if self.state == "reward":
+            return self._do_reward(text)
+        return self._round(text)
+
+    def _pick(self, note=None):
+        p = [SPIN_BANNER, ""]
+        if note:
+            p += [f"  > {note}", ""]
+        p += _wrap_lines("Welcome to the Spin League! Pick a starter top, then climb the ladder of rival spinners.", 50)
+        p += ["", "  Choose your top:"]
+        for i, (nm, a, d, s, desc) in enumerate(SPIN_STARTERS):
+            p.append(f"  {i + 1}) {nm}")
+            p.append(f"       ATK {a}  GUARD {d}  STAMINA {s}")
+            p += _wrap_lines(desc, 46, indent="       ")
+        p += ["", "  Type 1, 2 or 3.   (type 'quit' to leave)"]
+        return "\n".join(p)
+
+    def _do_pick(self, text):
+        m = re.search(r"\d+", text or "")
+        if not m or not (1 <= int(m.group()) <= 3):
+            return self._pick(note="Type 1, 2 or 3 to pick a top.")
+        nm, a, d, s, _ = SPIN_STARTERS[int(m.group()) - 1]
+        self.tname = nm
+        self.stats = [a, d, s]
+        self.state = "battle"
+        self._new_match()
+        return self._battle([f"You spin up {nm}!  Your first match begins."])
+
+    def _new_match(self):
+        nm, a, d, s = SPIN_RIVALS[self.rung]
+        b = (self.lap - 1) * 2
+        self.rname = nm
+        self.rs = [a + b, d + b, s + b]
+        # rival energy scales with the age band (younger -> gentler rivals)
+        self.foe_mx = self.foe = max(
+            8, int((18 + self.rs[2] * 2 + self.rung * 3) * age_difficulty()))
+        self.you_mx = self.you = 18 + self.stats[2] * 2
+
+    def _round(self, text):
+        m = re.search(r"\d+", text or "")
+        if not m or not (1 <= int(m.group()) <= 3):
+            return self._battle(["Type 1, 2 or 3 to choose a move."])
+        c = int(m.group())
+        log = []
+        if c == 1:
+            d = max(2, self.stats[0] + random.randint(0, 4) - max(0, self.rs[1] - 4))
+            self.foe -= d
+            log.append(f"{self.tname} charges! {self.rname} loses {d} spin.")
+        elif c == 2:
+            d = max(1, self.stats[1] - 2 + random.randint(0, 2))
+            self.foe -= d
+            self.you = min(self.you_mx, self.you + 2)
+            log.append(f"You brace and chip {d}, steadying your spin (+2).")
+        else:
+            if random.random() < 0.7:
+                d = self.stats[0] + self.stats[2] // 2 + random.randint(1, 5)
+                self.foe -= d
+                log.append(f"SPECIAL SPIN! A whirling {d}-hit rocks {self.rname}.")
+            else:
+                self.you = min(self.you_mx, self.you + 4)
+                log.append("Special Spin misses, but the wind-up re-balances you (+4).")
+        if self.foe <= 0:
+            self.foe = 0
+            return self._win(log)
+        f = random.randint(1, 3)
+        if f == 1:
+            fd = max(1, self.rs[0] + random.randint(0, 3) - max(0, self.stats[1] - 4))
+            self.you -= fd
+            log.append(f"{self.rname} strikes back for {fd}.")
+        elif f == 2:
+            self.foe = min(self.foe_mx, self.foe + 2)
+            log.append(f"{self.rname} guards and steadies (+2).")
+        else:
+            fd = max(1, self.rs[0] - 1 + random.randint(0, 2))
+            self.you -= fd
+            log.append(f"{self.rname} whirls in for {fd}.")
+        if self.you <= 0:
+            self.you = 0
+            return self._lose(log)
+        return self._battle(log)
+
+    def _reward(self, log, head, blurb):
+        p = [SPIN_BANNER]
+        for line in log:
+            p.append("")
+            p += [f"  > {x}" for x in _wrap_lines(line, 46, indent="")]
+        p += ["", head, ""]
+        p += _wrap_lines(blurb, 50)
+        p += _elder_menu([(str(i), lbl) for i, (lbl, _, _) in enumerate(SPIN_PARTS)])
+        p += ["", "  Type 1, 2 or 3.   (type 'quit' to stop)"]
+        return "\n".join(p)
+
+    def _win(self, log):
+        log.append(f"{self.rname} wobbles to a stop — you WIN!")
+        self.wins += 1
+        self._lost = False
+        self.state = "reward"
+        return self._reward(log, "  *** VICTORY! You earned an upgrade part! ***", "Pick a part to bolt onto your top — it makes you stronger for the climb ahead:")
+
+    def _lose(self, log):
+        log.append(f"{self.tname} slows down first this time — good match!")
+        self._lost = True
+        self.state = "reward"
+        return self._reward(log, "  Good match! Tune up and rematch the rival.", "Take a practice part to improve, then rematch the same rival:")
+
+    def _do_reward(self, text):
+        m = re.search(r"\d+", text or "")
+        if not m or not (1 <= int(m.group()) <= 3):
+            return self._reward([], "  Choose a part:", "Type 1, 2 or 3 to upgrade your top.")
+        _, idx, amt = SPIN_PARTS[int(m.group()) - 1]
+        self.stats[idx] += amt
+        won = not self._lost
+        self._lost = False
+        log = ["You bolt on a new part. Your top feels stronger!"]
+        if won:
+            self.rung += 1
+            if self.rung >= len(SPIN_RIVALS):
+                self.rung = 0
+                self.lap += 1
+                log.append(f"You CLEARED the ladder! Lap {self.lap} begins — tougher rivals await.")
+            else:
+                log.append("You climb to the next rung of the ladder!")
+        else:
+            log.append("Time for a rematch — you've got this!")
+        self.state = "battle"
+        self._new_match()
+        log.append(f"Next up: {self.rname}!")
+        return self._battle(log)
+
+    def _battle(self, log=None):
+        info = [f"  Ladder rung {self.rung + 1}/{len(SPIN_RIVALS)}   Lap {self.lap}   Wins {self.wins}", "", f"  YOU  {self.tname}", f"       {_spin_bar(self.you, self.you_mx)}", f"       ATK {self.stats[0]}  GUARD {self.stats[1]}  STA {self.stats[2]}", "", f"  RIVAL  {self.rname}", f"         {_spin_bar(self.foe, self.foe_mx)}"]
+        p = [SPIN_BANNER]
+        for line in (log or []):
+            p.append("")
+            p += [f"  > {x}" for x in _wrap_lines(line, 46, indent="")]
+        p += ["", SPIN_ART, ""] + info
+        p += ["", "  Your move:"]
+        p += _elder_menu([(k, lbl) for k, lbl in SPIN_MOVES])
+        p += ["", "  Type 1, 2 or 3.   (type 'quit' to stop)"]
+        return "\n".join(p)
+
+
+
+WILD_BANNER = _ascii_banner("W I L D   T R A I L S")
+
+# Each habitat: (key, display name, scene caption, [animals]).
+# Each animal: (name, true kid-fact, question, [(option, is_correct), ...], after-fact)
+# EVERY fact and EVERY correct answer is real-world accurate and kid-appropriate.
+WILD_HABITATS = [
+    ("savanna", "African Savanna", "~ golden grass under a wide sky ~", [
+        ("Giraffe",
+         "A giraffe is the tallest animal on Earth. Its neck "
+         "alone can be over 2 metres (6 feet) long!",
+         "How many bones are in a giraffe's long neck?",
+         [("Just 7 — the same as you", True),
+          ("Exactly 100 tiny bones", False),
+          ("None — it is all muscle", False)],
+         "True! A giraffe has 7 neck bones, like us — each "
+         "one is just very large."),
+        ("African Elephant",
+         "The African elephant is the largest land animal "
+         "alive today. It uses its trunk like a hand and a nose.",
+         "What does an elephant mainly use its trunk for?",
+         [("Breathing, smelling, and grabbing food", True),
+          ("Hearing far-away sounds", False),
+          ("Seeing in the dark", False)],
+         "Yes! The trunk smells, breathes, drinks, and even "
+         "picks up tiny things like a single blade of grass."),
+        ("Cheetah",
+         "The cheetah is the fastest land animal. It can "
+         "sprint up to about 110 km/h (70 mph) for short bursts.",
+         "What is the cheetah the fastest at?",
+         [("Running on land", True),
+          ("Swimming in rivers", False),
+          ("Flying in the sky", False)],
+         "Correct! No land animal can out-run a cheetah over "
+         "a short dash."),
+    ]),
+    ("rainforest", "Rainforest", "~ green leaves drip in warm mist ~", [
+        ("Toucan",
+         "A toucan has a huge, light beak. The big beak helps "
+         "it reach fruit and stay cool in the heat.",
+         "What is a toucan's giant beak good for?",
+         [("Reaching fruit and cooling down", True),
+          ("Digging deep tunnels", False),
+          ("Catching fish in the sea", False)],
+         "Right! The hollow beak is light, helps grab fruit, "
+         "and lets out body heat."),
+        ("Poison Dart Frog",
+         "Poison dart frogs are tiny and very bright. Their "
+         "bold colours warn other animals: 'do not eat me!'",
+         "Why are poison dart frogs so brightly coloured?",
+         [("To warn that they are not safe to eat", True),
+          ("To hide from the sun", False),
+          ("To look like flowers for fun", False)],
+         "Yes! Bright colours are a warning sign in nature."),
+        ("Sloth",
+         "A sloth moves very slowly and sleeps a lot. Green "
+         "algae can even grow on its fur, helping it hide.",
+         "Why does a sloth move so slowly?",
+         [("It saves energy on its leafy diet", True),
+          ("It is always sleepy from candy", False),
+          ("Its legs are made of stone", False)],
+         "Correct! Leaves give little energy, so the sloth "
+         "takes life nice and slow."),
+    ]),
+    ("arctic", "Arctic", "~ white snow shines on quiet ice ~", [
+        ("Polar Bear",
+         "Polar bears live in the frozen Arctic. Under their "
+         "white-looking fur, their skin is actually black.",
+         "What colour is polar bear skin under the fur?",
+         [("Black", True),
+          ("Bright blue", False),
+          ("Snow white", False)],
+         "True! Black skin soaks up the sun's warmth in the "
+         "cold north."),
+        ("Arctic Fox",
+         "The Arctic fox grows a thick white coat in winter "
+         "so it blends into the snow and stays cosy and warm.",
+         "Why does the Arctic fox turn white in winter?",
+         [("To blend into the snow", True),
+          ("Because it is very old", False),
+          ("To glow in the dark", False)],
+         "Yes! A white coat helps it hide in the snowy land."),
+        ("Snowy Owl",
+         "The snowy owl hunts in the day and night. It can "
+         "turn its head far around to look all about for food.",
+         "How does a snowy owl look all around itself?",
+         [("By turning its head very far", True),
+          ("By spinning its whole body", False),
+          ("By flapping its tail feathers", False)],
+         "Correct! Owls turn their heads to see, because "
+         "their eyes cannot roll like ours."),
+    ]),
+    ("reef", "Coral Reef", "~ blue water full of darting fish ~", [
+        ("Clownfish",
+         "A clownfish lives safely among the stinging arms of "
+         "a sea anemone. The sting does not hurt the clownfish.",
+         "Where does a clownfish like to live?",
+         [("Among a sea anemone's arms", True),
+          ("Inside a dry sandy cave", False),
+          ("High up in a tall tree", False)],
+         "Right! The anemone keeps the clownfish safe from "
+         "bigger fish."),
+        ("Sea Turtle",
+         "Sea turtles breathe air but live in the ocean. They "
+         "can hold their breath underwater for a long time.",
+         "How does a sea turtle breathe?",
+         [("It breathes air at the surface", True),
+          ("It breathes water like a fish", False),
+          ("It does not need to breathe", False)],
+         "Yes! Turtles come up for air, then dive back down "
+         "for a long while."),
+        ("Octopus",
+         "An octopus has eight arms and is very clever. It "
+         "can change colour to blend in and hide quickly.",
+         "How many arms does an octopus have?",
+         [("Eight", True),
+          ("Two", False),
+          ("Twenty", False)],
+         "Correct! 'Octo' means eight — eight bendy arms."),
+    ]),
+    ("outback", "Australian Outback", "~ red earth under a hot sun ~", [
+        ("Kangaroo",
+         "A kangaroo hops on strong back legs. A baby kangaroo, "
+         "called a joey, rides safely in its mother's pouch.",
+         "What is a baby kangaroo called?",
+         [("A joey", True),
+          ("A puppy", False),
+          ("A cub", False)],
+         "True! A tiny joey grows up snug in mum's pouch."),
+        ("Emu",
+         "The emu is a tall bird that cannot fly. Instead it "
+         "runs very fast on its long, strong legs.",
+         "What does an emu do instead of flying?",
+         [("It runs fast on land", True),
+          ("It swims across oceans", False),
+          ("It floats on the wind", False)],
+         "Yes! Emus are big running birds, like ostriches."),
+        ("Koala",
+         "A koala sleeps up to 20 hours a day. It eats "
+         "eucalyptus leaves, which take a lot of rest to digest.",
+         "Why does a koala sleep so much?",
+         [("Its leafy food takes lots of rest to digest", True),
+          ("It is scared of the daytime", False),
+          ("It is dreaming of the ocean", False)],
+         "Correct! Eucalyptus leaves are tough, so the koala "
+         "rests to save energy."),
+    ]),
+    ("antarctica", "Antarctica", "~ icy wind over a frozen shore ~", [
+        ("Emperor Penguin",
+         "Emperor penguins are the tallest penguins. They "
+         "huddle together in big groups to stay warm in winter.",
+         "How do emperor penguins keep warm in the cold?",
+         [("They huddle close together", True),
+          ("They light a little fire", False),
+          ("They fly south to the beach", False)],
+         "True! Taking turns on the warm inside of the huddle "
+         "keeps the whole group cosy."),
+        ("Weddell Seal",
+         "The Weddell seal can dive deep under the ice to hunt "
+         "fish, then come back to breathing holes for air.",
+         "Where does a Weddell seal get its air?",
+         [("From holes in the ice", True),
+          ("From under the deep mud", False),
+          ("It never needs any air", False)],
+         "Yes! Seals keep breathing holes open in the ice."),
+        ("Krill",
+         "Krill are tiny shrimp-like animals. Huge whales eat "
+         "enormous amounts of them, so krill feed the ocean.",
+         "Why are tiny krill so important?",
+         [("Big whales and many animals eat them", True),
+          ("They build nests in trees", False),
+          ("They are the largest animal", False)],
+         "Correct! Small krill help feed some of the biggest "
+         "animals on Earth."),
+    ]),
+]
+
+
+class WildTrails:
+    """A wildlife explorer. Pick a real habitat, meet real animals, learn one
+    true fact each, and answer a 3-way quiz. Right or wrong, the correct answer
+    is revealed and a stamp is earned — no losing, ever. Offline + deterministic.
+    Renders in the big monospace game screen."""
+
+    name = "Wild Trails"
+    blurb = "explore real habitats and learn amazing animal facts"
+    screen = True
+
+    def __init__(self):
+        self.over = False
+        self.state = "map"          # "map" -> "quiz"
+        self.stamps = 0
+        self.seen = set()           # (habitat_key, animal_index) already stamped
+        self.hab = None             # current habitat tuple
+        self.ai = 0                 # current animal index within the habitat
+
+    def start(self):
+        return self._map_screen(note="Pick a trail to begin your adventure!")
+
+    @property
+    def is_over(self):
+        return self.over            # endless; the app handles 'quit'
+
+    def handle(self, text):
+        if self.state == "quiz":
+            return self._answer(text)
+        return self._pick_habitat(text)
+
+    # ----- map / habitat picker ---------------------------------------------
+    def _habitat_rows(self):
+        labels = []
+        for k, nm, _cap, animals in WILD_HABITATS:
+            done = sum(1 for i in range(len(animals)) if (k, i) in self.seen)
+            mark = " *" if done == len(animals) else ""
+            labels.append((k, f"{nm} ({done}/{len(animals)}){mark}"))
+        return _elder_menu(labels)
+
+    def _map_screen(self, note=None):
+        parts = [WILD_BANNER, ""]
+        if note:
+            parts += [f"  > {note}", ""]          # note never holds the kid's raw text
+        parts += _wrap_lines(
+            "Welcome, explorer! Travel to real habitats and "
+            "meet the animals who live there.", 50)
+        parts += ["", f"  Stamps collected: {self.stamps}"]
+        parts += ["", "  Choose a habitat:"]
+        parts += self._habitat_rows()
+        parts += ["", "  Type a number to set off.",
+                  "  (* = every animal met!  type 'quit' to leave)"]
+        return "\n".join(parts)
+
+    def _pick_habitat(self, text):
+        m = re.search(r"\d+", text or "")
+        n = int(m.group()) if m else 0
+        if not m or not (1 <= n <= len(WILD_HABITATS)):
+            return self._map_screen(
+                note=f"Type a number from 1 to {len(WILD_HABITATS)}.")   # no echo
+        self.hab = WILD_HABITATS[n - 1]
+        self.ai = 0
+        self.state = "quiz"
+        return self._quiz_screen(log=[f"You arrive at the {self.hab[1]}.",
+                                      self.hab[2]])
+
+    # ----- quiz within a habitat --------------------------------------------
+    def _current_animal(self):
+        animals = self.hab[3]
+        if self.ai < 0 or self.ai >= len(animals):
+            return None
+        return animals[self.ai]
+
+    def _quiz_screen(self, log=None):
+        parts = [WILD_BANNER]
+        for line in (log or []):
+            parts += [""] + [f"  > {x}" for x in _wrap_lines(line, 46, indent="")]
+        animal = self._current_animal()
+        animals = self.hab[3]
+        parts += ["", f"  {self.hab[1]}  —  animal {self.ai + 1}/{len(animals)}",
+                  f"  Stamps: {self.stamps}"]
+        parts += ["", f"  ~~ {animal[0]} ~~"]
+        parts += [""] + [f"  {x}" for x in _wrap_lines(animal[1], 46, indent="")]
+        parts += ["", "  " + animal[2]]
+        for i, (opt, _ok) in enumerate(animal[3]):
+            key = chr(ord('a') + i)
+            wrapped = _wrap_lines(opt, 42, indent="")
+            for j, ln in enumerate(wrapped):
+                parts.append((f"  {key}) " if j == 0 else "     ") + ln)
+        parts += ["", "  Type a letter (a/b/c) or number.",
+                  "  (type 'quit' to leave the trail)"]
+        return "\n".join(parts)
+
+    def _answer(self, text):
+        animal = self._current_animal()
+        if animal is None:                       # safety: never crash, never dead-end
+            self.state = "map"
+            return self._map_screen(note="Back to the map!")
+        choices = animal[3]
+        pick = self._parse_choice(text, len(choices))
+        if pick is None:
+            return self._quiz_screen(
+                log=["Type a letter (a, b, or c) or a number (1-3)."])  # no echo
+        correct_i = next((i for i, (_o, ok) in enumerate(choices) if ok), 0)
+        letter = chr(ord('a') + correct_i)
+        if pick == correct_i:
+            opener = "Correct! You earned a stamp."
+        else:
+            opener = (f"Good try! The answer is {letter}) "
+                      f"{choices[correct_i][0]}. You still earn a stamp.")
+        # Award a stamp once per animal; revisiting still teaches but no double-count.
+        key = (self.hab[0], self.ai)
+        if key not in self.seen:
+            self.seen.add(key)
+            self.stamps += 1
+        log = [opener, animal[4]]                 # echoes the FACT, never the kid's text
+        self.ai += 1
+        if self._current_animal() is None:        # finished this habitat
+            self.state = "map"
+            log.append(f"You explored all of the {self.hab[1]}!")
+            return self._finish(log)
+        return self._quiz_screen(log=log)
+
+    def _finish(self, log):
+        parts = [WILD_BANNER, ""]
+        for line in log:
+            parts += [f"  > {x}" for x in _wrap_lines(line, 46, indent="")] + [""]
+        parts += _wrap_lines(
+            "Wonderful exploring! Your stamp book is growing.", 50)
+        parts += ["", f"  Stamps collected: {self.stamps}"]
+        parts += ["", "  Choose your next habitat:"]
+        parts += self._habitat_rows()
+        parts += ["", "  Type a number to set off.",
+                  "  (* = every animal met!  type 'quit' to leave)"]
+        return "\n".join(parts)
+
+    def _parse_choice(self, text, n):
+        """Return a 0-based index from a letter (a/b/c) or number (1..n), else None.
+        Never raises and never echoes the kid's text."""
+        s = (text or "").strip().lower()
+        ml = re.search(r"[a-z]", s)
+        if ml:
+            idx = ord(ml.group()) - ord('a')
+            if 0 <= idx < n:
+                return idx
+        md = re.search(r"\d+", s)
+        if md:
+            v = int(md.group())
+            if 1 <= v <= n:
+                return v - 1
+        return None
+
+
+
+MATH_BANNER = _ascii_banner("M A T H   Q U E S T")
+MATH_ART = (
+    "      ~ the flower meadow ~\n"
+    "     *   *    *   *    *  *\n"
+    "    ##########################")
+# (key, display name, description) — picked at the start, scales the problems.
+MATH_TIERS = [
+    ("sprouts", "Sprouts", "+ and − up to 12"),
+    ("saplings", "Saplings", "+ − × up to 100"),
+    ("oaks", "Oaks", "bigger + − ×, and ÷"),
+]
+
+
+def _make_math_problem(tier, rng=random):
+    """Return (question_text, integer_answer). Subtraction never goes negative
+    and division is always exact, so answers are always whole numbers."""
+    if tier == "sprouts":
+        a, b = rng.randint(1, 12), rng.randint(1, 12)
+        if rng.random() < 0.5:
+            return (f"{a} + {b}", a + b)
+        a, b = max(a, b), min(a, b)
+        return (f"{a} − {b}", a - b)
+    if tier == "saplings":
+        r = rng.random()
+        if r < 0.34:
+            a, b = rng.randint(2, 12), rng.randint(2, 12)
+            return (f"{a} × {b}", a * b)
+        if r < 0.67:
+            a, b = rng.randint(10, 99), rng.randint(10, 99)
+            return (f"{a} + {b}", a + b)
+        a, b = rng.randint(20, 99), rng.randint(1, 20)
+        return (f"{a} − {b}", a - b)
+    # oaks
+    r = rng.random()
+    if r < 0.3:
+        a, b = rng.randint(3, 12), rng.randint(3, 12)
+        return (f"{a} × {b}", a * b)
+    if r < 0.6:
+        b, ans = rng.randint(2, 12), rng.randint(2, 12)
+        return (f"{b * ans} ÷ {b}", ans)
+    a, b = rng.randint(100, 999), rng.randint(10, 99)
+    if rng.random() < 0.5:
+        return (f"{a} + {b}", a + b)
+    return (f"{a} − {b}", a - b)
+
+
+class MathQuest:
+    """Defend a flower meadow with mental math. A correct answer zaps a weed; a
+    wrong one only costs a flower (and still earns points) — it never ends, so a
+    kid always makes progress. Deterministic + offline; renders in the screen."""
+
+    name = "Math Quest"
+    blurb = "defend the meadow — every right answer zaps a weed (math practice)"
+    screen = True
+
+    # age band -> the level we suggest / start at
+    AGE_TIER = {"little": "sprouts", "kid": "saplings", "pro": "oaks"}
+
+    def __init__(self):
+        self.over = False
+        self.state = "tier"
+        self.tier = None          # the level the kid chose
+        self.eff_tier = None      # the level actually in play (auto-eases on a slump)
+        self.flowers = 5
+        self.weeds = 0
+        self.wave = 0
+        self.score = 0
+        self.right_streak = 0
+        self.wrong_streak = 0
+        self.prob = ("", 0)
+
+    def start(self):
+        return self._tier_screen()
+
+    @property
+    def is_over(self):
+        return self.over
+
+    def handle(self, text):
+        if self.state == "tier":
+            return self._pick_tier(text)
+        return self._answer(text)
+
+    def _suggested_tier(self):
+        return self.AGE_TIER.get(games_age_band(), "saplings")
+
+    def _tier_screen(self, note=None):
+        parts = [MATH_BANNER, ""]
+        if note:
+            parts += [f"  > {note}", ""]
+        parts += _wrap_lines("Defend the flower meadow! Solve a problem to zap "
+                             "each weed before it nibbles your flowers.", 50)
+        sug = next(nm for k, nm, _ in MATH_TIERS if k == self._suggested_tier())
+        parts += ["", f"  (just right for your age: {sug})", "",
+                  "  Pick your level:"]
+        parts += _elder_menu([(k, f"{nm} — {ds}") for k, nm, ds in MATH_TIERS])
+        parts += ["", "  (type 'quit' to leave)"]
+        return "\n".join(parts)
+
+    def _pick_tier(self, text):
+        m = re.search(r"\d+", text or "")
+        if not m or not (1 <= int(m.group()) <= len(MATH_TIERS)):
+            return self._tier_screen(note="Type 1, 2 or 3 to pick a level.")
+        self.tier = self.eff_tier = MATH_TIERS[int(m.group()) - 1][0]
+        self.state = "play"
+        self._new_wave()
+        return self._play_screen(log=["A wave of weeds creeps in — solve to zap!"])
+
+    def _new_wave(self):
+        self.wave += 1
+        self.weeds = 3 + self.wave        # a little bigger each wave
+        self.flowers = 5
+        self.prob = _make_math_problem(self.eff_tier)
+
+    def _ease(self, harder):
+        """Step the effective level down (help) or back up toward the chosen
+        one (reward a streak). Returns True if it changed."""
+        order = [k for k, _, _ in MATH_TIERS]
+        ei = order.index(self.eff_tier)
+        if harder:
+            top = order.index(self.tier)
+            if ei < top:
+                self.eff_tier = order[ei + 1]
+                return True
+        elif ei > 0:
+            self.eff_tier = order[ei - 1]
+            return True
+        return False
+
+    def _answer(self, text):
+        m = re.search(r"-?\d+", text or "")
+        if not m:
+            return self._play_screen(log=["Type your answer as a number."])
+        guess, (q, ans) = int(m.group()), self.prob
+        log = []
+        if guess == ans:
+            self.score += 10
+            self.weeds -= 1
+            self.right_streak += 1
+            self.wrong_streak = 0
+            log.append(f"{q} = {ans}.  Correct! A weed scampers off. (+10)")
+            if self.right_streak >= 3 and self._ease(harder=True):
+                self.right_streak = 0
+                log.append("You're on a roll — bumping it up a notch! 🔥")
+        else:
+            self.score += 2
+            self.flowers -= 1
+            self.wrong_streak += 1
+            self.right_streak = 0
+            log.append(f"{q} = {ans}.  A weed nibbles a flower — good try! (+2)")
+            if self.flowers <= 0:
+                self.flowers = 5
+                log.append("The weeds tire out and you replant the meadow. 🌱")
+            if self.wrong_streak >= 2 and self._ease(harder=False):
+                self.wrong_streak = 0
+                log.append("Let's try some easier ones — you've got this! 💪")
+        if self.weeds <= 0:
+            self.score += 20
+            log.append(f"Wave {self.wave} defended! +20 bonus 🌟")
+            self._new_wave()
+        else:
+            self.prob = _make_math_problem(self.eff_tier)
+        return self._play_screen(log=log)
+
+    def _play_screen(self, log=None):
+        shown = min(self.weeds, 12)
+        info = [
+            f"  Wave {self.wave}     Score {self.score}",
+            "",
+            f"  Garden:  {'* ' * self.flowers}".rstrip()
+            + f"   ({self.flowers} flowers)",
+            f"  Weeds:   {'w ' * shown}".rstrip() + f"   ({self.weeds} left)",
+            "",
+            f"     {self.prob[0]} = ?",
+        ]
+        parts = [MATH_BANNER]
+        for line in (log or []):
+            parts.append("")
+            parts += [f"  > {x}" for x in _wrap_lines(line, 46, indent="")]
+        parts += ["", MATH_ART, ""] + info
+        parts += ["", "  Type your answer (a number).",
+                  "", "  (type 'quit' to stop)"]
+        return "\n".join(parts)
+
+
+# ---- SCIENCE LAB -----------------------------------------------------------
+SCIENCE_BANNER = _ascii_banner("S C I E N C E   L A B")
+
+SCIENCE_ART = (
+    "        .--.\n"
+    "       |o_o |   ~bubble~\n"
+    "       |:_/ |    o  O  o\n"
+    "       (|   |)   (lab time!)\n"
+    "       /'---'\\\n"
+    "      (_______)"
+)
+
+# Each experiment: a fun title, a setup blurb, a prediction question with 3
+# options, the index (0-based) of the TRUE outcome, a one-line result line,
+# and the real, correct "why" explanation. All facts double-checked.
+SCIENCE_EXPERIMENTS = [
+    {
+        "key": "volcano",
+        "title": "The Fizzy Volcano",
+        "setup": ("We build a little clay volcano and pour baking soda "
+                  "inside. Then we add a splash of vinegar. Stand back!"),
+        "q": "What will happen when the vinegar meets the baking soda?",
+        "opts": ["It turns to solid rock",
+                 "It fizzes and foams up and over",
+                 "Nothing at all happens"],
+        "answer": 1,
+        "result": "WHOOSH! Foamy bubbles erupt up and over the rim!",
+        "why": ("Baking soda and vinegar do a chemical reaction. They "
+                "make a gas called carbon dioxide. The gas needs room, "
+                "so it pushes up as fizzy foam and spills over. It is "
+                "the very same gas that makes soda pop bubbly!"),
+    },
+    {
+        "key": "floatsink",
+        "title": "Float or Sink?",
+        "setup": ("We fill a tub with water and gently set a heavy metal "
+                  "bowl on top, with its open side up like a little boat."),
+        "q": "What will the metal bowl do on the water?",
+        "opts": ["It floats like a boat",
+                 "It sinks straight down",
+                 "It melts away"],
+        "answer": 0,
+        "result": "It floats! The bowl bobs on the water like a tiny ship.",
+        "why": ("Whether something floats is not just about being heavy. "
+                "A bowl shape holds lots of air, so it pushes aside more "
+                "water than it weighs. The water pushes back up and holds "
+                "it afloat. That is how giant steel ships float too!"),
+    },
+    {
+        "key": "skyblue",
+        "title": "Why Is the Sky Blue?",
+        "setup": ("We shine bright white sunlight through the air and "
+                  "watch the whole sky on a clear, sunny day."),
+        "q": "Why does the daytime sky look blue?",
+        "opts": ["The sky is painted blue",
+                 "Blue light scatters all across the sky",
+                 "The sky reflects the blue ocean"],
+        "answer": 1,
+        "result": "Blue light bounces all around the sky and fills it up!",
+        "why": ("Sunlight is really all the rainbow colors mixed. As it "
+                "zips through the air, the blue light bounces and scatters "
+                "the most in every direction. So blue light comes at your "
+                "eyes from all over the sky, and the sky looks blue!"),
+    },
+    {
+        "key": "balloon",
+        "title": "The Sticky Balloon",
+        "setup": ("We rub a blown-up balloon on a wooly sweater for a "
+                  "while, then hold it up close to a wall."),
+        "q": "What will the rubbed balloon do near the wall?",
+        "opts": ["It pops loudly",
+                 "It sticks to the wall by itself",
+                 "It floats up to the ceiling"],
+        "answer": 1,
+        "result": "It sticks! The balloon clings to the wall all on its own.",
+        "why": ("Rubbing the balloon gives it static electricity. It "
+                "grabs tiny invisible bits called electrons from the "
+                "wool. Now the balloon has an electric charge that pulls "
+                "on the wall, so it sticks. The same zap can make your "
+                "hair stand up!"),
+    },
+    {
+        "key": "icesalt",
+        "title": "Speedy Melting Ice",
+        "setup": ("We set out two ice cubes. On one we sprinkle a little "
+                  "salt. The other stays plain. Then we watch and wait."),
+        "q": "Which ice cube melts faster?",
+        "opts": ["The plain one melts faster",
+                 "The salty one melts faster",
+                 "They melt at the exact same time"],
+        "answer": 1,
+        "result": "The salty cube melts faster, while the plain one waits.",
+        "why": ("Salt lowers the temperature that water freezes at. So "
+                "the salty ice can no longer stay frozen and it melts "
+                "sooner. That is exactly why people sprinkle salt on icy "
+                "roads and paths in winter to melt the ice!"),
+    },
+    {
+        "key": "rainbow",
+        "title": "Catch a Rainbow",
+        "setup": ("We hold a clear glass prism in a beam of white "
+                  "sunlight and watch what spills out the other side."),
+        "q": "What comes out the other side of the prism?",
+        "opts": ["A band of rainbow colors",
+                 "Plain white light, same as before",
+                 "A shadow with no light"],
+        "answer": 0,
+        "result": "A rainbow fans out -- red, orange, yellow, green, blue!",
+        "why": ("White light is secretly all the rainbow colors mixed "
+                "together. The prism bends each color by a different "
+                "amount, so they fan apart and you see the rainbow. "
+                "Raindrops do the same trick to make a sky rainbow!"),
+    },
+]
+
+
+class ScienceLab:
+    """A 'mad scientist' lab where a kid picks a safe classic experiment,
+    predicts what happens (3-choice), then learns the real, correct science.
+    Every experiment is narrated/simulated as a story -- nothing to do at home.
+    A wrong guess still reveals and explains, so there is no failure. Endless,
+    deterministic, offline; renders inside the green arcade screen."""
+
+    name = "Science Lab"
+    blurb = "run zany safe experiments and discover the REAL science why"
+    screen = True
+
+    def __init__(self):
+        self.over = False
+        self.state = "pick"          # pick -> predict -> reveal -> (pick)
+        self.idx = None              # index of current experiment
+        self.done = set()            # keys of experiments explored
+        self.discoveries = 0         # count of correct predictions
+        self._last_correct = False
+
+    def start(self):
+        return self._pick_screen(log=["Welcome to the lab, young scientist!"])
+
+    @property
+    def is_over(self):
+        return self.over            # endless; the app handles 'quit'
+
+    def handle(self, text):
+        if self.state == "predict":
+            return self._predict(text)
+        if self.state == "reveal":
+            return self._after_reveal(text)
+        return self._pick(text)
+
+    # -- choose an experiment --------------------------------------------------
+    def _pick_screen(self, log=None):
+        parts = [SCIENCE_BANNER]
+        for line in (log or []):
+            parts.append("")
+            parts += [f"  > {x}" for x in _wrap_lines(line, 46, indent="")]
+        parts += ["", SCIENCE_ART, ""]
+        parts += [f"  Discoveries: {self.discoveries}"
+                  f"     Explored: {len(self.done)}/{len(SCIENCE_EXPERIMENTS)}"]
+        parts += ["", "  Pick an experiment to run:"]
+        labels = []
+        for ex in SCIENCE_EXPERIMENTS:
+            tick = "* " if ex["key"] in self.done else ""
+            labels.append((ex["key"], f"{tick}{ex['title']}"))
+        parts += _elder_menu(labels)
+        parts += ["", "  Type a number (1-6), or 'quit' to leave."]
+        return "\n".join(parts)
+
+    def _pick(self, text):
+        m = re.search(r"\d+", text or "")
+        if not m or not (1 <= int(m.group()) <= len(SCIENCE_EXPERIMENTS)):
+            return self._pick_screen(
+                log=["Type a number from 1 to 6 to pick an experiment."])
+        self.idx = int(m.group()) - 1
+        self.state = "predict"
+        return self._predict_screen()
+
+    # -- make a prediction -----------------------------------------------------
+    def _predict_screen(self, note=None):
+        ex = SCIENCE_EXPERIMENTS[self.idx]
+        parts = [SCIENCE_BANNER, "", f"  ** {ex['title']} **"]
+        if note:
+            parts += ["", f"  > {note}"]
+        parts += [""] + _wrap_lines(ex["setup"], 48)
+        parts += ["", "  Make your prediction!"]
+        parts += [""] + _wrap_lines(ex["q"], 48)
+        parts += [""]
+        parts += _elder_menu([(str(i), o) for i, o in enumerate(ex["opts"])])
+        parts += ["", "  Type 1, 2 or 3 to guess.  (no wrong answers!)"]
+        return "\n".join(parts)
+
+    def _predict(self, text):
+        ex = SCIENCE_EXPERIMENTS[self.idx]
+        m = re.search(r"\d+", text or "")
+        if not m or not (1 <= int(m.group()) <= len(ex["opts"])):
+            return self._predict_screen(
+                note="Type 1, 2 or 3 to make your prediction.")
+        pick = int(m.group()) - 1
+        correct = (pick == ex["answer"])
+        if correct:
+            self.discoveries += 1
+        self.done.add(ex["key"])
+        self.state = "reveal"
+        self._last_correct = correct
+        return self._reveal_screen()
+
+    # -- reveal the result + the real science ----------------------------------
+    def _reveal_screen(self):
+        ex = SCIENCE_EXPERIMENTS[self.idx]
+        parts = [SCIENCE_BANNER, "", f"  ** {ex['title']} **", ""]
+        if self._last_correct:
+            parts += _wrap_lines("Great prediction, scientist! You nailed it!",
+                                 48)
+        else:
+            parts += _wrap_lines("Good guess! Real scientists love surprises. "
+                                 "Here is what really happened:", 48)
+        parts += ["", "  RESULT:"]
+        parts += _wrap_lines(ex["result"], 48)
+        parts += ["", "  THE REAL WHY:"]
+        parts += _wrap_lines(ex["why"], 48)
+        parts += ["", f"  Discoveries: {self.discoveries}"
+                  f"     Explored: {len(self.done)}/{len(SCIENCE_EXPERIMENTS)}"]
+        if len(self.done) >= len(SCIENCE_EXPERIMENTS):
+            parts += [""] + _wrap_lines("WOW -- you explored every experiment! "
+                                        "You are a true lab scientist. Run any "
+                                        "one again any time!", 48)
+        parts += ["", "  Press Enter (or type 'more') for the lab menu.",
+                  "  (type 'quit' to leave)"]
+        return "\n".join(parts)
+
+    def _after_reveal(self, text):
+        # ANY input (including blank) returns to the picker -- always progress.
+        self.state = "pick"
+        self.idx = None
+        return self._pick_screen(log=["Back to the lab! Pick your next one."])
+
+
+
 # Play-name -> game class. Aliases let kids type the obvious thing.
 GAMES = {
+    # RPG quests (0.36.0) — always unlocked, count toward opening the rest
+    "eldermark": EldermarkRPG, "quest": EldermarkRPG, "adventure": EldermarkRPG,
+    "rpg": EldermarkRPG, "story": EldermarkRPG,
+    "tidehollow": TideHollowRPG, "tide": TideHollowRPG, "hollow": TideHollowRPG,
+    "emberpeak": EmberPeakRPG, "ember": EmberPeakRPG, "peak": EmberPeakRPG,
+    "frostfall": FrostfallRPG, "frost": FrostfallRPG, "vale": FrostfallRPG,
+    "dungeon": CozyDungeon, "cozy": CozyDungeon, "explore": CozyDungeon,
+    # other modes (locked until a few RPG quests are done)
+    "critters": CritterKeepers, "critter": CritterKeepers, "keepers": CritterKeepers,
+    "spin": SpinLeague, "spinners": SpinLeague, "league": SpinLeague,
+    "wild": WildTrails, "trails": WildTrails, "animals": WildTrails,
+    "math": MathQuest, "mathquest": MathQuest,
+    "science": ScienceLab, "lab": ScienceLab,
     "number": NumberGuess, "numbers": NumberGuess, "guess": NumberGuess,
     "scramble": WordScramble, "word": WordScramble, "unscramble": WordScramble,
     "hangman": Hangman,
     "20questions": TwentyQuestions, "20q": TwentyQuestions,
     "questions": TwentyQuestions,
     "trivia": Trivia, "quiz": Trivia,
-    "dungeon": CozyDungeon, "adventure": CozyDungeon, "rpg": CozyDungeon,
-    "explore": CozyDungeon,
 }
 
-# Ordered menu shown by /games: (canonical play-name, emoji, class).
+# Ordered menu shown by /play. RPG adventures first (always playable); the rest
+# are gated by the picker until enough RPG quests are finished.
 GAME_MENU = [
+    ("eldermark", "⚔️", EldermarkRPG),
+    ("tidehollow", "🌊", TideHollowRPG),
+    ("emberpeak", "🔥", EmberPeakRPG),
+    ("frostfall", "❄️", FrostfallRPG),
     ("dungeon", "🗺️", CozyDungeon),
+    ("critters", "🐾", CritterKeepers),
+    ("spin", "🌀", SpinLeague),
+    ("wild", "🦉", WildTrails),
+    ("math", "➗", MathQuest),
+    ("science", "🔬", ScienceLab),
     ("number", "🔢", NumberGuess),
     ("scramble", "🪢", WordScramble),
     ("hangman", "🔤", Hangman),
     ("20questions", "❓", TwentyQuestions),
     ("trivia", "🧠", Trivia),
 ]
+
+
+class GamePicker:
+    """The /play chooser: a big, easy-to-read screen. On first run it asks the
+    player's age (sets difficulty everywhere). Then it lists RPG ADVENTURES
+    first (always playable) and the other modes below — LOCKED until a few RPG
+    quests are finished. The kid just types a number. ChatWindow watches `pick`
+    and swaps the chosen game in; this stays a pure, GUI-free object."""
+
+    name = "Game Arcade"
+    blurb = "pick a game to play"
+    screen = True
+
+    def __init__(self):
+        self.over = False
+        self.pick = None        # a play-name once a valid game number is entered
+        self.state = "pick"
+        self._order = []        # [(key, cls, locked)] for the current menu
+        self._change_age_n = 0
+
+    def start(self):
+        self.pick = None
+        if games_age_band() is None:        # first time: ask the age once
+            self.state = "age"
+            return self._age_screen()
+        self.state = "pick"
+        return self._menu_screen()
+
+    @property
+    def is_over(self):
+        return self.over
+
+    def handle(self, text):
+        if self.state == "age":
+            return self._pick_age(text)
+        return self._pick(text)
+
+    # -- age selection -------------------------------------------------------
+    def _age_screen(self, note=None):
+        parts = [GAMES_BANNER, ""]
+        if note:
+            parts += [f"  > {note}", ""]
+        parts += _wrap_lines("How old is the player? This sets the right "
+                             "challenge — and I'll always help if it gets tricky.",
+                             50)
+        parts.append("")
+        for i, (key, label, hint) in enumerate(AGE_BANDS, 1):
+            parts.append(f"  {i})  {label}")
+            parts += _wrap_lines(hint, 46, indent="       ")
+        parts += ["", "  Type 1, 2 or 3.   (type 'quit' to leave)"]
+        return "\n".join(parts)
+
+    def _pick_age(self, text):
+        m = re.search(r"\d+", text or "")
+        if not m or not (1 <= int(m.group()) <= len(AGE_BANDS)):
+            return self._age_screen(note="Type 1, 2 or 3 to choose.")
+        key, label, _ = AGE_BANDS[int(m.group()) - 1]
+        set_games_age_band(key)
+        self.state = "pick"
+        return self._menu_screen(note=f"Set to {label}! Now pick a game:")
+
+    def _band_label(self):
+        b = games_age_band()
+        for key, label, _ in AGE_BANDS:
+            if key == b:
+                return label
+        return "All ages"
+
+    # -- the game menu -------------------------------------------------------
+    def _menu_screen(self, note=None):
+        unlocked = games_unlocked()
+        done = rpg_completed_count()
+        rpg = [(k, c) for (k, _e, c) in GAME_MENU if getattr(c, "rpg", False)]
+        other = [(k, c) for (k, _e, c) in GAME_MENU if not getattr(c, "rpg", False)]
+        self._order = []
+        parts = [GAMES_BANNER, ""]
+        if note:
+            parts += [f"  > {note}", ""]
+        parts.append(f"  Player: {self._band_label()}    RPG quests done: {done}")
+        parts += ["", "  == RPG ADVENTURES (play these first!) =="]
+        n = 0
+        for k, c in rpg:
+            n += 1
+            self._order.append((k, c, False))
+            parts.append(f"  {n:>2})  {c.name}")
+            parts += _wrap_lines(c.blurb, 50, indent="        ")
+        parts += ["", "  == MORE GAMES =="]
+        if not unlocked:
+            need = RPG_UNLOCK_THRESHOLD - done
+            s = "s" if need != 1 else ""
+            parts += _wrap_lines(f"(locked — finish {need} more RPG quest{s} "
+                                 "above to open these!)", 50)
+        for k, c in other:
+            n += 1
+            self._order.append((k, c, not unlocked))
+            if unlocked:
+                parts.append(f"  {n:>2})  {c.name}")
+            else:
+                parts.append(f"  {n:>2})  {c.name}   [LOCKED]")
+        n += 1
+        self._change_age_n = n
+        parts += ["", f"  {n:>2})  Change player age"]
+        parts += ["", "  Type a number to pick.   (type 'quit' to leave)"]
+        return "\n".join(parts)
+
+    def _pick(self, text):
+        m = re.search(r"\d+", text or "")
+        if not m:
+            return self._menu_screen(note="Type the number of a game to play.")
+        n = int(m.group())
+        if n == self._change_age_n:
+            self.state = "age"
+            return self._age_screen()
+        if not (1 <= n <= len(self._order)):
+            return self._menu_screen(note=f"Pick a number from 1 to "
+                                          f"{self._change_age_n}.")
+        key, cls, locked = self._order[n - 1]
+        if locked:
+            need = RPG_UNLOCK_THRESHOLD - rpg_completed_count()
+            s = "s" if need != 1 else ""
+            return self._menu_screen(note=f"That one's locked! Finish {need} more "
+                                          f"RPG quest{s} (pick an ADVENTURE up "
+                                          "top) to unlock it.")
+        self.pick = key
+        return f"Starting {cls.name}..."
 
 
 def start_game(name):
@@ -8639,6 +11489,7 @@ class ChatWindow:
         self.last = None       # (raw, cleaned, rec, prompt)
         self.pending = None    # active follow-up Q&A state
         self.active_game = None  # a running game (NumberGuess/Hangman/…), or None
+        self._pre_game_geom = None  # window geom to restore after a big game
         self.messages = []     # (kind, text) history, re-flowed on resize
         self._frames = []      # embedded button frames, destroyed on re-flow
         self._typing = False
@@ -8768,6 +11619,8 @@ class ChatWindow:
             return  # the pet's right-click menu is up; keep the chat open
         if self._ai_busy:
             return  # a local-AI answer is still streaming — don't drop it
+        if self.active_game is not None:
+            return  # a game is running — don't close on a click away mid-game
         # Our completion dropdowns are separate overrideredirect Toplevels;
         # keep the chat open while one is showing so a click inside it can't be
         # read as a click away.
@@ -8904,6 +11757,45 @@ class ChatWindow:
         x = min(max(8, x), sw - w - 8)
         y = min(max(8, y), sh - h - 60)
         self.win.geometry(f"{w}x{h}+{x}+{y}")
+
+    def _resize_window(self, w, h):
+        """Resize in place, keeping the window on-screen (used by game mode)."""
+        self.win.update_idletasks()
+        x, y = self.win.winfo_x(), self.win.winfo_y()
+        sw, sh = self.win.winfo_screenwidth(), self.win.winfo_screenheight()
+        x = min(max(8, x), sw - w - 8)
+        y = min(max(8, y), sh - h - 60)
+        self.win.geometry(f"{w}x{h}+{x}+{y}")
+
+    def _game_win_size(self):
+        """A nearly-fullscreen 'arcade' size, clamped so it stays usable."""
+        sw, sh = self.win.winfo_screenwidth(), self.win.winfo_screenheight()
+        w = min(1400, max(720, int(sw * 0.82)))
+        h = max(600, int(sh * 0.92))
+        return w, h
+
+    def _enter_game_mode(self):
+        """Expand the chat to a big, centered, almost-fullscreen 'arcade'
+        window, remembering the current geometry so quitting restores it."""
+        if self._pre_game_geom is None:
+            try:
+                self._pre_game_geom = self.win.geometry()
+            except tk.TclError:
+                self._pre_game_geom = None
+        w, h = self._game_win_size()
+        sw, sh = self.win.winfo_screenwidth(), self.win.winfo_screenheight()
+        x = max(8, (sw - w) // 2)
+        y = max(8, (sh - h) // 2 - 20)
+        self.win.geometry(f"{w}x{h}+{x}+{y}")
+
+    def _exit_game_mode(self):
+        """Restore the pre-game window size when a screen-style game ends."""
+        geom, self._pre_game_geom = self._pre_game_geom, None
+        if geom:
+            try:
+                self.win.geometry(geom)
+            except tk.TclError:
+                pass
 
     def is_open(self):
         return self.win.winfo_exists()
@@ -9046,6 +11938,8 @@ class ChatWindow:
         elif kind == "pet":
             self._draw_bubble(text, "left", self.t["PET_BUBBLE"],
                               self.t["PET_TEXT"])
+        elif kind == "game":
+            self._draw_game_screen(text)
         elif kind == "chips":
             self._draw_chips(text)
         elif kind == "prompt":
@@ -9126,6 +12020,27 @@ class ChatWindow:
         self._round_rect(bx1, by1, bx2, by2, r=15, fill=fill, outline=fill)
         self.canvas.create_text(bx1 + pad, by1 + pad, text=text, font=font,
                                 fill=fg, width=maxw, anchor="nw")
+        self._finish(by2)
+
+    def _draw_game_screen(self, text):
+        """A wide, fixed-width, NO-WRAP retro 'screen' for ASCII game art. The
+        normal bubbles word-wrap in a proportional font (which mangles art and
+        health bars); this uses a monospace font and width=0 so columns line
+        up. Dark green-on-near-black panel for the arcade look."""
+        size = max(13, min(self.chat_text_size + 4, 18))
+        font = ("Consolas", size)
+        pad, bg, fg, border = 14, "#0e1a12", "#a9e6a0", "#244a30"
+        tmp = self.canvas.create_text(0, -10000, text=text, font=font,
+                                      width=0, anchor="nw")
+        bb = self.canvas.bbox(tmp)
+        self.canvas.delete(tmp)
+        tw, th = bb[2] - bb[0], bb[3] - bb[1]
+        x1 = 12
+        x2 = max(self._cw - 12, x1 + tw + 2 * pad)
+        by2 = self._y + th + 2 * pad
+        self._round_rect(x1, self._y, x2, by2, r=10, fill=bg, outline=border)
+        self.canvas.create_text(x1 + pad, self._y + pad, text=text, font=font,
+                                fill=fg, width=0, anchor="nw")
         self._finish(by2)
 
     def _draw_actions(self, payload=None):
@@ -9338,42 +12253,56 @@ class ChatWindow:
     # ---- games ----------------------------------------------------------------
 
     def _show_games_menu(self):
-        lines = ["🎮 Let's play! Pick a game with /play and its name:"]
-        for key, emoji, cls in GAME_MENU:
-            lines.append(f"  {emoji}  /play {key}  —  {cls.name}: {cls.blurb}")
-        lines.append("While we play, just type your moves. Say 'quit' to stop. 🐾")
-        self._add("pet", "\n".join(lines))
+        self._start_picker()
+
+    def _start_picker(self):
+        """Open the interactive game picker: a big arcade screen listing every
+        game; the kid types a number to launch one."""
+        self.active_game = GamePicker()
+        self._enter_game_mode()
+        self._add("game", self.active_game.start())
 
     def _start_game(self, arg):
         game = start_game(arg)
-        if game is None:
+        if game is None:                 # '/play' alone or an unknown name
             if arg:
-                self._add("pet", f"I don't know the game “{arg}”. "
-                                 "Here's what we can play:")
-            self._show_games_menu()
+                self._add("pet", f"I don't know the game “{arg}”.")
+            self._start_picker()
             return
         self.active_game = game
-        self._add("pet", game.start())
+        self._enter_game_mode()          # every game plays in the big window
+        self._add("game", game.start())
 
     def _handle_game_input(self, raw):
         """Route a move to the running game; 'quit' returns to normal chat."""
+        game = self.active_game
         if raw.strip().lower() in ("quit", "stop", "exit", "done"):
             self.active_game = None
+            self._exit_game_mode()
             self._add("pet", "Okay, game over for now — that was fun! "
-                             "Say /games anytime to play again. 🐾")
+                             "Say /play anytime to play again. 🐾")
             return
-        game = self.active_game
         try:
             reply = game.handle(raw)
         except Exception:  # a game bug must never break the chat
             self.active_game = None
+            self._exit_game_mode()
             self._add("pet", "Oops, that game got muddled — let's pick another! "
-                             "Say /games. 🐾")
+                             "Say /play. 🐾")
             return
-        self._add("pet", reply)
+        # The picker turns a number into a real game — swap it in (window is
+        # already the big arcade size, so no resize needed).
+        if isinstance(game, GamePicker) and getattr(game, "pick", None):
+            chosen = start_game(game.pick)
+            if chosen is not None:
+                self.active_game = chosen
+                self._add("game", chosen.start())
+                return
+        self._add("game", reply)
         if game.is_over:
             self.active_game = None
-            self._add("caption", "Game over — say /games to play again.")
+            self._exit_game_mode()
+            self._add("caption", "Game over — say /play to play again.")
 
     def _standard_request(self, raw, cleaned, rec):
         questions = clarifying_questions(cleaned, rec)
