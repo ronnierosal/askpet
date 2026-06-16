@@ -37,16 +37,27 @@ function Sign-File($path) {
 }
 
 Write-Host "== 1/4 Running tests =="
-& $python test_logic.py | Out-Null
-& $python test_history.py | Select-Object -Last 1
-& $python test_spell.py | Select-Object -Last 1
-& $python test_local_ai.py | Select-Object -Last 1
-& $python test_knowledge.py | Select-Object -Last 1
-& $python test_deckside.py | Select-Object -Last 1
-& $python test_slash.py | Select-Object -Last 1
-& $python test_gui.py | Select-Object -Last 1
-& $python test_pet.py | Select-Object -Last 1
-& $python test_games.py | Select-Object -Last 1
+# A FAILING test MUST halt the build. $ErrorActionPreference='Stop' does NOT
+# catch a native exe's non-zero exit, so check $LASTEXITCODE after every test
+# and throw. (Piping to Select-Object/Out-Null doesn't change $LASTEXITCODE —
+# it reflects python.exe's exit code.)
+function Invoke-Test([string]$file, [switch]$Quiet) {
+    if ($Quiet) { & $python $file | Out-Null }
+    else        { & $python $file | Select-Object -Last 1 }
+    if ($LASTEXITCODE -ne 0) { throw "TEST FAILED: $file (exit code $LASTEXITCODE)" }
+}
+Invoke-Test test_logic.py -Quiet
+Invoke-Test test_history.py
+Invoke-Test test_spell.py
+Invoke-Test test_local_ai.py
+Invoke-Test test_knowledge.py
+Invoke-Test test_deckside.py
+Invoke-Test test_slash.py
+Invoke-Test test_gui.py
+Invoke-Test test_pet.py
+Invoke-Test test_games.py
+Invoke-Test test_rpg.py
+Invoke-Test test_world.py
 
 Write-Host "== 2/4 Building AskPet.exe (PyInstaller) =="
 & $pyinstaller --noconfirm --clean --windowed --name AskPet `

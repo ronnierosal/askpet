@@ -31,6 +31,15 @@ def _restore_mem():
 atexit.register(_restore_mem)
 pm.clear_pet_memory()
 
+# ...and the games-state file (the picker persists the age band + RPG progress).
+_games_backup = pm.GAMES_STATE_FILE.read_bytes() if pm.GAMES_STATE_FILE.exists() else None
+def _restore_games():
+    if _games_backup is not None:
+        pm.GAMES_STATE_FILE.write_bytes(_games_backup)
+    elif pm.GAMES_STATE_FILE.exists():
+        pm.GAMES_STATE_FILE.unlink()
+atexit.register(_restore_games)
+
 root = tk.Tk()
 pet = pm.PetOverlay(root)
 # The chat default is now general chat (local AI). Disable local AI so the
@@ -284,26 +293,32 @@ assert chat.chat_text_size == 18
 pet.set_chat_text_size(10)    # restore default
 print("chat text size OK (persist + clamp + live reflow)")
 
-# Games: /games menu, /play start, in-game move routing, quit, win clears.
+# Games: /games opens the interactive picker, /play starts a game, in-game
+# moves route to the game, quit returns to chat, and a win clears the game.
+# Pin an age band so the picker skips its first-run age screen (deterministic).
+pm.set_games_age_band("kid")
 chat.active_game = None
-n = len(chat.messages)
 chat.entry.insert("1.0", "/games"); chat.send()
-assert chat.active_game is None
-assert any("/play" in (t or "") for k, t in chat.messages[n:]), "games menu not shown"
-chat.entry.insert("1.0", "/play hangman"); chat.send()
+assert isinstance(chat.active_game, pm.GamePicker), "/games should open the picker"
+assert chat.messages[-1][0] == "game", "the picker screen is a 'game'-role message"
+assert "Type a number to pick" in (chat.messages[-1][1] or ""), "picker menu not shown"
+chat.entry.insert("1.0", "/play hangman"); chat.send()   # a /command still routes mid-picker
 assert isinstance(chat.active_game, pm.Hangman), "hangman didn't start"
+assert chat.messages[-1][0] == "game", "the game's opening screen replies as 'game'"
 _g = chat.active_game
 chat.entry.insert("1.0", "e"); chat.send()        # a plain move routes to the game
 assert chat.active_game is _g, "a move shouldn't end the game"
-assert chat.messages[-1][0] == "pet", "game should reply as the pet"
+assert chat.messages[-1][0] == "game", "an in-game move replies as 'game', not 'pet'"
 chat.entry.insert("1.0", "quit"); chat.send()     # 'quit' returns to normal chat
 assert chat.active_game is None, "quit should end the game"
-chat.entry.insert("1.0", "/play dragons"); chat.send()   # unknown -> menu, no game
-assert chat.active_game is None
+assert chat.messages[-1][0] == "pet", "quitting says goodbye as the pet"
+chat.entry.insert("1.0", "/play dragons"); chat.send()   # unknown name -> picker, not None
+assert isinstance(chat.active_game, pm.GamePicker), "an unknown game should open the picker"
 chat.active_game = pm.NumberGuess(); chat.active_game.secret = 42
 chat.entry.insert("1.0", "42"); chat.send()       # winning clears the game
 assert chat.active_game is None, "a finished game should clear itself"
-print("games integration OK (/games, /play, moves, quit, win clears)")
+assert chat.messages[-1][0] == "caption", "a finished game leaves a 'play again' caption"
+print("games integration OK (/games picker, /play, moves, quit, win clears)")
 
 # Slim custom scrollbar replaced the ttk one and speaks the scrollbar protocol
 assert isinstance(chat._scroll, pm.SlimScrollbar), type(chat._scroll)
