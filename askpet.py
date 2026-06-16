@@ -33,7 +33,7 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 APP_NAME = "AskPet"
-APP_VERSION = "0.37.0"
+APP_VERSION = "0.38.0"
 CONTENT_VERSION = "2026.06.17"
 
 # ---------------------------------------------------------------------------
@@ -6390,6 +6390,7 @@ SLASH_COMMANDS = [
     ("/fix-prompt", "Build a best-practice prompt for an AI/IT task", "prompt"),
     ("/games", "See the games we can play", "games"),
     ("/play", "Start a game — e.g. /play hangman", "play"),
+    ("/eldermark", "Walk the world of Eldermark (pixel adventure)", "eldermark"),
     ("/help", "Show what AskPet can do", "help"),
 ]
 SLASH_BY_NAME = {name[1:]: (desc, action) for name, desc, action in SLASH_COMMANDS}
@@ -8919,6 +8920,18 @@ def _ascii_banner(title, inner=28):
     return f"{bar}\n{mid}\n{bar}"
 
 
+GAME_ART_W = 54         # reference width art is centered within on game screens
+
+
+def _center_block(s, width=GAME_ART_W):
+    """Center a multi-line art block (uniform left pad so it stays aligned),
+    so the picture sits in the middle with text/actions below it."""
+    lines = s.split("\n")
+    mw = max((len(ln) for ln in lines), default=0)
+    pad = " " * max(0, (width - mw) // 2)
+    return "\n".join(pad + ln for ln in lines)
+
+
 GAMES_BANNER = _ascii_banner("G A M E   A R C A D E")
 
 # Small scene/enemy motifs. Pure ASCII (no backslashes/quotes) so columns stay
@@ -9019,7 +9032,7 @@ def _elder_screen(log=None, title=None, art=None, info=None, opts=None,
     if title:
         parts += ["", f"  {title}"]
     if art:
-        parts.append(art)
+        parts.append(_center_block(art))
     for block in (info or []):
         parts.append(block)
     if opts:
@@ -9454,7 +9467,7 @@ class RPGQuest:
         if title:
             parts += ["", f"  {title}"]
         if art:
-            parts.append(art)
+            parts.append(_center_block(art))
         for block in (info or []):
             parts.append(block)
         if opts:
@@ -9849,6 +9862,78 @@ class FrostfallRPG(RPGQuest):
     }
 
 
+# ---- LUMEN QUEST: the 3 region quests merged into ONE game (pick a region) ---
+QUEST_REGIONS = [TideHollowRPG, EmberPeakRPG, FrostfallRPG]
+# Pixel-art region emblems (sea / fire / snow), shown on the region-select.
+REGION_EMBLEMS = [
+    "    ▟█▙    ▟█▙\n"
+    "  ▒▓███▓▒▒▓███▓▒\n"
+    "  ░▒▓▓▒░  ░▒▓▓▒░\n"
+    "  ~~~~~~~~~~~~~~~",
+    "       ▟▙\n"
+    "      ▟██▙\n"
+    "    ▟██████▙\n"
+    "   ▟████████▙\n"
+    "   ░▒▓████▓▒░",
+    "   *   *   *   *\n"
+    "     ▟██████▙\n"
+    "    ▟████████▙\n"
+    "    ░▒▓▓▓▓▓▓▒░\n"
+    "   *   *   *   *",
+]
+
+
+class RegionQuest:
+    """The anime RPG, merged: one game with three regions (Tide Hollow, Ember
+    Peak, Frostfall). Pick a region, then this delegates all play to that
+    region's adventure. Each region still records its own RPG completion."""
+
+    name = "Lumen Quest"
+    blurb = "a gentle anime RPG — pick a region (sea, fire or snow) and save it"
+    screen = True
+    rpg = True
+
+    def __init__(self):
+        self.over = False
+        self.state = "region"
+        self.quest = None
+
+    def start(self):
+        self.__init__()
+        return self._region_screen()
+
+    @property
+    def is_over(self):
+        return self.quest.is_over if self.quest else self.over
+
+    def handle(self, text):
+        if self.state == "region":
+            return self._pick_region(text)
+        return self.quest.handle(text)
+
+    def _region_screen(self, note=None):
+        parts = [_ascii_banner("L U M E N   Q U E S T", inner=30), ""]
+        if note:
+            parts += [f"  > {note}", ""]
+        parts += _wrap_lines("Three worlds need your light! Pick a region — each "
+                             "is its own gentle quest to relight a world.", 50)
+        parts += ["", "  Choose a region:"]
+        for i, cls in enumerate(QUEST_REGIONS, 1):
+            parts.append(f"  {i})  {cls.TITLE}")
+            parts.append(_center_block(REGION_EMBLEMS[i - 1], 40))
+            parts += _wrap_lines(cls.blurb, 48, indent="      ")
+        parts += ["", "  Type 1, 2 or 3.   (type 'quit' to leave)"]
+        return "\n".join(parts)
+
+    def _pick_region(self, text):
+        m = re.search(r"\d+", text or "")
+        if not m or not (1 <= int(m.group()) <= len(QUEST_REGIONS)):
+            return self._region_screen(note="Type 1, 2 or 3 to pick a region.")
+        self.quest = QUEST_REGIONS[int(m.group()) - 1]()
+        self.state = "play"
+        return self.quest.start()
+
+
 # ---- CRITTER KEEPERS: an original creature-collector (catch / raise / evolve)
 # All critters, types and art are 100% original (own IP). Pure logic; the chat
 # renders every returned string in the green monospace "arcade screen".
@@ -10011,17 +10096,6 @@ CRITTERS_WILD_KEYS = list(CRITTERS_DEX.keys())
 # Three original starters offered at the very beginning.
 CRITTERS_STARTERS = ["emberkit", "dewpup", "sproutling"]
 
-# Gentle befriend choices (both ALWAYS work — kindness never fails).
-CRITTERS_BEFRIEND = [
-    ("berry", "Offer a sweet sunberry"),
-    ("play", "Play a game of tag"),
-]
-CRITTERS_BEFRIEND_FLAVOR = {
-    "berry": "nibbles the sunberry, gives a happy wiggle",
-    "play": "chases your hand, then tumbles over giggling",
-}
-
-
 def _critters_form_index(level):
     """Which evolution stage (0,1,2) a critter shows at a given level."""
     idx = 0
@@ -10067,27 +10141,64 @@ def _critters_bar(level):
             + "-" * (10 - fill) + "]")
 
 
+CRITTERS_DUEL_BANNER = _ascii_banner("C R I T T E R   M E E T", inner=30)
+
+# Treats you can offer during a meeting — every one is kind. Offering a treat to
+# a wild critter makes it friendlier (and a little happier); in a friendly spar
+# it gives YOUR critter a bit of pep back. Nothing here ever hurts a critter.
+CRITTERS_TREATS = ["Sunberry", "Bubble Cake", "Sparkle Nut"]
+
+
+def _critters_meter(cur, mx, width=10, fill="#", empty="-"):
+    """A fixed-width ASCII meter like [####------] (stays aligned in Consolas)."""
+    cur = max(0, min(cur, mx))
+    n = int(round(width * cur / mx)) if mx else 0
+    n = max(0, min(width, n))
+    return "[" + fill * n + empty * (width - n) + "]"
+
+
+def _critters_pep_mx(level):
+    """Gentle 'pep' pool — our kid-safe stand-in for health — by level."""
+    return 16 + level * 4
+
+
+def _critters_card(label, pep, pep_mx, extra=""):
+    """A two-line status card (name/level line + a pep bar), returned as one
+    block so _center_block keeps the picture-above / text-below layout tidy."""
+    line2 = f"pep {_critters_meter(pep, pep_mx)} {pep}/{pep_mx}"
+    if extra:
+        line2 += "   " + extra
+    return label + "\n" + line2
+
+
 class CritterKeepers:
-    """Catch, raise and EVOLVE a team of original critters. Explore to befriend
-    new friends (kindness always works), Train to level up and evolve, Spar in
-    gentle matches where critters just get sleepy — never hurt. Endless, offline,
-    deterministic; renders in the green monospace screen."""
+    """Catch, raise and EVOLVE a team of original critters. Explore the meadow to
+    MEET a wild critter on a full battle screen — its picture up top, yours below,
+    a four-command menu beneath — then be kind (Play, Spark, Treat, Call) until it
+    happily joins you. Train to level up and evolve, Spar in gentle matches where
+    critters only ever get sleepy (never hurt), and fill your Critter Dex.
+    Endless, offline, deterministic; renders in the green monospace screen."""
 
     name = "Critter Keepers"
-    blurb = "tame, train, and EVOLVE a team of original critters (collect-em-all)"
+    blurb = ("meet, befriend and EVOLVE a team of original critters on a friendly "
+             "battle screen — then fill your Critter Dex (find every kind!)")
     screen = True
 
     def __init__(self):
-        self.over = False
-        self.state = "starter"     # starter -> hub -> explore/spar/team_back
+        self.over = False           # a collector: ALWAYS endless, never set True
+        self.state = "starter"      # starter -> hub -> battle/team_back/dex_back
         self.team = []
-        self.active = 0            # index into team
-        # explore scratch
-        self.wild = None
-        # spar scratch
+        self.active = 0             # index into team
+        self.seen = set()           # critter keys spotted while exploring
+        self.caught = set()         # critter keys befriended (your Dex)
+        # battle scratch (shared by wild meetings and friendly spars)
+        self.mode = "wild"          # "wild" (befriend) or "spar" (gentle match)
         self.foe = None
-        self.foe_sleep = 0         # 0..3 (tuckered out at 3)
-        self.mine_sleep = 0
+        self.foe_pep = self.foe_pep_mx = 0
+        self.you_pep = self.you_pep_mx = 0
+        self.spark = 0              # 0..100 charge for the Spark (signature) move
+        self.friend = 0             # wild-meeting friendliness gauge
+        self.friend_need = 3        # how friendly before a Call succeeds
 
     # ---- contract ----------------------------------------------------------
     def start(self):
@@ -10100,12 +10211,10 @@ class CritterKeepers:
     def handle(self, text):
         if self.state == "starter":
             return self._pick_starter(text)
-        if self.state == "explore":
-            return self._do_befriend(text)
-        if self.state == "spar":
-            return self._do_spar(text)
-        if self.state == "team_back":
-            self.state = "hub"          # any input returns from the team view
+        if self.state == "battle":
+            return self._battle_input(text)
+        if self.state in ("team_back", "dex_back"):
+            self.state = "hub"          # any input returns from a full-screen view
             return self._hub_screen()
         return self._hub_pick(text)     # state == "hub"
 
@@ -10133,6 +10242,8 @@ class CritterKeepers:
         key = CRITTERS_STARTERS[int(m.group()) - 1]
         self.team = [_critters_make(key)]
         self.active = 0
+        self.seen.add(key)
+        self.caught.add(key)            # your first Dex entry
         self.state = "hub"
         nm = _critters_name(self.team[0])
         return self._hub_screen(log=[f"{nm} bounces to your side. You are now a "
@@ -10156,16 +10267,18 @@ class CritterKeepers:
             d = CRITTERS_DEX[c["key"]]
             parts += [f"  Active: {_critters_name(c)}  Lv {c['level']}"
                       f"  ({d['type']})"]
-            parts += [_critters_art(c)]
+            parts += [_center_block(_critters_art(c))]
             parts += ["", _critters_bar(c["level"]),
                       f"  XP to next level: {self._xp_need(c) - c['xp']}",
-                      f"  Team size: {len(self.team)}"]
+                      f"  Team: {len(self.team)}    "
+                      f"Dex: {len(self.caught)}/{len(CRITTERS_DEX)}"]
         parts += ["", "  What would you like to do?"]
         parts += _elder_menu([
-            ("explore", "Explore"),
+            ("explore", "Explore (meet a wild critter)"),
             ("train", "Train"),
             ("team", "Team"),
             ("spar", "Spar"),
+            ("dex", "Critter Dex"),
             ("swap", "Swap active"),
         ])
         parts += ["", "  (type 'quit' to leave)"]
@@ -10183,8 +10296,10 @@ class CritterKeepers:
         if choice == 4:
             return self._begin_spar()
         if choice == 5:
+            return self._dex_screen()
+        if choice == 6:
             return self._swap()
-        return self._hub_screen(log=["Type a number from 1 to 5 to choose."])
+        return self._hub_screen(log=["Type a number from 1 to 6 to choose."])
 
     # ---- leveling / evolution ---------------------------------------------
     def _xp_need(self, c):
@@ -10244,126 +10359,285 @@ class CritterKeepers:
         return self._hub_screen(log=[f"{_critters_name(self._active())} is now "
                                      "your active critter!"])
 
-    # ---- explore / befriend ------------------------------------------------
+    # ---- battle screen (wild meetings AND friendly spars) ------------------
     def _begin_explore(self):
+        c = self._active()
+        if not c:
+            return self._hub_screen(log=["Befriend a critter first!"])
         key = random.choice(CRITTERS_WILD_KEYS)
-        self.wild = _critters_make(key, level=1)
-        self.state = "explore"
+        self.seen.add(key)
+        self.foe = _critters_make(key, level=max(1, c["level"]))
         d = CRITTERS_DEX[key]
-        return self._explore_screen(
-            log=[f"You spot a wild {d['forms'][0][0]} in the meadow!"])
+        self.mode = "wild"
+        self.state = "battle"
+        # a wild critter is easy to win over: a small pep pool and a low,
+        # age-scaled friendliness target — being kind ALWAYS gets there.
+        self.foe_pep_mx = self.foe_pep = max(8, 12 + self.foe["level"] * 3)
+        self.you_pep_mx = self.you_pep = _critters_pep_mx(c["level"])
+        self.spark = 0
+        self.friend = 0
+        self.friend_need = max(2, int(round(3 * age_difficulty())))
+        return self._battle_screen(
+            log=[f"A wild {d['forms'][0][0]} peeks out of the meadow grass!"])
 
-    def _explore_screen(self, note=None, log=None):
-        parts = [CRITTERS_BANNER]
-        for line in (log or []):
-            parts.append("")
-            parts += [f"  > {x}" for x in _wrap_lines(line, 46, indent="")]
-        if note:
-            parts += ["", f"  > {note}"]
-        w = self.wild
-        d = CRITTERS_DEX[w["key"]]
-        parts += ["", f"  A wild {d['forms'][0][0]}  ({d['type']})",
-                  _critters_art(w), "", "  How will you say hello?"]
-        parts += _elder_menu([(k, lbl) for k, lbl in CRITTERS_BEFRIEND])
-        parts += ["", "  (type 'quit' to leave)"]
-        return "\n".join(parts)
-
-    def _do_befriend(self, text):
-        m = re.search(r"\d+", text or "")
-        if not m or not (1 <= int(m.group()) <= len(CRITTERS_BEFRIEND)):
-            return self._explore_screen(
-                note="Type 1 or 2 to greet your new friend.")
-        key, _label = CRITTERS_BEFRIEND[int(m.group()) - 1]
-        flavor = CRITTERS_BEFRIEND_FLAVOR[key]
-        w = self.wild
-        d = CRITTERS_DEX[w["key"]]
-        nm = d["forms"][0][0]
-        # kindness ALWAYS works — the critter joins the team.
-        self.team.append(w)
-        self.wild = None
-        self.state = "hub"
-        return self._hub_screen(log=[
-            f"The {nm} {flavor}.",
-            f"{nm} happily joins your team!  (Team size {len(self.team)})"])
-
-    # ---- spar --------------------------------------------------------------
     def _begin_spar(self):
         c = self._active()
         if not c:
             return self._hub_screen(log=["Befriend a critter first!"])
         key = random.choice(CRITTERS_WILD_KEYS)
         self.foe = _critters_make(key, level=max(1, c["level"]))
-        self.foe_sleep = 0
-        self.mine_sleep = 0
-        self.state = "spar"
-        return self._spar_screen(log=[
-            f"A friendly {_critters_name(self.foe)} wants to play a match!"])
+        self.mode = "spar"
+        self.state = "battle"
+        base = _critters_pep_mx(self.foe["level"])
+        # a sparring partner's pep scales with the age band (tougher = more pep)
+        self.foe_pep_mx = self.foe_pep = max(8, int(round(base * age_difficulty())))
+        self.you_pep_mx = self.you_pep = _critters_pep_mx(c["level"])
+        self.spark = 0
+        self.friend = 0
+        return self._battle_screen(
+            log=[f"A friendly {_critters_name(self.foe)} wants to play a match!"])
 
-    def _sleep_bar(self, n):
-        n = max(0, min(3, n))
-        return "[" + "z" * n + "-" * (3 - n) + "]"
+    def _menu(self):
+        base = [("play", "Play"), ("spark", "Spark"), ("treat", "Treat")]
+        if self.mode == "wild":
+            # the kind take on the classic "RUN" slot: Call to befriend, or wave
+            # goodbye and leave (so no kid is ever forced to befriend this one).
+            return base + [("call", "Call (befriend!)"), ("leave", "Wave goodbye")]
+        return base + [("rest", "Rest (end match)")]
 
-    def _spar_screen(self, note=None, log=None):
-        parts = [CRITTERS_BANNER]
+    def _battle_screen(self, note=None, log=None):
+        c, f = self._active(), self.foe
+        df, dc = CRITTERS_DEX[f["key"]], CRITTERS_DEX[c["key"]]
+        parts = [CRITTERS_DUEL_BANNER]
         for line in (log or []):
             parts.append("")
             parts += [f"  > {x}" for x in _wrap_lines(line, 46, indent="")]
         if note:
             parts += ["", f"  > {note}"]
-        c = self._active()
-        f = self.foe
-        moves = CRITTERS_DEX[c["key"]]["moves"]
-        parts += ["",
-                  f"  You: {_critters_name(c)} Lv {c['level']}   "
-                  f"sleepy {self._sleep_bar(self.mine_sleep)}",
-                  f"  Foe: {_critters_name(f)} Lv {f['level']}   "
-                  f"sleepy {self._sleep_bar(self.foe_sleep)}",
-                  _critters_art(f),
-                  "", "  Pick a playful move:"]
-        parts += _elder_menu([(mv, mv) for mv in moves])
-        parts += ["", "  (type 'quit' to leave)"]
+        # --- the wild/foe critter: status card up top, picture in the middle --
+        if self.mode == "wild":
+            foe_extra = ("friend "
+                         + _critters_meter(self.friend, self.friend_need, 6, "+", "."))
+        else:
+            foe_extra = ""
+        foe_label = f"{_critters_name(f)}  Lv {f['level']}  ({df['type']})"
+        parts += ["", _center_block(
+            _critters_card(foe_label, self.foe_pep, self.foe_pep_mx, foe_extra))]
+        parts += [_center_block(_critters_art(f))]
+        # --- your critter: picture, then your status card --------------------
+        parts += [_center_block(_critters_art(c))]
+        you_extra = "spark " + _critters_meter(self.spark, 100, 8, "*", ".")
+        you_label = f"{_critters_name(c)}  Lv {c['level']}  ({dc['type']})"
+        parts += [_center_block(
+            _critters_card(you_label, self.you_pep, self.you_pep_mx, you_extra))]
+        # --- the four-command menu (a kind take on the classic battle menu) --
+        parts += ["", "  What will you do?"]
+        parts += _elder_menu(self._menu())
+        parts += ["", "  (type 'quit' to stop)"]
         return "\n".join(parts)
 
-    def _do_spar(self, text):
-        c = self._active()
-        moves = CRITTERS_DEX[c["key"]]["moves"]
+    def _battle_input(self, text):
+        if not self._active():          # defensive: never act without a critter
+            self.state = "hub"
+            return self._hub_screen()
+        menu = self._menu()
         m = re.search(r"\d+", text or "")
-        if not m or not (1 <= int(m.group()) <= len(moves)):
-            return self._spar_screen(note="Type 1, 2 or 3 to pick a move.")
-        move = moves[int(m.group()) - 1]
+        if not m or not (1 <= int(m.group()) <= len(menu)):
+            return self._battle_screen(note=f"Type 1 to {len(menu)} to choose.")
+        action = menu[int(m.group()) - 1][0]
+        return {
+            "play": self._battle_play,
+            "spark": self._battle_spark,
+            "treat": self._battle_treat,
+            "call": self._battle_call,
+            "leave": self._battle_leave,
+            "rest": self._battle_rest,
+        }[action]()
+
+    def _foe_calm(self):
+        """A wild critter is ready to befriend once it is comfy with you OR has
+        played itself happily sleepy. Kindness always reaches this — eventually."""
+        return (self.friend >= self.friend_need
+                or self.foe_pep <= max(1, self.foe_pep_mx // 4))
+
+    def _battle_play(self):
+        c = self._active()
+        move = random.choice(CRITTERS_DEX[c["key"]]["moves"])
+        amt = max(3, c["level"] + random.randint(2, 5))
+        self.foe_pep = max(0, self.foe_pep - amt)
+        self.spark = min(100, self.spark + 25)
         log = [f"{_critters_name(c)} uses {move}!"]
-        # your move makes the foe a little sleepier
-        self.foe_sleep += random.randint(1, 2)
-        if self.foe_sleep >= 3:
-            self.foe_sleep = 3
-            # YOU WIN — foe is tuckered out, you gain XP
-            gain = random.randint(5, 8)
-            log.append(f"The {_critters_name(self.foe)} yawns a big happy "
-                       "yawn — all tuckered out! You win the match!")
-            log.append(f"(+{gain} XP)")
-            log += self._grant_xp(c, gain)
-            self.foe = None
-            self.state = "hub"
-            return self._hub_screen(log=log)
-        # foe gently plays back; your critter may get a little sleepy too
-        log.append(f"The {_critters_name(self.foe)} bounces back playfully.")
-        self.mine_sleep += random.randint(0, 1)
-        if self.mine_sleep >= 3:
-            self.mine_sleep = 3
-            # you "lose" -> just a nap; still get a little XP, try again
-            gain = random.randint(2, 4)
-            log.append(f"{_critters_name(c)} curls up for a happy little nap. "
-                       "What a fun match!")
-            log.append(f"You both had fun. (+{gain} XP) Try another match anytime!")
-            log += self._grant_xp(c, gain)
-            self.foe = None
-            self.state = "hub"
-            return self._hub_screen(log=log)
-        return self._spar_screen(log=log)
+        if self.mode == "wild":
+            self.friend += 1            # playing together builds trust
+            log.append(f"The wild {_critters_name(self.foe)} giggles and tumbles "
+                       "— it's warming up to you.")
+            if self._foe_calm():
+                log.append("It looks ready to be friends — try Call (4)!")
+            return self._battle_screen(log=log)
+        # spar: a gentle back-and-forth; the worst case is a happy nap
+        if self.foe_pep <= 0:
+            return self._spar_win(log)
+        return self._foe_turn(log)
+
+    def _battle_spark(self):
+        c = self._active()
+        sig = CRITTERS_DEX[c["key"]]["moves"][-1]
+        if self.spark >= 100:
+            self.spark = 0
+            log = [f"SPARK MOVE!  {_critters_name(c)} lights up with {sig}!"]
+            if self.mode == "wild":
+                self.friend += 2
+                self.foe_pep = max(0, self.foe_pep
+                                   - (c["level"] + random.randint(3, 6)))
+                log.append("The wild critter is dazzled — and delighted!")
+                if self._foe_calm():
+                    log.append("It looks ready to be friends — try Call (4)!")
+                return self._battle_screen(log=log)
+            self.foe_pep = max(0, self.foe_pep
+                               - (c["level"] * 2 + random.randint(5, 9)))
+            if self.foe_pep <= 0:
+                return self._spar_win(log)
+            return self._foe_turn(log)
+        # not charged yet — a wind-up that charges the Spark fast
+        self.spark = min(100, self.spark + 40)
+        log = [f"{_critters_name(c)} winds up — the Spark is charging "
+               f"({self.spark}/100)!"]
+        if self.mode == "spar":
+            return self._foe_turn(log)
+        self.friend += 1
+        return self._battle_screen(log=log)
+
+    def _battle_treat(self):
+        c = self._active()
+        treat = random.choice(CRITTERS_TREATS)
+        self.spark = min(100, self.spark + 15)
+        if self.mode == "wild":
+            self.friend += 2
+            self.foe_pep = min(self.foe_pep_mx, self.foe_pep + 2)   # a happy snack
+            log = [f"You offer a {treat}. The wild {_critters_name(self.foe)} "
+                   "nibbles it happily and trusts you more!"]
+            if self._foe_calm():
+                log.append("It looks ready to be friends — try Call (4)!")
+            return self._battle_screen(log=log)
+        # spar: the treat refreshes YOUR critter (+4 pep)
+        self.you_pep = min(self.you_pep_mx, self.you_pep + 4)
+        return self._foe_turn([f"You share a {treat} — {_critters_name(c)} "
+                               "perks back up (+4 pep)."])
+
+    def _battle_call(self):
+        if not self._foe_calm():
+            self.friend += 1            # never a dead end — trust keeps growing
+            return self._battle_screen(
+                note="Almost! Keep being kind — Play or Treat, then Call again.")
+        return self._befriend()
+
+    def _befriend(self):
+        c = self._active()
+        f = self.foe
+        nm = CRITTERS_DEX[f["key"]]["forms"][0][0]
+        self.team.append(f)
+        new = f["key"] not in self.caught
+        self.caught.add(f["key"])
+        self.foe = None
+        self.state = "hub"
+        gain = random.randint(4, 7)
+        log = [f"{nm} happily joins your team!  (Team {len(self.team)})"]
+        if new:
+            log.append(f"New Dex friend!  {len(self.caught)}/{len(CRITTERS_DEX)} "
+                       "kinds befriended.")
+        log.append(f"(+{gain} XP for your active critter)")
+        log += self._grant_xp(c, gain)
+        if len(self.caught) >= len(CRITTERS_DEX):
+            log.append("")
+            log.append("*  *  *  You've befriended EVERY kind of critter — "
+                       "you're a Champion Keeper!  *  *  *")
+        return self._hub_screen(log=log)
+
+    def _foe_turn(self, log):
+        """The sparring partner's gentle reply. It can make your critter sleepy,
+        but a happy nap is the worst that ever happens — then you both had fun."""
+        f = self.foe
+        if random.randint(1, 3) == 2:
+            self.foe_pep = min(self.foe_pep_mx, self.foe_pep + 2)
+            log.append(f"The {_critters_name(f)} catches its breath (+2 pep).")
+        else:
+            amt = max(1, f["level"] // 2 + random.randint(1, 3))
+            self.you_pep = max(0, self.you_pep - amt)
+            log.append(f"The {_critters_name(f)} bounces back playfully.")
+        if self.you_pep <= 0:
+            return self._spar_nap(log)
+        return self._battle_screen(log=log)
+
+    def _spar_win(self, log):
+        c = self._active()
+        gain = random.randint(5, 8)
+        log.append(f"The {_critters_name(self.foe)} yawns a big happy yawn — all "
+                   "tuckered out! You win the match!")
+        log.append(f"(+{gain} XP)")
+        log += self._grant_xp(c, gain)
+        self.foe = None
+        self.state = "hub"
+        return self._hub_screen(log=log)
+
+    def _spar_nap(self, log):
+        c = self._active()
+        gain = random.randint(2, 4)
+        log.append(f"{_critters_name(c)} curls up for a happy little nap. What a "
+                   "fun match!")
+        log.append(f"You both had fun. (+{gain} XP) Try another match anytime!")
+        log += self._grant_xp(c, gain)
+        self.foe = None
+        self.state = "hub"
+        return self._hub_screen(log=log)
+
+    def _battle_rest(self):
+        c = self._active()
+        gain = random.randint(2, 4)
+        self.foe = None
+        self.state = "hub"
+        log = [f"You both take a rest — good match! (+{gain} XP)"]
+        log += self._grant_xp(c, gain)
+        return self._hub_screen(log=log)
+
+    def _battle_leave(self):
+        nm = _critters_name(self.foe)   # the wild critter stays "seen" in your Dex
+        self.foe = None
+        self.state = "hub"
+        return self._hub_screen(log=[f"You wave goodbye to the wild {nm}. It's "
+                                     "noted in your Dex — come back to befriend it!"])
+
+    # ---- Critter Dex -------------------------------------------------------
+    def _dex_screen(self):
+        parts = [CRITTERS_BANNER, "", "  ~ Critter Dex ~   (find every kind!)", ""]
+        for key in CRITTERS_DEX:
+            d = CRITTERS_DEX[key]
+            base = d["forms"][0][0]
+            if key in self.caught:
+                parts.append(f"  [*] {base:<12} ({d['type']}) — friend!")
+            elif key in self.seen:
+                parts.append(f"  [.] {base:<12} ({d['type']}) — seen; befriend it!")
+            else:
+                parts.append("  [ ] ???          — explore to discover!")
+        parts += ["", f"  Befriended {len(self.caught)} of {len(CRITTERS_DEX)} "
+                  "kinds of critter."]
+        if len(self.caught) >= len(CRITTERS_DEX):
+            parts.append("  Champion Keeper — you found them all!")
+        parts += ["", "  Type any key, then Enter, to go back.",
+                  "", "  (type 'quit' to leave)"]
+        self.state = "dex_back"
+        return "\n".join(parts)
 
 
 
 SPIN_BANNER = _ascii_banner("S P I N   L E A G U E")
+# Pixel-art (block-shade) emblem for the title — a glowing spinning blade.
+SPIN_EMBLEM = (
+    "        ░▒▓▓▓▒░\n"
+    "      ░▒▓█████▓▒░\n"
+    "      ▒▓███████▓▒\n"
+    "      ░▒▓█████▓▒░\n"
+    "        ░▒▓▓▓▒░\n"
+    "       / /|||\\ \\")
 
 # Spirit-Beast Blades: an ORIGINAL spinner-battle world (own creatures/rivals;
 # only the genre's generic mechanics — types, a tournament ladder, special
@@ -10379,15 +10653,15 @@ SPIN_STARTERS = [
     {"name": "Emberwyrm", "type": "atk", "atk": 7, "guard": 4, "sta": 5,
      "desc": "a fiery dragon spirit that loves to charge in",
      "special": "Ember Drive",
-     "art": "       (>oo<)\n      [ EMBER ]  *whirr*\n        '-O-'"},
+     "art": "    ▟▙     ▟▙\n   ░▓███████▓░\n   ▒▓█o███o█▓▒\n   ░▓██▀█▀██▓░\n    ░▒▓▓▓▓▒░"},
     {"name": "Stonemaw", "type": "def", "atk": 4, "guard": 7, "sta": 5,
      "desc": "a rugged rock-bear spirit that shrugs off hits",
      "special": "Bastion Crash",
-     "art": "       [-oo-]\n      [ STONE ]  *grnd*\n        '-O-'"},
+     "art": "   ▟▙       ▟▙\n   ▓████████▓\n   ▓█o████o█▓\n   ▓███▄▄███▓\n   ░▒▓▓▓▓▓▓▒░"},
     {"name": "Galelynx", "type": "sta", "atk": 5, "guard": 4, "sta": 7,
      "desc": "a swift wind-cat spirit that spins and spins",
      "special": "Cyclone Whirl",
-     "art": "       (^..^)\n      [ GALE ]  *zoom*\n        '-O-'"},
+     "art": "   ▜▙       ▟▛\n   ░▓██████▓░\n   ▒▓█^██^█▓▒\n   ░▓███▄███▓░\n    ░▒▓▓▓▓▒░"},
 ]
 
 # The league ladder of ORIGINAL rivals (last one is the Champion).
@@ -10477,7 +10751,7 @@ class SpinLeague:
 
     # -- choose your blade ---------------------------------------------------
     def _pick(self, note=None):
-        p = [SPIN_BANNER, ""]
+        p = [SPIN_BANNER, "", _center_block(SPIN_EMBLEM), ""]
         if note:
             p += [f"  > {note}", ""]
         p += _wrap_lines("Welcome to the Spin League! Every blade carries a "
@@ -10487,10 +10761,10 @@ class SpinLeague:
         p += ["  Choose your blade:"]
         for i, s in enumerate(SPIN_STARTERS):
             p.append(f"  {i + 1}) {s['name']}  [{SPIN_TYPES[s['type']]}]")
-            p.append(f"     {s['art'].splitlines()[0].strip()}")
-            p.append(f"       ATK {s['atk']}  GUARD {s['guard']}  STA {s['sta']}")
+            p.append(_center_block(s["art"], 40))
+            p.append(f"     ATK {s['atk']}  GUARD {s['guard']}  STA {s['sta']}")
             p += _wrap_lines(s["desc"] + f"  Spirit Move: {s['special']}.", 46,
-                             indent="       ")
+                             indent="     ")
         p += ["", "  Type 1, 2 or 3.   (type 'quit' to leave)"]
         return "\n".join(p)
 
@@ -10648,7 +10922,7 @@ class SpinLeague:
             f"  League rung {self.rung + 1}/{len(SPIN_RIVALS)}   Lap {self.lap}"
             f"   Wins {self.wins}",
             "",
-            rv["art"],
+            _center_block(rv["art"], 40),
             f"  RIVAL: {self.rname} & {rv['beast']}  [{SPIN_TYPES[rv['type']]}]",
             f"         {_spin_bar(self.foe, self.foe_mx)}",
             "",
@@ -11424,12 +11698,13 @@ class ScienceLab:
 
 # Play-name -> game class. Aliases let kids type the obvious thing.
 GAMES = {
-    # RPG quests (0.36.0) — always unlocked, count toward opening the rest
-    "eldermark": EldermarkRPG, "quest": EldermarkRPG, "adventure": EldermarkRPG,
-    "rpg": EldermarkRPG, "story": EldermarkRPG,
-    "tidehollow": TideHollowRPG, "tide": TideHollowRPG, "hollow": TideHollowRPG,
-    "emberpeak": EmberPeakRPG, "ember": EmberPeakRPG, "peak": EmberPeakRPG,
-    "frostfall": FrostfallRPG, "frost": FrostfallRPG, "vale": FrostfallRPG,
+    # RPG adventures — always unlocked, count toward opening the rest
+    "eldermark": EldermarkRPG, "adventure": EldermarkRPG, "rpg": EldermarkRPG,
+    "story": EldermarkRPG,
+    "quest": RegionQuest, "quests": RegionQuest, "regions": RegionQuest,
+    "lumen": RegionQuest, "tidehollow": RegionQuest, "tide": RegionQuest,
+    "emberpeak": RegionQuest, "ember": RegionQuest, "frostfall": RegionQuest,
+    "frost": RegionQuest,
     "dungeon": CozyDungeon, "cozy": CozyDungeon, "explore": CozyDungeon,
     # other modes (locked until a few RPG quests are done)
     "critters": CritterKeepers, "critter": CritterKeepers, "keepers": CritterKeepers,
@@ -11449,9 +11724,7 @@ GAMES = {
 # are gated by the picker until enough RPG quests are finished.
 GAME_MENU = [
     ("eldermark", "⚔️", EldermarkRPG),
-    ("tidehollow", "🌊", TideHollowRPG),
-    ("emberpeak", "🔥", EmberPeakRPG),
-    ("frostfall", "❄️", FrostfallRPG),
+    ("quest", "🌍", RegionQuest),
     ("dungeon", "🗺️", CozyDungeon),
     ("critters", "🐾", CritterKeepers),
     ("spin", "🌀", SpinLeague),
@@ -11603,6 +11876,455 @@ def start_game(name):
     """Instantiate a game by play-name (or alias); None if unknown."""
     cls = GAMES.get((name or "").strip().lower())
     return cls() if cls else None
+
+
+# ===========================================================================
+# Eldermark — a small WALKABLE pixel world (vertical slice). Original IP, kid-
+# safe (NO combat). It opens in its own window and renders with stdlib
+# tk.PhotoImage tiles (no Pillow, no asset files). The LOGIC (map, collision,
+# the Wayshrine trigger) lives in a GUI-free class so it can be unit-tested
+# headlessly like every other game. Walking up to the Wayshrine opens a short
+# READING moment — the whole point of the arcade.
+# ===========================================================================
+
+# 4-shade warm Game-Boy monochrome palette (char -> hex). '.' = transparent.
+WORLD_PAL = {"0": "#ece9d8", "1": "#a7a489", "2": "#5b5743", "3": "#211e15"}
+WORLD_TILE = 16
+WORLD_COLS = 20
+WORLD_ROWS = 11
+
+
+def _build_world_map():
+    """One-screen tilemap, painted by coordinate so rows can't drift in length.
+    Tile ids: g grass · f flower · p moss path · b bridge · w stream ·
+    W wall · T tree · R roof · H house · S Wayshrine stone."""
+    g = [["g"] * WORLD_COLS for _ in range(WORLD_ROWS)]
+    for x in range(WORLD_COLS):
+        g[0][x] = g[WORLD_ROWS - 1][x] = "W"
+    for y in range(WORLD_ROWS):
+        g[y][0] = g[y][WORLD_COLS - 1] = "W"
+    for x in range(1, WORLD_COLS - 1):           # a stream across the screen
+        g[3][x] = "w"
+    path_cols = (8, 9)
+    for y in range(1, WORLD_ROWS):               # moss path down the middle
+        for c in path_cols:
+            g[y][c] = "p"
+    for c in path_cols:                          # a bridge over the stream
+        g[3][c] = "b"
+    for c in path_cols:                          # a gate through the bottom wall
+        g[WORLD_ROWS - 1][c] = "p"
+    for c in path_cols:                          # the Wayshrine caps the path
+        g[1][c] = "S"
+    for (x, y) in [(13, 4), (14, 4), (13, 5), (14, 5)]:
+        g[y][x] = "T"                            # a little tree cluster
+    for x in (2, 3, 4):
+        g[5][x] = "R"                            # cottage roof
+    for x in (2, 3, 4):
+        g[6][x] = "H"                            # cottage wall
+    for (x, y) in [(3, 1), (16, 2), (15, 6), (13, 8), (5, 8), (16, 9)]:
+        if g[y][x] == "g":
+            g[y][x] = "f"                        # flowers
+    return ["".join(row) for row in g]
+
+
+WORLD_MAP = _build_world_map()
+
+# The reading beat the Wayshrine opens (original, kid-safe; nods to the Mossback
+# from the Eldermark story). Each entry is one short page, pre-wrapped.
+WORLD_READING = [
+    "The Wayshrine stands quiet and dark.\nLong ago its light guided every\ntraveller safely home.",
+    "You rest a hand on the cool stone.\nThe fireflies gather close, blinking\nlike tiny lanterns.",
+    "You whisper the old word the Mossback\ntaught you... and a warm glow stirs\ndeep inside the stone.",
+    "The Wayshrine wakes! Soft light spills\nacross the moss. Eldermark feels a\nlittle less lonely tonight.",
+]
+
+
+def _world_tile_grids():
+    """Original 16x16 placeholder tiles as char grids (pure data; the GUI turns
+    these into tk.PhotoImages). Swappable later for hand-drawn GB art."""
+    def grid(fill):
+        return [[fill] * WORLD_TILE for _ in range(WORLD_TILE)]
+
+    def rect(gr, x, y, w, h, c):
+        for j in range(y, y + h):
+            for i in range(x, x + w):
+                if 0 <= i < WORLD_TILE and 0 <= j < WORLD_TILE:
+                    gr[j][i] = c
+
+    def dot(gr, x, y, c):
+        if 0 <= x < WORLD_TILE and 0 <= y < WORLD_TILE:
+            gr[y][x] = c
+
+    T = {}
+    gr = grid("1")
+    for (x, y) in [(2, 3), (11, 6), (6, 11), (14, 13), (9, 8)]:
+        dot(gr, x, y, "0")
+    for (x, y) in [(8, 2), (3, 9), (13, 8), (5, 14), (12, 2)]:
+        dot(gr, x, y, "2")
+    T["g"] = gr
+
+    fl = [row[:] for row in gr]
+    for (x, y) in [(7, 6), (7, 7), (8, 7), (7, 8)]:
+        dot(fl, x, y, "0")
+    dot(fl, 8, 8, "3")
+    T["f"] = fl
+
+    p = grid("0")
+    rect(p, 0, 0, 16, 1, "1"); rect(p, 0, 15, 16, 1, "1")
+    rect(p, 0, 0, 1, 16, "1"); rect(p, 15, 0, 1, 16, "1")
+    for (x, y) in [(3, 3), (8, 4), (12, 6), (5, 9), (10, 11), (3, 13), (13, 13)]:
+        dot(p, x, y, "2")
+    T["p"] = p
+
+    w = grid("2")
+    for y in (3, 8, 12):
+        rect(w, 2, y, 4, 1, "1"); rect(w, 9, y, 4, 1, "1")
+    T["w"] = w
+
+    b = grid("2")
+    rect(b, 0, 0, 16, 2, "3"); rect(b, 0, 14, 16, 2, "3")
+    for x in (3, 7, 11):
+        rect(b, x, 2, 1, 12, "3")
+    rect(b, 1, 5, 2, 1, "1"); rect(b, 8, 9, 2, 1, "1")
+    T["b"] = b
+
+    t = grid("1")
+    rect(t, 3, 1, 10, 10, "2"); rect(t, 8, 6, 5, 5, "3")
+    dot(t, 4, 2, "0"); dot(t, 5, 2, "0"); dot(t, 4, 3, "0")
+    rect(t, 7, 11, 2, 4, "3")
+    T["T"] = t
+
+    wl = grid("1")
+    rect(wl, 0, 0, 16, 3, "0")
+    rect(wl, 0, 6, 16, 1, "2"); rect(wl, 0, 11, 16, 1, "2")
+    rect(wl, 5, 3, 1, 3, "2"); rect(wl, 11, 7, 1, 4, "2"); rect(wl, 7, 12, 1, 4, "2")
+    rect(wl, 0, 14, 16, 2, "3")
+    T["W"] = wl
+
+    r = grid("2")
+    rect(r, 0, 0, 16, 2, "3"); rect(r, 0, 2, 16, 1, "1")
+    for y in (5, 9, 13):
+        rect(r, 0, y, 16, 1, "3")
+    T["R"] = r
+
+    h = grid("0")
+    rect(h, 0, 0, 16, 1, "3"); rect(h, 0, 15, 16, 1, "3")
+    rect(h, 0, 0, 1, 16, "3"); rect(h, 15, 0, 1, 16, "3")
+    rect(h, 6, 8, 4, 8, "3")
+    rect(h, 2, 3, 3, 3, "1"); rect(h, 11, 3, 3, 3, "1")
+    T["H"] = h
+
+    s = grid("1")
+    rect(s, 4, 1, 8, 13, "2")
+    rect(s, 4, 1, 8, 1, "3"); rect(s, 4, 13, 8, 1, "3")
+    rect(s, 4, 1, 1, 13, "3"); rect(s, 11, 1, 1, 13, "3")
+    dot(s, 6, 4, "3"); dot(s, 9, 4, "3"); dot(s, 6, 8, "3"); dot(s, 9, 8, "3")
+    rect(s, 3, 13, 10, 2, "0")
+    T["S"] = s
+
+    return {k: ["".join(row) for row in v] for k, v in T.items()}
+
+
+def _world_sprite_grids():
+    """Original sprite art as char grids ('.' = transparent)."""
+    def grid(w, h):
+        return [["."] * w for _ in range(h)]
+
+    def rect(gr, x, y, w, h, c):
+        for j in range(y, y + h):
+            for i in range(x, x + w):
+                if 0 <= j < len(gr) and 0 <= i < len(gr[0]):
+                    gr[j][i] = c
+
+    def dot(gr, x, y, c):
+        if 0 <= y < len(gr) and 0 <= x < len(gr[0]):
+            gr[y][x] = c
+
+    S = {}
+    p = grid(10, 14)
+    rect(p, 2, 0, 6, 4, "3"); rect(p, 1, 1, 8, 2, "3")     # hair
+    rect(p, 2, 4, 6, 4, "0")                               # face
+    dot(p, 3, 5, "3"); dot(p, 6, 5, "3")                   # eyes
+    rect(p, 2, 8, 6, 4, "2"); rect(p, 2, 8, 6, 1, "0")     # body + collar
+    dot(p, 1, 9, "0"); dot(p, 8, 9, "0")                   # arms
+    rect(p, 3, 12, 2, 2, "3"); rect(p, 5, 12, 2, 2, "3")   # legs
+    S["hero"] = p
+
+    fly = grid(4, 4)
+    rect(fly, 1, 1, 2, 2, "0"); dot(fly, 0, 1, "1"); dot(fly, 3, 2, "1")
+    S["fly"] = fly
+
+    od = grid(8, 8)
+    rect(od, 2, 2, 4, 4, "1"); rect(od, 3, 3, 2, 2, "0")
+    S["orb0"] = od
+    ob = grid(8, 8)
+    rect(ob, 2, 2, 4, 4, "0"); rect(ob, 1, 3, 6, 2, "0"); rect(ob, 3, 1, 2, 6, "0")
+    S["orb1"] = ob
+
+    c = grid(12, 12)
+    rect(c, 2, 3, 8, 8, "2"); rect(c, 4, 6, 4, 4, "1")
+    rect(c, 3, 5, 2, 2, "0"); rect(c, 7, 5, 2, 2, "0")     # eyes
+    dot(c, 4, 6, "3"); dot(c, 8, 6, "3")                   # pupils
+    dot(c, 6, 1, "0"); dot(c, 6, 2, "2")                   # antenna
+    rect(c, 3, 11, 2, 1, "2"); rect(c, 7, 11, 2, 1, "2")   # feet
+    S["critter"] = c
+    return {k: ["".join(row) for row in v] for k, v in S.items()}
+
+
+class EldermarkWorldLogic:
+    """GUI-free state for the Eldermark world: the tilemap, bounding-box
+    collision, the player, and the Wayshrine trigger. Deterministic and
+    headless-testable (no tkinter)."""
+
+    SOLID = set("WwTRHS")          # walls, water, trees, cottage, shrine stones
+    PW, PH = 10, 12                # player bounding box (pixels)
+    SPEED = 2
+    SHRINE = [(8, 1), (9, 1)]
+
+    def __init__(self):
+        self.base_w = WORLD_COLS * WORLD_TILE
+        self.base_h = WORLD_ROWS * WORLD_TILE
+        self.x = 8 * WORLD_TILE + (WORLD_TILE - self.PW) // 2     # on the path
+        self.y = 9 * WORLD_TILE + (WORLD_TILE - self.PH) // 2
+        self.facing = "up"
+        self.relit = False
+        self.anim = 0
+
+    def tile_at(self, px, py):
+        if px < 0 or py < 0 or px >= self.base_w or py >= self.base_h:
+            return "W"
+        return WORLD_MAP[py // WORLD_TILE][px // WORLD_TILE]
+
+    def _blocked(self, x, y):
+        if x < 0 or y < 0 or x + self.PW > self.base_w or y + self.PH > self.base_h:
+            return True
+        for cx in (x, x + self.PW - 1):
+            for cy in (y, y + self.PH - 1):
+                if self.tile_at(cx, cy) in self.SOLID:
+                    return True
+        return False
+
+    def step(self, dirs, dt=1):
+        """Advance one tick given a set of held directions. Moves each axis
+        separately so the player slides along walls; never enters a solid tile."""
+        self.anim += 1
+        dx = (1 if "right" in dirs else 0) - (1 if "left" in dirs else 0)
+        dy = (1 if "down" in dirs else 0) - (1 if "up" in dirs else 0)
+        if dx:
+            self.facing = "right" if dx > 0 else "left"
+            nx = self.x + dx * self.SPEED
+            if not self._blocked(nx, self.y):
+                self.x = nx
+        if dy:
+            self.facing = "down" if dy > 0 else "up"
+            ny = self.y + dy * self.SPEED
+            if not self._blocked(self.x, ny):
+                self.y = ny
+        return bool(dx or dy)
+
+    @property
+    def at_shrine(self):
+        tcx = (self.x + self.PW // 2) // WORLD_TILE
+        tcy = (self.y + self.PH // 2) // WORLD_TILE
+        return any(abs(tcx - sx) <= 1 and abs(tcy - sy) <= 1
+                   for sx, sy in self.SHRINE)
+
+    def relight(self):
+        self.relit = True
+
+
+class EldermarkWorld:
+    """The walkable Eldermark window: stdlib pixel tiles, a ~30fps loop, arrow/
+    WASD movement, and a Wayshrine reading moment. Crash-isolated by its caller
+    (a world bug must never break the chat)."""
+
+    def __init__(self, pet):
+        self.pet = pet
+        self.logic = EldermarkWorldLogic()
+        base_w = WORLD_COLS * WORLD_TILE
+        base_h = WORLD_ROWS * WORLD_TILE
+        sw = pet.root.winfo_screenwidth()
+        sh = pet.root.winfo_screenheight()
+        scale = 4
+        while scale > 2 and (base_w * scale > sw - 80 or base_h * scale > sh - 140):
+            scale -= 1
+        self.scale = scale
+        cw, ch = base_w * scale, base_h * scale
+
+        self._refs = []                      # keep PhotoImages alive (anti-GC)
+        self._tiles = {k: self._img(v) for k, v in _world_tile_grids().items()}
+        bg = tk.PhotoImage(width=base_w, height=base_h)
+        for ry, row in enumerate(WORLD_MAP):
+            for rx, cch in enumerate(row):
+                bg.tk.call(bg, "copy", self._tiles.get(cch, self._tiles["g"]),
+                           "-to", rx * WORLD_TILE, ry * WORLD_TILE)
+        self.bg = bg.zoom(scale)
+        self.spr = {k: self._img(v).zoom(scale)
+                    for k, v in _world_sprite_grids().items()}
+        self._refs += [self.bg] + list(self.spr.values()) + list(self._tiles.values())
+
+        self.win = tk.Toplevel(pet.root)
+        self.win.title("Eldermark")
+        self.win.resizable(False, False)
+        self.canvas = tk.Canvas(self.win, width=cw, height=ch,
+                                highlightthickness=0, bg="#211e15")
+        self.canvas.pack()
+        self.canvas.create_image(0, 0, anchor="nw", image=self.bg)
+
+        self._fly_base = [(110, 22), (150, 18), (128, 42), (96, 30),
+                          (160, 40), (134, 10)]
+        self.fly_items = [self.canvas.create_image(0, 0, anchor="nw",
+                          image=self.spr["fly"]) for _ in self._fly_base]
+        self.orb_item = self.canvas.create_image(132 * scale, 6 * scale,
+                                                 anchor="nw", image=self.spr["orb1"])
+        self.crit_item = self.canvas.create_image(0, 0, anchor="nw",
+                                                  image=self.spr["critter"])
+        self.player_item = self.canvas.create_image(0, 0, anchor="nw",
+                                                    image=self.spr["hero"])
+        fs = max(9, 3 * scale)
+        self.hint = self.canvas.create_text(
+            10, ch - 8, anchor="sw", fill="#ece9d8",
+            font=("Consolas", fs),
+            text="Arrows / WASD to walk    Esc to leave")
+
+        # reading box (hidden until the Wayshrine is reached)
+        bx0, by0, bx1, by1 = int(cw * 0.06), int(ch * 0.60), int(cw * 0.94), int(ch * 0.93)
+        self.read_bg = self.canvas.create_rectangle(
+            bx0, by0, bx1, by1, fill="#ece9d8", outline="#211e15", width=3,
+            state="hidden")
+        self.read_txt = self.canvas.create_text(
+            bx0 + 14, by0 + 12, anchor="nw", fill="#211e15",
+            font=("Consolas", fs), state="hidden")
+        self.read_tip = self.canvas.create_text(
+            bx1 - 12, by1 - 10, anchor="se", fill="#5b5743",
+            font=("Consolas", max(9, fs - 2)), state="hidden")
+
+        self._dirs = set()
+        self._reading = None
+        self._read_i = 0
+        self._read_done = False
+        self._anim = 0
+        self._loop = None
+        self.win.bind("<KeyPress>", self._key_down)
+        self.win.bind("<KeyRelease>", self._key_up)
+        self.win.protocol("WM_DELETE_WINDOW", self.close)
+        # center on screen
+        self.win.update_idletasks()
+        self.win.geometry(f"+{max(0, (sw - cw) // 2)}+{max(0, (sh - ch) // 2 - 30)}")
+        self.win.focus_force()
+        self._tick()
+
+    # -- art helpers ---------------------------------------------------------
+    def _img(self, grid):
+        """Build a tk.PhotoImage from a char grid; '.' pixels stay transparent."""
+        h, w = len(grid), len(grid[0])
+        im = tk.PhotoImage(width=w, height=h)
+        for y, row in enumerate(grid):
+            x = 0
+            while x < w:
+                ch = row[x]
+                if ch == ".":
+                    x += 1
+                    continue
+                x2 = x
+                while x2 < w and row[x2] == ch:
+                    x2 += 1
+                im.put(WORLD_PAL[ch], to=(x, y, x2, y + 1))
+                x = x2
+        return im
+
+    # -- input ---------------------------------------------------------------
+    _KEYS = {"up": "up", "w": "up", "down": "down", "s": "down",
+             "left": "left", "a": "left", "right": "right", "d": "right"}
+
+    def _key_down(self, e):
+        ks = (e.keysym or "").lower()
+        if ks == "escape":
+            self.close()
+            return
+        if ks in ("space", "return"):
+            self._on_space()
+            return
+        d = self._KEYS.get(ks)
+        if d:
+            self._dirs.add(d)
+
+    def _key_up(self, e):
+        d = self._KEYS.get((e.keysym or "").lower())
+        if d:
+            self._dirs.discard(d)
+
+    def _on_space(self):
+        if self._reading is not None:
+            self._advance_reading()
+        elif self.logic.at_shrine and not self._read_done:
+            self._open_reading()
+
+    # -- reading moment ------------------------------------------------------
+    def _open_reading(self):
+        self._reading = True
+        self._read_i = 0
+        self._dirs.clear()
+        self._render_reading()
+
+    def _advance_reading(self):
+        self._read_i += 1
+        if self._read_i >= len(WORLD_READING):
+            self._reading = None
+            self._read_done = True
+            self.logic.relight()
+            for it in (self.read_bg, self.read_txt, self.read_tip):
+                self.canvas.itemconfigure(it, state="hidden")
+            return
+        self._render_reading()
+
+    def _render_reading(self):
+        last = self._read_i == len(WORLD_READING) - 1
+        self.canvas.itemconfigure(self.read_bg, state="normal")
+        self.canvas.itemconfigure(self.read_txt, state="normal",
+                                  text=WORLD_READING[self._read_i])
+        self.canvas.itemconfigure(self.read_tip, state="normal",
+                                  text="Space to relight  >" if last else "Space  >")
+
+    # -- loop ----------------------------------------------------------------
+    def _tick(self):
+        if not self.win.winfo_exists():
+            return
+        self._anim += 1
+        if self._reading is None:
+            self.logic.step(self._dirs)
+        s = self.scale
+        self.canvas.coords(self.player_item, self.logic.x * s, self.logic.y * s)
+        bright = self.logic.relit or (self._anim // 8) % 2 == 0
+        self.canvas.itemconfigure(self.orb_item,
+                                  image=self.spr["orb1" if bright else "orb0"])
+        for i, it in enumerate(self.fly_items):
+            bxx, byy = self._fly_base[i]
+            ox = math.sin(self._anim * 0.05 + i) * 6
+            oy = math.cos(self._anim * 0.04 + i * 1.7) * 5
+            self.canvas.coords(it, (bxx + ox) * s, (byy + oy) * s)
+        cx = 60 + math.sin(self._anim * 0.02) * 12
+        self.canvas.coords(self.crit_item, cx * s, 126 * s)
+        if self._reading is None:
+            near = self.logic.at_shrine and not self._read_done
+            self.canvas.itemconfigure(
+                self.hint,
+                text="Press Space to read the Wayshrine"
+                if near else "Arrows / WASD to walk    Esc to leave")
+        self._loop = self.win.after(33, self._tick)
+
+    def close(self):
+        if self._loop is not None:
+            try:
+                self.win.after_cancel(self._loop)
+            except Exception:
+                pass
+            self._loop = None
+        try:
+            if self.win.winfo_exists():
+                self.win.destroy()
+        except Exception:
+            pass
 
 
 class ChatWindow:
@@ -12166,8 +12888,11 @@ class ChatWindow:
         bb = self.canvas.bbox(tmp)
         self.canvas.delete(tmp)
         tw, th = bb[2] - bb[0], bb[3] - bb[1]
-        x1 = 12
-        x2 = max(self._cw - 12, x1 + tw + 2 * pad)
+        # Hug the content and CENTER the console in the window (so the art reads
+        # as the centerpiece), falling back to full width if content is huge.
+        panel_w = min(self._cw - 24, max(360, tw + 2 * pad))
+        x1 = max(12, (self._cw - panel_w) // 2)
+        x2 = x1 + panel_w
         by2 = self._y + th + 2 * pad
         self._round_rect(x1, self._y, x2, by2, r=10, fill=bg, outline=border)
         self.canvas.create_text(x1 + pad, self._y + pad, text=text, font=font,
@@ -12328,6 +13053,9 @@ class ChatWindow:
         if action == "play":
             self._start_game(arg)
             return
+        if action == "eldermark":
+            self._open_eldermark_world()
+            return
         if not arg:
             self._add("pet", f"Add your text after /{name} — e.g. “/{name} …”.")
             return
@@ -12344,6 +13072,17 @@ class ChatWindow:
             self._add("caption", "Local AI (Ollama) isn't running — "
                                  "building you a prompt instead.")
             self._standard_request(arg, cleaned, rec)
+
+    def _open_eldermark_world(self):
+        """Open the walkable Eldermark pixel world in its own window. A world
+        bug must never break the chat, so failure is caught and reported."""
+        self._add("game", "Opening the world of Eldermark... use the arrow keys "
+                          "(or WASD) to walk, and reach the Wayshrine. 🌿")
+        try:
+            EldermarkWorld(self.pet)
+        except Exception:
+            self._add("pet", "Hmm, I couldn't open Eldermark just now — let's "
+                             "play a game instead? Say /play. 🐾")
 
     def _build_template_prompt(self, task, template_key):
         """Build a prompt with a specific template forced (used by the

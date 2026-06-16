@@ -199,4 +199,68 @@ dd2 = pm.CozyDungeon(); dd2.inventory, dd2.loc = ["key"], "hall"
 assert any(w in dd2.handle("use").lower() for w in ("open", "click", "unlock"))
 print("dungeon use-fallback OK")
 
+# === Critter Keepers: full collector — battle screen, befriend, evolve, dex ===
+random.seed(0)
+ck = pm.CritterKeepers()
+assert "CRITTER" in ck.start().upper() and not ck.is_over
+ck.handle("2")                                   # pick starter #2
+assert len(ck.team) == 1 and ck.state == "hub"
+assert ck.team[0]["key"] in ck.caught and ck.team[0]["key"] in ck.seen
+# Explore opens the full battle screen with the four-command menu + both critters
+scr = ck.handle("1").lower()                      # 1 = Explore
+assert ck.state == "battle" and ck.mode == "wild"
+for word in ("play", "spark", "treat", "call", "pep"):
+    assert word in scr, word
+# Be kind (Treat, then Call) until the wild critter joins — endless, never ends
+start_team = len(ck.team)
+for _ in range(40):
+    if ck.state != "battle":
+        break
+    ck.handle("3")                               # Treat (always kind, builds trust)
+    if ck.state == "battle":
+        ck.handle("4")                           # Call
+    assert ck.is_over is False                   # a collector never ends
+assert ck.state == "hub" and len(ck.team) == start_team + 1
+assert ck.team[-1]["key"] in ck.caught          # recorded in the Dex
+# Evolution: crossing a fixed level threshold changes the active critter's form
+c = ck.team[0]; c["level"] = pm.CRITTERS_EVO_LEVELS[0] - 1; c["xp"] = 0
+form_before = pm._critters_name(c)
+for _ in range(60):
+    ck._grant_xp(c, 8)
+    if c["level"] >= pm.CRITTERS_EVO_LEVELS[0]:
+        break
+assert c["level"] >= pm.CRITTERS_EVO_LEVELS[0]
+assert pm._critters_name(c) != form_before       # evolved into a new form
+# Spar is a gentle match that always returns to the hub and never ends the game
+ck.active = 0
+sp = ck.handle("4").lower()                       # 4 = Spar
+assert ck.state == "battle" and ck.mode == "spar" and "rest" in sp
+for _ in range(150):
+    if ck.state != "battle":
+        break
+    ck.handle("1")                               # Play until a happy nap/win
+    assert ck.is_over is False
+assert ck.state == "hub"
+# Dex screen is reachable and reports collection progress; still never over
+dex = ck.handle("5").lower()                       # 5 = Critter Dex
+assert "dex" in dex and "befriended" in dex
+ck.handle("back")                                # any key leaves the Dex view
+assert ck.state == "hub" and ck.is_over is False
+# Befriending the same kind again does not double-count the Dex
+caught_n = len(ck.caught)
+ck.foe = pm._critters_make(ck.team[-1]["key"], level=1)
+ck.mode = "wild"; ck.friend = 99; ck.state = "battle"
+ck.handle("4")                                   # Call -> already a known friend
+assert len(ck.caught) == caught_n and ck.state == "hub"
+# Wave goodbye leaves a wild critter "seen" but not caught — the Dex [.] state
+ck2 = pm.CritterKeepers(); random.seed(0); ck2.start(); ck2.handle("1")
+ck2.mode = "wild"; ck2.state = "battle"
+ck2.foe = pm._critters_make("frostnib", level=1); ck2.seen.add("frostnib")
+ck2.handle(str(len(ck2._menu())))                # last wild option = Wave goodbye
+assert ck2.state == "hub"
+assert "frostnib" in ck2.seen and "frostnib" not in ck2.caught
+dex2 = ck2.handle("5").lower()
+assert "seen" in dex2 and "befriend it" in dex2  # the [.] seen row renders
+print("critter keepers OK (battle screen + befriend + evolve + spar + dex + leave)")
+
 print("GAMES TEST PASSED")

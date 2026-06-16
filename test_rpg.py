@@ -337,4 +337,16 @@ sl._new_match()
 assert sl.foe_mx < e0
 print("spin league OK (spirit-beast, type edge, beatable, always-playable, adaptive)")
 
+# --- Lumen Quest: the 3 regions merged into one game (pick -> delegate) -------
+rq = pm.RegionQuest()
+assert getattr(rq, "rpg", False) is True
+assert "region" in rq.start().lower() and rq.quest is None
+assert rq.handle("nope") and rq.quest is None              # junk -> reprompt
+rq.handle("1")
+assert isinstance(rq.quest, pm.TideHollowRPG) and rq.state == "play"
+out = rq.handle("1")                                       # delegates to the region
+assert isinstance(out, str) and rq.is_over is False
+assert pm.start_game("frostfall").__class__ is pm.RegionQuest   # alias merged
+print("lumen quest OK (3 regions merged -> pick -> delegate)")
+
 print("RPG TEST PASSED")
