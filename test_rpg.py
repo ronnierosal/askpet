@@ -307,4 +307,34 @@ mq.handle(str(a + 1))
 assert mq.flowers == 5
 print("math quest OK")
 
+# --- Spin League: original spirit-beast battler, type edge, beatable, always --
+pm.save_games_state({"age_band": "kid", "rpg_completed": 0})
+assert getattr(pm.SpinLeague, "always", False) is True        # up top, never locked
+sl = pm.SpinLeague()
+assert "Choose your blade" in sl.start()
+assert sl.handle("nope") and not sl.tname                     # junk -> reprompt
+sl.handle("1")
+assert sl.tname == "Emberwyrm" and sl.state == "battle"
+assert pm._spin_edge("atk", "sta") == 1 and pm._spin_edge("sta", "atk") == -1
+# the champion (last rival) is reachable with a sensible strategy
+random.seed(5)
+sl = pm.SpinLeague(); sl.start(); sl.handle("1")
+steps = 0
+while steps < 3000 and sl.wins < len(pm.SPIN_RIVALS):
+    steps += 1
+    if sl.state == "reward":
+        sl.handle("1")
+    elif sl.state == "battle":
+        sl.handle("3" if sl.spirit >= 100 else "1")
+    else:
+        sl.handle("1")
+assert sl.wins >= len(pm.SPIN_RIVALS), "champion not beatable"
+# adaptive: rival energy drops after a losing streak (auto-help)
+sl = pm.SpinLeague(); sl.start(); sl.handle("1")
+e0 = sl.foe_mx
+sl.losses, sl.ease = 5, 0.5
+sl._new_match()
+assert sl.foe_mx < e0
+print("spin league OK (spirit-beast, type edge, beatable, always-playable, adaptive)")
+
 print("RPG TEST PASSED")

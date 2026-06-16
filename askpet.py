@@ -33,7 +33,7 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 APP_NAME = "AskPet"
-APP_VERSION = "0.36.0"
+APP_VERSION = "0.37.0"
 CONTENT_VERSION = "2026.06.17"
 
 # ---------------------------------------------------------------------------
@@ -10364,11 +10364,57 @@ class CritterKeepers:
 
 
 SPIN_BANNER = _ascii_banner("S P I N   L E A G U E")
-SPIN_ART = ("        .-~~~-.\n       ( o   o )   *whirrr*\n        |  ^  |\n        '-._.-'\n      ===[ ARENA ]===")
-SPIN_STARTERS = [("Blaze Comet", 7, 4, 5, "a fierce attacker that loves to charge"), ("Iron Aegis", 4, 7, 5, "a sturdy wall that shrugs off hits"), ("Steady Gyro", 5, 4, 7, "a tireless spinner that just keeps going")]
-SPIN_RIVALS = [("Pebble Pip", 3, 3, 4), ("Coil Sprout", 4, 4, 5), ("Dusty Dervish", 5, 5, 6), ("Frost Whirl", 6, 5, 7), ("Volt Vortex", 6, 7, 7), ("Titan Maelstrom", 8, 7, 9)]
-SPIN_PARTS = [("Razor Rim (+2 Attack)", 0, 2), ("Bulwark Ring (+2 Guard)", 1, 2), ("Flywheel Core (+2 Stamina)", 2, 2)]
-SPIN_MOVES = [("a", "Attack"), ("g", "Guard"), ("s", "Special Spin")]
+
+# Spirit-Beast Blades: an ORIGINAL spinner-battle world (own creatures/rivals;
+# only the genre's generic mechanics — types, a tournament ladder, special
+# finishers — which are not anyone's IP). Pick a blade that channels a spirit
+# beast, charge your Spirit Move, and climb the league.
+
+# Type triangle: Attack beats Stamina beats Defense beats Attack.
+SPIN_TYPES = {"atk": "Attack", "def": "Defense", "sta": "Stamina"}
+SPIN_BEATS = {"atk": "sta", "sta": "def", "def": "atk"}
+
+# Your starter blades: (name, type, atk, guard, sta, desc, special, art)
+SPIN_STARTERS = [
+    {"name": "Emberwyrm", "type": "atk", "atk": 7, "guard": 4, "sta": 5,
+     "desc": "a fiery dragon spirit that loves to charge in",
+     "special": "Ember Drive",
+     "art": "       (>oo<)\n      [ EMBER ]  *whirr*\n        '-O-'"},
+    {"name": "Stonemaw", "type": "def", "atk": 4, "guard": 7, "sta": 5,
+     "desc": "a rugged rock-bear spirit that shrugs off hits",
+     "special": "Bastion Crash",
+     "art": "       [-oo-]\n      [ STONE ]  *grnd*\n        '-O-'"},
+    {"name": "Galelynx", "type": "sta", "atk": 5, "guard": 4, "sta": 7,
+     "desc": "a swift wind-cat spirit that spins and spins",
+     "special": "Cyclone Whirl",
+     "art": "       (^..^)\n      [ GALE ]  *zoom*\n        '-O-'"},
+]
+
+# The league ladder of ORIGINAL rivals (last one is the Champion).
+SPIN_RIVALS = [
+    {"name": "Pip", "beast": "Flitmoth", "type": "sta", "atk": 3, "guard": 3,
+     "sta": 4, "taunt": "Pip grins: 'You're my first match — let's have fun!'",
+     "art": "        vVv\n       ( oo )  ~flit~\n        '-O-'"},
+    {"name": "Bo", "beast": "Tuskroller", "type": "def", "atk": 4, "guard": 5,
+     "sta": 4, "taunt": "Bo rumbles: 'My guard is a wall — try and crack it!'",
+     "art": "       ( OO )\n       [ tusk ]  *roll*\n        '-O-'"},
+    {"name": "Vega", "beast": "Volthawk", "type": "atk", "atk": 6, "guard": 3,
+     "sta": 4, "taunt": "Vega smirks: 'Too slow! Volthawk strikes first!'",
+     "art": "        ^v^\n       ( >< )  ~zap~\n        '-O-'"},
+    {"name": "Mira", "beast": "Tideserpent", "type": "sta", "atk": 5,
+     "guard": 4, "sta": 6, "taunt": "Mira says calmly: 'Patience wins races.'",
+     "art": "        ~s~\n       ( oo )  ~wave~\n        '-O-'"},
+    {"name": "Cass", "beast": "Thornbeetle", "type": "def", "atk": 6,
+     "guard": 6, "sta": 5, "taunt": "Cass clicks: 'Bounce right off my thorns!'",
+     "art": "       ><><\n       ( -- )  *click*\n        '-O-'"},
+    {"name": "Ryker", "beast": "Stormdrake", "type": "atk", "atk": 8,
+     "guard": 6, "sta": 7,
+     "taunt": "Ryker, the League Champion: 'Show me your spirit!'",
+     "art": "       (>OO<)\n      < DRAKE >  ~BOOM~\n        =(O)="},
+]
+
+SPIN_PARTS = [("Razor Rim (+2 Attack)", 0, 2), ("Bulwark Ring (+2 Guard)", 1, 2),
+              ("Flywheel Core (+2 Stamina)", 2, 2)]
 
 
 def _spin_bar(cur, mx, width=14):
@@ -10377,20 +10423,41 @@ def _spin_bar(cur, mx, width=14):
     return "[" + "#" * fill + "-" * (width - fill) + f"] {cur}/{mx}"
 
 
+def _spin_meter(spirit, width=10):
+    fill = int(round(width * min(100, spirit) / 100))
+    tag = "  CHARGED!" if spirit >= 100 else ""
+    return "[" + "*" * fill + "." * (width - fill) + "]" + tag
+
+
+def _spin_edge(att_type, def_type):
+    if SPIN_BEATS.get(att_type) == def_type:
+        return 1            # advantage
+    if SPIN_BEATS.get(def_type) == att_type:
+        return -1           # disadvantage
+    return 0
+
+
 class SpinLeague:
     name = "Spin League"
-    blurb = "build a top and climb a friendly tournament ladder (battle game)"
+    blurb = ("build a Spirit-Beast blade and climb the league — type matchups, "
+             "rival battles, and a chargeable Spirit Move")
     screen = True
+    always = True       # always playable (no RPG unlock needed), shown up top
 
     def __init__(self):
         self.over = False
         self.state = "pick"
-        self.tname = ""
+        self.tname = ""          # your blade / spirit-beast
+        self.ptype = "atk"
+        self.pspecial = ""
         self.stats = [0, 0, 0]
-        self.rung = self.wins = 0
+        self.rung = self.wins = self.losses = 0
         self.lap = 1
+        self.ease = 1.0          # adaptive: gentler rivals after a loss
         self.you = self.you_mx = self.foe = self.foe_mx = 0
+        self.spirit = 0
         self.rname = ""
+        self.rtype = "atk"
         self.rs = [0, 0, 0]
         self._lost = False
 
@@ -10408,82 +10475,133 @@ class SpinLeague:
             return self._do_reward(text)
         return self._round(text)
 
+    # -- choose your blade ---------------------------------------------------
     def _pick(self, note=None):
         p = [SPIN_BANNER, ""]
         if note:
             p += [f"  > {note}", ""]
-        p += _wrap_lines("Welcome to the Spin League! Pick a starter top, then climb the ladder of rival spinners.", 50)
-        p += ["", "  Choose your top:"]
-        for i, (nm, a, d, s, desc) in enumerate(SPIN_STARTERS):
-            p.append(f"  {i + 1}) {nm}")
-            p.append(f"       ATK {a}  GUARD {d}  STAMINA {s}")
-            p += _wrap_lines(desc, 46, indent="       ")
+        p += _wrap_lines("Welcome to the Spin League! Every blade carries a "
+                         "spirit beast. Pick yours, then climb the rival ladder "
+                         "to the Champion.", 50)
+        p += ["", "  Type beats type:  Attack > Stamina > Defense > Attack", ""]
+        p += ["  Choose your blade:"]
+        for i, s in enumerate(SPIN_STARTERS):
+            p.append(f"  {i + 1}) {s['name']}  [{SPIN_TYPES[s['type']]}]")
+            p.append(f"     {s['art'].splitlines()[0].strip()}")
+            p.append(f"       ATK {s['atk']}  GUARD {s['guard']}  STA {s['sta']}")
+            p += _wrap_lines(s["desc"] + f"  Spirit Move: {s['special']}.", 46,
+                             indent="       ")
         p += ["", "  Type 1, 2 or 3.   (type 'quit' to leave)"]
         return "\n".join(p)
 
     def _do_pick(self, text):
         m = re.search(r"\d+", text or "")
-        if not m or not (1 <= int(m.group()) <= 3):
-            return self._pick(note="Type 1, 2 or 3 to pick a top.")
-        nm, a, d, s, _ = SPIN_STARTERS[int(m.group()) - 1]
-        self.tname = nm
-        self.stats = [a, d, s]
+        if not m or not (1 <= int(m.group()) <= len(SPIN_STARTERS)):
+            return self._pick(note="Type 1, 2 or 3 to pick a blade.")
+        s = SPIN_STARTERS[int(m.group()) - 1]
+        self.tname = s["name"]
+        self.ptype = s["type"]
+        self.pspecial = s["special"]
+        self.stats = [s["atk"], s["guard"], s["sta"]]
         self.state = "battle"
         self._new_match()
-        return self._battle([f"You spin up {nm}!  Your first match begins."])
+        rv = SPIN_RIVALS[self.rung]
+        return self._battle([f"You spin up {self.tname}!", rv["taunt"]])
 
+    # -- matches -------------------------------------------------------------
     def _new_match(self):
-        nm, a, d, s = SPIN_RIVALS[self.rung]
+        rv = SPIN_RIVALS[self.rung]
         b = (self.lap - 1) * 2
-        self.rname = nm
-        self.rs = [a + b, d + b, s + b]
-        # rival energy scales with the age band (younger -> gentler rivals)
-        self.foe_mx = self.foe = max(
-            8, int((18 + self.rs[2] * 2 + self.rung * 3) * age_difficulty()))
-        self.you_mx = self.you = 18 + self.stats[2] * 2
+        self.rname = rv["name"]
+        self.rtype = rv["type"]
+        self.rs = [rv["atk"] + b, rv["guard"] + b, rv["sta"] + b]
+        base = 18 + self.rs[2] * 2 + self.rung * 3
+        # rival energy scales with the age band AND auto-eases after a loss
+        self.foe_mx = self.foe = max(8, int(base * age_difficulty() * self.ease))
+        self.you_mx = self.you = 20 + self.stats[2] * 2
+        self.spirit = 0
 
     def _round(self, text):
         m = re.search(r"\d+", text or "")
         if not m or not (1 <= int(m.group()) <= 3):
             return self._battle(["Type 1, 2 or 3 to choose a move."])
         c = int(m.group())
+        rv = SPIN_RIVALS[self.rung]
+        bonus = {1: 3, 0: 0, -1: -2}[_spin_edge(self.ptype, self.rtype)]
         log = []
-        if c == 1:
-            d = max(2, self.stats[0] + random.randint(0, 4) - max(0, self.rs[1] - 4))
+        if c == 1:                                    # Strike
+            d = max(2, self.stats[0] + random.randint(0, 4)
+                    - max(0, self.rs[1] - 4) + bonus)
             self.foe -= d
-            log.append(f"{self.tname} charges! {self.rname} loses {d} spin.")
-        elif c == 2:
+            self.spirit = min(100, self.spirit + 30)
+            log.append(f"{self.tname} strikes for {d}!"
+                       + (" Type edge!" if bonus > 0 else ""))
+        elif c == 2:                                  # Guard
             d = max(1, self.stats[1] - 2 + random.randint(0, 2))
             self.foe -= d
             self.you = min(self.you_mx, self.you + 2)
-            log.append(f"You brace and chip {d}, steadying your spin (+2).")
-        else:
-            if random.random() < 0.7:
-                d = self.stats[0] + self.stats[2] // 2 + random.randint(1, 5)
+            self.spirit = min(100, self.spirit + 22)
+            log.append(f"You brace — chip {d}, steady your spin (+2), and the "
+                       "spirit charges.")
+        else:                                         # Spirit Move
+            if self.spirit >= 100:
+                d = (self.stats[0] + self.stats[2] // 2 + random.randint(3, 7)
+                     + 8 + bonus)
                 self.foe -= d
-                log.append(f"SPECIAL SPIN! A whirling {d}-hit rocks {self.rname}.")
+                self.spirit = 0
+                log.append(f"SPIRIT MOVE!  {self.tname} unleashes {self.pspecial} "
+                           f"— the spirit blazes out for {d}!")
             else:
-                self.you = min(self.you_mx, self.you + 4)
-                log.append("Special Spin misses, but the wind-up re-balances you (+4).")
+                d = max(2, self.stats[0] // 2 + random.randint(0, 3))
+                self.foe -= d
+                self.spirit = min(100, self.spirit + 45)
+                log.append(f"You wind up — the spirit stirs (+{d}, charging "
+                           "fast!).")
         if self.foe <= 0:
             self.foe = 0
             return self._win(log)
+        # rival's turn (gentle; it can never knock you out for good)
+        rb = {1: 3, 0: 0, -1: -2}[_spin_edge(self.rtype, self.ptype)]
         f = random.randint(1, 3)
-        if f == 1:
-            fd = max(1, self.rs[0] + random.randint(0, 3) - max(0, self.stats[1] - 4))
-            self.you -= fd
-            log.append(f"{self.rname} strikes back for {fd}.")
-        elif f == 2:
+        if f == 2:
             self.foe = min(self.foe_mx, self.foe + 2)
-            log.append(f"{self.rname} guards and steadies (+2).")
+            log.append(f"{self.rname}'s {rv['beast']} steadies (+2).")
         else:
-            fd = max(1, self.rs[0] - 1 + random.randint(0, 2))
+            fd = max(1, self.rs[0] + random.randint(0, 3)
+                     - max(0, self.stats[1] - 4) + rb)
             self.you -= fd
-            log.append(f"{self.rname} whirls in for {fd}.")
+            log.append(f"{self.rname}'s {rv['beast']} whirls in for {fd}.")
         if self.you <= 0:
             self.you = 0
             return self._lose(log)
         return self._battle(log)
+
+    def _win(self, log):
+        rv = SPIN_RIVALS[self.rung]
+        log.append(f"{self.rname}'s {rv['beast']} wobbles to a stop — you WIN!")
+        self.wins += 1
+        self._lost = False
+        self.ease = min(1.0, self.ease + 0.1)
+        self.state = "reward"
+        if self.rung == len(SPIN_RIVALS) - 1:
+            head = "  *** LEAGUE CHAMPION!  You beat the champ! ***"
+            blurb = ("You're the Spin League Champion! Take a victory upgrade — "
+                     "then a tougher new season begins:")
+        else:
+            head = "  *** VICTORY! You earned an upgrade part! ***"
+            blurb = "Bolt a part onto your blade for the climb ahead:"
+        return self._reward(log, head, blurb)
+
+    def _lose(self, log):
+        log.append(f"{self.tname} slows down first this time — good match!")
+        self._lost = True
+        self.losses += 1
+        self.ease = max(0.5, self.ease * 0.8)     # adaptive: gentler rematch
+        self.state = "reward"
+        return self._reward(
+            log, "  Good match! Tune up and rematch — I'll make it a little "
+                 "easier. You've got this!",
+            "Take a practice part to get stronger, then rematch:")
 
     def _reward(self, log, head, blurb):
         p = [SPIN_BANNER]
@@ -10496,55 +10614,60 @@ class SpinLeague:
         p += ["", "  Type 1, 2 or 3.   (type 'quit' to stop)"]
         return "\n".join(p)
 
-    def _win(self, log):
-        log.append(f"{self.rname} wobbles to a stop — you WIN!")
-        self.wins += 1
-        self._lost = False
-        self.state = "reward"
-        return self._reward(log, "  *** VICTORY! You earned an upgrade part! ***", "Pick a part to bolt onto your top — it makes you stronger for the climb ahead:")
-
-    def _lose(self, log):
-        log.append(f"{self.tname} slows down first this time — good match!")
-        self._lost = True
-        self.state = "reward"
-        return self._reward(log, "  Good match! Tune up and rematch the rival.", "Take a practice part to improve, then rematch the same rival:")
-
     def _do_reward(self, text):
         m = re.search(r"\d+", text or "")
-        if not m or not (1 <= int(m.group()) <= 3):
-            return self._reward([], "  Choose a part:", "Type 1, 2 or 3 to upgrade your top.")
+        if not m or not (1 <= int(m.group()) <= len(SPIN_PARTS)):
+            return self._reward([], "  Choose a part:",
+                                "Type 1, 2 or 3 to upgrade your blade.")
         _, idx, amt = SPIN_PARTS[int(m.group()) - 1]
         self.stats[idx] += amt
         won = not self._lost
         self._lost = False
-        log = ["You bolt on a new part. Your top feels stronger!"]
+        log = ["You bolt on a new part. Your blade feels stronger!"]
         if won:
             self.rung += 1
             if self.rung >= len(SPIN_RIVALS):
                 self.rung = 0
                 self.lap += 1
-                log.append(f"You CLEARED the ladder! Lap {self.lap} begins — tougher rivals await.")
+                log.append(f"A new season begins — Lap {self.lap}! The rivals "
+                           "come back tougher.")
             else:
-                log.append("You climb to the next rung of the ladder!")
+                log.append("You climb to the next rung of the league!")
         else:
             log.append("Time for a rematch — you've got this!")
         self.state = "battle"
         self._new_match()
-        log.append(f"Next up: {self.rname}!")
+        rv = SPIN_RIVALS[self.rung]
+        log.append(f"Next up: {self.rname} & {rv['beast']} "
+                   f"[{SPIN_TYPES[rv['type']]}]!")
         return self._battle(log)
 
     def _battle(self, log=None):
-        info = [f"  Ladder rung {self.rung + 1}/{len(SPIN_RIVALS)}   Lap {self.lap}   Wins {self.wins}", "", f"  YOU  {self.tname}", f"       {_spin_bar(self.you, self.you_mx)}", f"       ATK {self.stats[0]}  GUARD {self.stats[1]}  STA {self.stats[2]}", "", f"  RIVAL  {self.rname}", f"         {_spin_bar(self.foe, self.foe_mx)}"]
+        rv = SPIN_RIVALS[self.rung]
+        info = [
+            f"  League rung {self.rung + 1}/{len(SPIN_RIVALS)}   Lap {self.lap}"
+            f"   Wins {self.wins}",
+            "",
+            rv["art"],
+            f"  RIVAL: {self.rname} & {rv['beast']}  [{SPIN_TYPES[rv['type']]}]",
+            f"         {_spin_bar(self.foe, self.foe_mx)}",
+            "",
+            f"  YOU:   {self.tname}  [{SPIN_TYPES[self.ptype]}]",
+            f"         {_spin_bar(self.you, self.you_mx)}",
+            f"         Spirit {_spin_meter(self.spirit)}",
+            f"         ATK {self.stats[0]}  GUARD {self.stats[1]}"
+            f"  STA {self.stats[2]}",
+        ]
         p = [SPIN_BANNER]
         for line in (log or []):
             p.append("")
             p += [f"  > {x}" for x in _wrap_lines(line, 46, indent="")]
-        p += ["", SPIN_ART, ""] + info
+        p += [""] + info
         p += ["", "  Your move:"]
-        p += _elder_menu([(k, lbl) for k, lbl in SPIN_MOVES])
-        p += ["", "  Type 1, 2 or 3.   (type 'quit' to stop)"]
+        p += _elder_menu([("1", "Strike"), ("2", "Guard"),
+                          ("3", "Spirit Move")])
+        p += ["", "  (type 'quit' to stop)"]
         return "\n".join(p)
-
 
 
 WILD_BANNER = _ascii_banner("W I L D   T R A I L S")
@@ -11414,32 +11537,40 @@ class GamePicker:
         unlocked = games_unlocked()
         done = rpg_completed_count()
         rpg = [(k, c) for (k, _e, c) in GAME_MENU if getattr(c, "rpg", False)]
-        other = [(k, c) for (k, _e, c) in GAME_MENU if not getattr(c, "rpg", False)]
+        # always-playable non-RPG games (e.g. Spin League) — never locked, up top
+        arena = [(k, c) for (k, _e, c) in GAME_MENU
+                 if getattr(c, "always", False) and not getattr(c, "rpg", False)]
+        other = [(k, c) for (k, _e, c) in GAME_MENU
+                 if not getattr(c, "rpg", False) and not getattr(c, "always", False)]
         self._order = []
         parts = [GAMES_BANNER, ""]
         if note:
             parts += [f"  > {note}", ""]
         parts.append(f"  Player: {self._band_label()}    RPG quests done: {done}")
-        parts += ["", "  == RPG ADVENTURES (play these first!) =="]
         n = 0
-        for k, c in rpg:
-            n += 1
-            self._order.append((k, c, False))
-            parts.append(f"  {n:>2})  {c.name}")
-            parts += _wrap_lines(c.blurb, 50, indent="        ")
+
+        def _add(group, locked, blurbs):
+            nonlocal n
+            for k, c in group:
+                n += 1
+                self._order.append((k, c, locked))
+                tag = "   [LOCKED]" if locked else ""
+                parts.append(f"  {n:>2})  {c.name}{tag}")
+                if blurbs and not locked:
+                    parts.extend(_wrap_lines(c.blurb, 50, indent="        "))
+
+        parts += ["", "  == RPG ADVENTURES (play these first!) =="]
+        _add(rpg, False, True)
+        if arena:
+            parts += ["", "  == THE ARENA (always open) =="]
+            _add(arena, False, True)
         parts += ["", "  == MORE GAMES =="]
         if not unlocked:
             need = RPG_UNLOCK_THRESHOLD - done
             s = "s" if need != 1 else ""
             parts += _wrap_lines(f"(locked — finish {need} more RPG quest{s} "
                                  "above to open these!)", 50)
-        for k, c in other:
-            n += 1
-            self._order.append((k, c, not unlocked))
-            if unlocked:
-                parts.append(f"  {n:>2})  {c.name}")
-            else:
-                parts.append(f"  {n:>2})  {c.name}   [LOCKED]")
+        _add(other, not unlocked, False)
         n += 1
         self._change_age_n = n
         parts += ["", f"  {n:>2})  Change player age"]
