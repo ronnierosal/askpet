@@ -19,6 +19,9 @@ a file here is missing the game draws a simple placeholder, so it always runs.
    - `mosslight_gate_bg.png` — background, ~3:2, any size
    - `hero_down.png` `hero_up.png` `hero_right.png` — on solid magenta `#fe00fe`
    - `mossback.png` — on solid magenta `#fe00fe`
+   - `gloomling.png` — battle creature, on solid magenta `#fe00fe`
+   - `battle_bg.png` — optional battle backdrop, ~3:2 (defaults to reusing
+     `mosslight_gate_bg.png`). The battle player back-sprite reuses `hero_up.png`.
 3. Run: `python tools/prep_eldermark_art.py`
    - resizes the background to 720x480, keys magenta -> transparent on sprites,
      quantizes everything to the 4 greens, and auto-mirrors `hero_left.png`.

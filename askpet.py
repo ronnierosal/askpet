@@ -12518,6 +12518,8 @@ ELDER_SLICE = {
              "Beyond the moss-covered arch the trees\nlean close and the path grows quiet.",
              "The way to Whisperwood opens soon...",
          ]},
+        {"id": "ferns", "sprite": None, "pos": (150, 360), "battle": "gloomling",
+         "pages": ["The ferns rustle..."]},
     ],
 }
 
@@ -12734,9 +12736,12 @@ class EldermarkScene:
             return
         npc = self.logic.npc_in_range()
         if npc:
+            self._dirs.clear()
+            if npc.get("battle"):
+                self._start_battle(npc["battle"])
+                return
             self._talk = npc
             self._page = 0
-            self._dirs.clear()
             self._render_page()
 
     def _render_page(self):
@@ -12746,6 +12751,13 @@ class EldermarkScene:
         self.canvas.itemconfigure(self.box_txt, state="normal", text=pages[self._page])
         self.canvas.itemconfigure(self.box_tip, state="normal",
                                   text="Space to close  >" if last else "Space  >")
+
+    def _start_battle(self, enemy_key):
+        """Launch a battle screen. A battle bug must never break the scene."""
+        try:
+            EldermarkBattle(self.pet, enemy_key)
+        except Exception:
+            pass
 
     # -- loop ----------------------------------------------------------------
     def _tick(self):
@@ -12765,8 +12777,13 @@ class EldermarkScene:
             oy = math.cos(self._anim * 0.04 + i * 1.7) * 8
             self.canvas.coords(it, bxx + ox, byy + oy, bxx + ox + 5, byy + oy + 5)
         if self._talk is None:
-            near = self.logic.npc_in_range() is not None
-            txt = "Press Space to talk" if near else self._hint_walk
+            near = self.logic.npc_in_range()
+            if near and near.get("battle"):
+                txt = "Press Space — something rustles in the ferns!"
+            elif near:
+                txt = "Press Space to talk"
+            else:
+                txt = self._hint_walk
             self.canvas.itemconfigure(self.hint_sh, text=txt)
             self.canvas.itemconfigure(self.hint, text=txt)
         self._loop = self.win.after(33, self._tick)
@@ -12783,6 +12800,346 @@ class EldermarkScene:
                 self.win.destroy()
         except Exception:
             pass
+
+
+# ---------------------------------------------------------------------------
+# Eldermark BATTLE screen — gentle, kid-safe, Pokemon-style layout.
+#
+# "HP" is how WARY a creature is; bringing it to 0 means the creature trusts
+# you (befriended) — the hero never harms anything. Enemy upper-right, hero
+# (back) lower-left, two HP boxes, a FIGHT / SKILL / ITEM / RUN menu. Painted
+# PNG art with code-drawn UI; placeholders until art lands. The combat LOGIC is
+# GUI-free + deterministic (headless-tested in test_battle.py).
+# ---------------------------------------------------------------------------
+
+# The hero's calming "moves" (no harm — open hands, a gentle song).
+ELDER_MOVES = [
+    {"key": "fight", "label": "FIGHT", "power": 6,
+     "flavor": "You step closer, hands open and kind."},
+    {"key": "skill", "label": "SKILL", "power": 9,
+     "flavor": "You hum the Mossback's gentle song."},
+]
+
+ELDER_BATTLERS = {
+    "gloomling": {
+        "name": "Gloomling", "sprite": "gloomling.png",
+        "hp": 18, "atk": 3, "lv": 4,
+        "meet": "A shy Gloomling peeks out from the rustling ferns!",
+        "poke": "The Gloomling shivers shyly.",
+        "win": "The Gloomling gives a happy wiggle and drifts beside you — a new friend!",
+        "lose": "You grow sleepy and sit to rest. The Gloomling waits nearby, kind and patient.",
+    },
+}
+
+
+class EldermarkBattleLogic:
+    """GUI-free, deterministic Eldermark battle. No RNG so it's headless-
+    testable. HP never displays below 0; the hero can't truly lose (just rests)."""
+
+    HEAL = 10
+    ITEMS = 3
+
+    def __init__(self, enemy_key="gloomling", hero_name="Wanderer",
+                 hero_lv=5, hero_hp=26):
+        b = ELDER_BATTLERS[enemy_key]
+        self.ekey = enemy_key
+        self.ename = b["name"]
+        self.e_hp = self.e_max = b["hp"]
+        self.e_atk = b["atk"]
+        self.e_lv = b["lv"]
+        self.hname = hero_name
+        self.h_hp = self.h_max = hero_hp
+        self.h_lv = hero_lv
+        self.items = self.ITEMS
+        self.over = False
+        self.won = None            # True = befriended, False = rested, None = ran
+        self.turn = 0
+        self.log = b["meet"]
+
+    def _power(self, move):
+        return move["power"] + (self.h_lv - 1) // 2
+
+    def act(self, action):
+        """Apply one player action plus the creature's gentle response; return
+        the message to show. Idempotent once the battle is over."""
+        if self.over:
+            return self.log
+        self.turn += 1
+        if action == "run":
+            self.over, self.won = True, None
+            self.log = "You slip quietly back down the path."
+            return self.log
+        if action == "item":
+            if self.items <= 0:
+                self.log = "Your pack is empty — no glow-berries left."
+                return self.log
+            self.items -= 1
+            self.h_hp = min(self.h_max, self.h_hp + self.HEAL)
+            msg = f"You share a glow-berry. (+{self.HEAL})"
+        elif action in ("fight", "skill"):
+            move = ELDER_MOVES[0] if action == "fight" else ELDER_MOVES[1]
+            self.e_hp = max(0, self.e_hp - self._power(move))
+            msg = move["flavor"]
+            if self.e_hp <= 0:
+                self.over, self.won = True, True
+                self.log = ELDER_BATTLERS[self.ekey]["win"]
+                return self.log
+        else:
+            return self.log
+        self.h_hp = max(0, self.h_hp - self.e_atk)      # gentle response
+        if self.h_hp <= 0:
+            self.over, self.won = True, False
+            self.log = ELDER_BATTLERS[self.ekey]["lose"]
+        else:
+            self.log = f"{msg}\n{ELDER_BATTLERS[self.ekey]['poke']}"
+        return self.log
+
+
+class EldermarkBattle:
+    """The battle window: painted backdrop, enemy + hero sprites, two HP boxes,
+    and a FIGHT/SKILL/ITEM/RUN menu. Crash-isolated by its caller."""
+
+    MENU = [("fight", "FIGHT"), ("skill", "SKILL"), ("item", "ITEM"), ("run", "RUN")]
+
+    def __init__(self, pet, enemy_key="gloomling", hero_name="Wanderer",
+                 hero_lv=5, hero_hp=26, on_close=None):
+        self.pet = pet
+        self.on_close = on_close
+        self.logic = EldermarkBattleLogic(enemy_key, hero_name, hero_lv, hero_hp)
+        self._refs = []
+
+        self.win = tk.Toplevel(pet.root)
+        self.win.title("Eldermark — Battle")
+        self.win.resizable(False, False)
+        self.canvas = tk.Canvas(self.win, width=SCENE_W, height=SCENE_H,
+                                highlightthickness=0, bg=ELDER_GREEN[0])
+        self.canvas.pack()
+
+        self.bg = self._load_bg()
+        self.canvas.create_image(0, 0, anchor="nw", image=self.bg)
+        self.canvas.create_oval(470, 238, 662, 288, outline="", fill=ELDER_GREEN[1])
+        self.canvas.create_oval(96, 384, 300, 430, outline="", fill=ELDER_GREEN[1])
+
+        self.enemy_img = self._load(ELDER_BATTLERS[enemy_key]["sprite"],
+                                    self._placeholder_enemy)
+        self.enemy_item = self.canvas.create_image(566, 262, anchor="s",
+                                                   image=self.enemy_img)
+        self.hero_img = self._load("hero_up.png", self._placeholder_hero_back)
+        self.canvas.create_image(198, 416, anchor="s", image=self.hero_img)
+
+        self._enemy_box()
+        self._hero_box()
+        self._msg_box()
+        self._menu_box()
+
+        self.sel = 0
+        self.phase = "message"          # message (intro/result) | menu
+        self._anim = 0
+        self._loop = None
+        self._set_message(self.logic.log)
+        self._render_menu()
+        self.win.bind("<KeyPress>", self._key)
+        self.win.protocol("WM_DELETE_WINDOW", self.close)
+        sw, sh = pet.root.winfo_screenwidth(), pet.root.winfo_screenheight()
+        self.win.update_idletasks()
+        self.win.geometry(f"+{max(0, (sw - SCENE_W) // 2)}"
+                          f"+{max(0, (sh - SCENE_H) // 2 - 30)}")
+        self.win.focus_force()
+        self._tick()
+
+    # -- art -----------------------------------------------------------------
+    def _load(self, fname, placeholder):
+        p = ELDER_ASSETS / fname
+        if p.exists():
+            try:
+                img = tk.PhotoImage(file=str(p))
+                self._refs.append(img)
+                return img
+            except tk.TclError:
+                pass
+        img = placeholder()
+        self._refs.append(img)
+        return img
+
+    def _load_bg(self):
+        for name in ("battle_bg.png", "mosslight_gate_bg.png"):
+            if (ELDER_ASSETS / name).exists():
+                try:
+                    img = tk.PhotoImage(file=str(ELDER_ASSETS / name))
+                    self._refs.append(img)
+                    return img
+                except tk.TclError:
+                    pass
+        img = self._placeholder_bg()
+        self._refs.append(img)
+        return img
+
+    def _placeholder_bg(self):
+        im = tk.PhotoImage(width=SCENE_W, height=SCENE_H)
+        im.put(ELDER_GREEN[1], to=(0, 0, SCENE_W, SCENE_H))
+        im.put(ELDER_GREEN[0], to=(0, 0, SCENE_W, 150))
+        im.put(ELDER_GREEN[2], to=(0, SCENE_H - 110, SCENE_W, SCENE_H))
+        return im
+
+    def _placeholder_enemy(self):
+        w, h = 130, 120
+        im = tk.PhotoImage(width=w, height=h)
+        im.put(ELDER_GREEN[2], to=(w // 6, h // 4, 5 * w // 6, h))
+        im.put(ELDER_GREEN[1], to=(w // 4, h // 8, 3 * w // 4, h // 2))
+        im.put(ELDER_GREEN[0], to=(w // 3, h // 3, w // 3 + 9, h // 3 + 9))
+        im.put(ELDER_GREEN[0], to=(3 * w // 5, h // 3, 3 * w // 5 + 9, h // 3 + 9))
+        return im
+
+    def _placeholder_hero_back(self):
+        w, h = 56, 96
+        im = tk.PhotoImage(width=w, height=h)
+        im.put(ELDER_GREEN[2], to=(w // 4, 2, 3 * w // 4, h // 2))
+        im.put(ELDER_GREEN[1], to=(w // 6, h // 2, 5 * w // 6, h - 4))
+        im.put(ELDER_GREEN[0], to=(w // 6, h - 8, 5 * w // 6, h))
+        return im
+
+    # -- UI panels -----------------------------------------------------------
+    def _panel(self, x0, y0, x1, y1):
+        self.canvas.create_rectangle(x0, y0, x1, y1, fill=ELDER_GREEN[3],
+                                     outline=ELDER_GREEN[0], width=4)
+
+    def _hp_bar(self, x0, y, x1, frac):
+        self.canvas.create_rectangle(x0, y, x1, y + 14, outline=ELDER_GREEN[0],
+                                     width=2, fill=ELDER_GREEN[1])
+        w = (x1 - x0 - 4) * max(0.0, min(1.0, frac))
+        return self.canvas.create_rectangle(x0 + 2, y + 2, x0 + 2 + w, y + 12,
+                                            outline="", fill=ELDER_GREEN[0])
+
+    def _enemy_box(self):
+        x0, y0, x1, y1 = 24, 24, 344, 104
+        self._panel(x0, y0, x1, y1)
+        self.canvas.create_text(x0 + 16, y0 + 14, anchor="nw", fill=ELDER_GREEN[0],
+                                font=("Consolas", 15, "bold"), text=self.logic.ename)
+        self.canvas.create_text(x1 - 16, y0 + 14, anchor="ne", fill=ELDER_GREEN[0],
+                                font=("Consolas", 13, "bold"), text=f"Lv.{self.logic.e_lv}")
+        self._ebar = (x0 + 16, y0 + 50, x1 - 16)
+        self.e_fill = self._hp_bar(*self._ebar, self.logic.e_hp / self.logic.e_max)
+
+    def _hero_box(self):
+        x0, y0, x1, y1 = 388, 286, 696, 372
+        self._panel(x0, y0, x1, y1)
+        self.canvas.create_text(x0 + 16, y0 + 12, anchor="nw", fill=ELDER_GREEN[0],
+                                font=("Consolas", 15, "bold"), text=self.logic.hname)
+        self.canvas.create_text(x1 - 16, y0 + 12, anchor="ne", fill=ELDER_GREEN[0],
+                                font=("Consolas", 13, "bold"), text=f"Lv.{self.logic.h_lv}")
+        self._hbar = (x0 + 16, y0 + 42, x1 - 16)
+        self.h_fill = self._hp_bar(*self._hbar, self.logic.h_hp / self.logic.h_max)
+        self.h_num = self.canvas.create_text(x1 - 16, y1 - 10, anchor="se",
+                                             fill=ELDER_GREEN[0], font=("Consolas", 12, "bold"),
+                                             text=f"{self.logic.h_hp}/{self.logic.h_max}")
+
+    def _msg_box(self):
+        self._panel(24, 384, 430, 468)
+        self.msg_item = self.canvas.create_text(42, 398, anchor="nw", fill=ELDER_GREEN[0],
+                                                font=("Consolas", 14, "bold"), width=372, text="")
+        self.msg_tip = self.canvas.create_text(418, 458, anchor="se", fill=ELDER_GREEN[1],
+                                               font=("Consolas", 11, "bold"), text="")
+
+    def _menu_box(self):
+        self._panel(446, 384, 696, 468)
+        self._cells = [(486, 408), (606, 408), (486, 444), (606, 444)]
+        for (cx, cy), (_, label) in zip(self._cells, self.MENU):
+            self.canvas.create_text(cx, cy, anchor="w", fill=ELDER_GREEN[0],
+                                    font=("Consolas", 15, "bold"), text=label)
+        self.cursor = self.canvas.create_text(0, 0, anchor="e", fill=ELDER_GREEN[0],
+                                              font=("Consolas", 15, "bold"), text="▸")
+
+    # -- state ---------------------------------------------------------------
+    def _set_message(self, text):
+        self.canvas.itemconfigure(self.msg_item, text=text)
+        self.canvas.itemconfigure(self.msg_tip,
+                                  text="Enter ▸" if self.phase == "message" else "")
+
+    def _update_hp(self):
+        for fill, bar, cur, mx in ((self.e_fill, self._ebar, self.logic.e_hp, self.logic.e_max),
+                                   (self.h_fill, self._hbar, self.logic.h_hp, self.logic.h_max)):
+            x0, y, x1 = bar
+            w = (x1 - x0 - 4) * max(0.0, cur / mx)
+            self.canvas.coords(fill, x0 + 2, y + 2, x0 + 2 + w, y + 12)
+        self.canvas.itemconfigure(self.h_num, text=f"{self.logic.h_hp}/{self.logic.h_max}")
+
+    def _render_menu(self):
+        cx, cy = self._cells[self.sel]
+        self.canvas.coords(self.cursor, cx - 10, cy)
+        self.canvas.itemconfigure(self.cursor,
+                                  state="normal" if self.phase == "menu" else "hidden")
+
+    def _move_sel(self, dx, dy):
+        col, row = self.sel % 2, self.sel // 2
+        if dx:
+            col = (col + dx) % 2
+        if dy:
+            row = (row + dy) % 2
+        self.sel = row * 2 + col
+
+    def _choose(self):
+        action = self.MENU[self.sel][0]
+        msg = self.logic.act(action)
+        self._update_hp()
+        self.phase = "message"
+        self._set_message(msg)
+        self._render_menu()
+        if self.logic.won is None and self.logic.over:   # ran away — leave at once
+            self.win.after(700, self.close)
+
+    # -- input ---------------------------------------------------------------
+    def _key(self, e):
+        ks = (e.keysym or "").lower()
+        if ks == "escape":
+            self.close()
+            return
+        if self.phase == "menu":
+            if ks in ("right", "d"):
+                self._move_sel(1, 0)
+            elif ks in ("left", "a"):
+                self._move_sel(-1, 0)
+            elif ks in ("down", "s"):
+                self._move_sel(0, 1)
+            elif ks in ("up", "w"):
+                self._move_sel(0, -1)
+            elif ks in ("return", "space"):
+                self._choose()
+                return
+            self._render_menu()
+        elif self.phase == "message":
+            if ks in ("return", "space"):
+                if self.logic.over:
+                    self.close()
+                else:
+                    self.phase = "menu"
+                    self._set_message("What will you do?")
+                    self._render_menu()
+
+    # -- loop ----------------------------------------------------------------
+    def _tick(self):
+        if not self.win.winfo_exists():
+            return
+        self._anim += 1
+        self.canvas.coords(self.enemy_item, 566, 262 + int(math.sin(self._anim * 0.08) * 3))
+        self._loop = self.win.after(40, self._tick)
+
+    def close(self):
+        if self._loop is not None:
+            try:
+                self.win.after_cancel(self._loop)
+            except Exception:
+                pass
+            self._loop = None
+        try:
+            if self.win.winfo_exists():
+                self.win.destroy()
+        except Exception:
+            pass
+        if self.on_close:
+            try:
+                self.on_close(self.logic.won)
+            except Exception:
+                pass
 
 
 class ChatWindow:

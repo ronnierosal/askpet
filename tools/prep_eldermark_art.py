@@ -27,9 +27,10 @@ GREENS = [(0x0f, 0x38, 0x0f), (0x30, 0x62, 0x30),
 KEY = (0xfe, 0x00, 0xfe)                            # magenta -> transparent
 
 BG_SIZE = (720, 480)
-SPRITE_H = {"hero_down": 128, "hero_up": 128, "hero_right": 128, "mossback": 140}
-BACKGROUNDS = ("mosslight_gate_bg.png",)
-SPRITES = ("hero_down", "hero_up", "hero_right", "mossback")
+SPRITE_H = {"hero_down": 128, "hero_up": 128, "hero_right": 128,
+            "mossback": 140, "gloomling": 150}
+BACKGROUNDS = ("mosslight_gate_bg.png", "battle_bg.png")
+SPRITES = ("hero_down", "hero_up", "hero_right", "mossback", "gloomling")
 
 
 def _nearest_green(r, g, b):
