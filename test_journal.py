@@ -41,10 +41,31 @@ def test_global_state_singleton():
     print("global state singleton OK")
 
 
+def test_scene_battle_keys_resolve_fully():
+    # every scene battle key must be both a battler AND a journal creature, so a
+    # win can open the battle and befriend a real, displayable creature
+    for npc in ELDER_SLICE["npcs"]:
+        bk = npc.get("battle")
+        if bk:
+            assert bk in ELDER_BATTLERS, f"battle {bk!r} not a battler"
+            assert bk in ELDER_CREATURES, f"battle {bk!r} has no journal entry"
+    print("scene battle keys resolve fully OK")
+
+
+def test_state_rejects_unknown_ids():
+    s = EldermarkState()
+    s.meet("not_a_creature")
+    s.befriend("also_fake")
+    assert not s.met and not s.friends        # phantom ids never recorded
+    print("state rejects unknown ids OK")
+
+
 if __name__ == "__main__":
     test_state_meet_befriend()
     test_creatures_wellformed()
     test_battlers_have_journal_entries()
     test_scene_creature_keys_resolve()
     test_global_state_singleton()
+    test_scene_battle_keys_resolve_fully()
+    test_state_rejects_unknown_ids()
     print("JOURNAL TEST PASSED")

@@ -12558,11 +12558,13 @@ class EldermarkState:
         self.friends = set()
 
     def meet(self, cid):
-        self.met.add(cid)
+        if cid in ELDER_CREATURES:        # only ever record journal creatures
+            self.met.add(cid)
 
     def befriend(self, cid):
-        self.met.add(cid)
-        self.friends.add(cid)
+        if cid in ELDER_CREATURES:
+            self.met.add(cid)
+            self.friends.add(cid)
 
 
 ELDER_STATE = EldermarkState()
@@ -12985,7 +12987,7 @@ class EldermarkBattle:
         self.canvas.create_oval(470, 238, 662, 288, outline="", fill=ELDER_GREEN[1])
         self.canvas.create_oval(96, 384, 300, 430, outline="", fill=ELDER_GREEN[1])
 
-        self.enemy_img = self._load(ELDER_BATTLERS[enemy_key]["sprite"],
+        self.enemy_img = self._load(ELDER_BATTLERS[self.logic.ekey]["sprite"],
                                     self._placeholder_enemy)
         self.enemy_item = self.canvas.create_image(566, 262, anchor="s",
                                                    image=self.enemy_img)
@@ -13248,10 +13250,10 @@ class EldermarkJournal:
         self.canvas.create_rectangle(356, 80, SCENE_W - 24, SCENE_H - 58,
                                      fill=ELDER_GREEN[3], outline=ELDER_GREEN[0], width=4)
         cx = (356 + SCENE_W - 24) // 2
-        self.d_name = self.canvas.create_text(cx, 92, anchor="n", fill=ELDER_GREEN[0],
+        self.d_name = self.canvas.create_text(cx, 86, anchor="n", fill=ELDER_GREEN[0],
                                               font=("Consolas", 18, "bold"), text="")
-        self.d_sprite = self.canvas.create_image(cx, 262, anchor="s")
-        self.d_lore = self.canvas.create_text(378, 276, anchor="nw", fill=ELDER_GREEN[0],
+        self.d_sprite = self.canvas.create_image(cx, 266, anchor="s")
+        self.d_lore = self.canvas.create_text(378, 280, anchor="nw", fill=ELDER_GREEN[0],
                                               font=("Consolas", 13, "bold"),
                                               width=SCENE_W - 24 - 378 - 14, text="")
 
@@ -13275,6 +13277,9 @@ class EldermarkJournal:
             if p.exists():
                 try:
                     img = tk.PhotoImage(file=str(p))
+                    if img.height() > 154:        # cap so tall art clears the title
+                        f = (img.height() + 153) // 154
+                        img = img.subsample(f, f)
                 except tk.TclError:
                     img = None
             img = img or self._placeholder()
