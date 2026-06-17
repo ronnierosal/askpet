@@ -12884,13 +12884,13 @@ class EldermarkScene:
                 pass
 
     def _go(self, scene_id, spawn):
-        """Walk to an adjacent scene: open the new one, close this one."""
-        pet = self.pet
-        self.close()
+        """Walk to an adjacent scene. Build the next one BEFORE closing this one,
+        so a construction failure leaves the player where they were, not nowhere."""
         try:
-            EldermarkScene(pet, scene_id, spawn)
+            EldermarkScene(self.pet, scene_id, spawn)
         except Exception:
-            pass
+            return
+        self.close()
 
     # -- loop ----------------------------------------------------------------
     def _tick(self):
