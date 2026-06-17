@@ -60,6 +60,24 @@ def test_state_rejects_unknown_ids():
     print("state rejects unknown ids OK")
 
 
+def test_persistence_roundtrip():
+    s = EldermarkState()
+    s.befriend("mossback")
+    s.meet("gloomling")
+    disk = {}
+    s.save_into(disk)
+    assert disk["eldermark_friends"] == ["mossback"]
+    assert disk["eldermark_met"] == ["gloomling", "mossback"]
+    s2 = EldermarkState()
+    s2.load(disk)
+    assert s2.friends == {"mossback"} and s2.met == {"gloomling", "mossback"}
+    # junk ids in stored settings are dropped on load
+    s3 = EldermarkState()
+    s3.load({"eldermark_met": ["mossback", "junk"], "eldermark_friends": ["junk"]})
+    assert s3.met == {"mossback"} and s3.friends == set()
+    print("persistence round-trip OK")
+
+
 if __name__ == "__main__":
     test_state_meet_befriend()
     test_creatures_wellformed()

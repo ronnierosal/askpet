@@ -6885,6 +6885,7 @@ class PetOverlay:
         self._menu_open = False
         self.settings = load_json(SETTINGS_FILE, {})
         prune_history(history_retention_hours(self.settings))
+        ELDER_STATE.load(self.settings)      # restore befriended creatures
 
         # Local AI: detect installed Ollama models off the UI thread.
         self.local_models = []
@@ -7453,6 +7454,7 @@ class PetOverlay:
             if key in self.settings:
                 disk[key] = self.settings[key]
         disk["app_version"] = APP_VERSION
+        ELDER_STATE.save_into(disk)          # persist the Creature Journal
         save_json(SETTINGS_FILE, disk)
 
     # ---- self-update -----------------------------------------------------------
@@ -12566,6 +12568,17 @@ class EldermarkState:
             self.met.add(cid)
             self.friends.add(cid)
 
+    def load(self, settings):
+        """Restore from a settings dict, dropping ids no longer in the registry."""
+        self.met = {c for c in settings.get("eldermark_met", []) if c in ELDER_CREATURES}
+        self.friends = {c for c in settings.get("eldermark_friends", [])
+                        if c in ELDER_CREATURES}
+
+    def save_into(self, disk):
+        """Write met/friends as sorted lists for stable JSON."""
+        disk["eldermark_met"] = sorted(self.met)
+        disk["eldermark_friends"] = sorted(self.friends)
+
 
 ELDER_STATE = EldermarkState()
 
@@ -12791,6 +12804,7 @@ class EldermarkScene:
                 return
             if npc.get("creature"):
                 ELDER_STATE.meet(npc["creature"])
+                self._persist()
             self._talk = npc
             self._page = 0
             self._render_page()
@@ -12811,6 +12825,7 @@ class EldermarkScene:
         def done(won):
             if won:
                 ELDER_STATE.befriend(enemy_key)
+                self._persist()
         try:
             EldermarkBattle(self.pet, enemy_key, on_close=done)
         except Exception:
@@ -12822,6 +12837,15 @@ class EldermarkScene:
             EldermarkJournal(self.pet)
         except Exception:
             pass
+
+    def _persist(self):
+        """Save journal progress through the pet's settings, if available."""
+        save = getattr(self.pet, "_save_settings", None)
+        if save:
+            try:
+                save()
+            except Exception:
+                pass
 
     # -- loop ----------------------------------------------------------------
     def _tick(self):
