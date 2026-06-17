@@ -8877,7 +8877,7 @@ ELDER_ENEMIES = {
                            "warm breath of starlight, and steps gently aside. 🌟"},
 }
 
-ELDER_SCENES = [
+ELDER_RPG_SCENES = [
     {"name": "Mosslight Gate",
      "desc": "A soft mossy archway twinkles with fireflies. The path into the "
              "Hollow glows ahead. A sleepy MOSSBACK dozes on a warm stone.",
@@ -9191,9 +9191,9 @@ class EldermarkRPG:
 
     def _current_scene(self):
         g = self._g()
-        if g["scene"] >= len(ELDER_SCENES):
+        if g["scene"] >= len(ELDER_RPG_SCENES):
             return None                              # roaming after victory
-        return ELDER_SCENES[g["scene"]]
+        return ELDER_RPG_SCENES[g["scene"]]
 
     def _scene_text(self, log=None):
         g = self._g()
@@ -9243,7 +9243,7 @@ class EldermarkRPG:
         g["scene"] += 1
         save_game_profile(self.prof)
         msg = ("You follow the glimmering path onward..."
-               if g["scene"] < len(ELDER_SCENES)
+               if g["scene"] < len(ELDER_RPG_SCENES)
                else "You stroll on into the sunshine...")
         return self._scene_text(log=[msg])
 
@@ -9369,7 +9369,7 @@ class EldermarkRPG:
         self.state = "play"
         if e["boss"]:
             first_win = not self._has("won")
-            g["scene"] = len(ELDER_SCENES)
+            g["scene"] = len(ELDER_RPG_SCENES)
             self._flag("won")
             log.append("The Wayshrine blazes back to life! The whole Hollow is "
                        "warm and safe again. You did it!")
