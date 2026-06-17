@@ -12825,7 +12825,7 @@ ELDER_BATTLERS = {
         "name": "Gloomling", "sprite": "gloomling.png",
         "hp": 18, "atk": 3, "lv": 4,
         "meet": "A shy Gloomling peeks out from the rustling ferns!",
-        "poke": "The Gloomling shivers shyly.",
+        "poke": "The Gloomling bumps you softly.",
         "win": "The Gloomling gives a happy wiggle and drifts beside you — a new friend!",
         "lose": "You grow sleepy and sit to rest. The Gloomling waits nearby, kind and patient.",
     },
@@ -12841,6 +12841,8 @@ class EldermarkBattleLogic:
 
     def __init__(self, enemy_key="gloomling", hero_name="Wanderer",
                  hero_lv=5, hero_hp=26):
+        if enemy_key not in ELDER_BATTLERS:      # unknown key -> safe fallback
+            enemy_key = "gloomling"
         b = ELDER_BATTLERS[enemy_key]
         self.ekey = enemy_key
         self.ename = b["name"]
@@ -12848,7 +12850,7 @@ class EldermarkBattleLogic:
         self.e_atk = b["atk"]
         self.e_lv = b["lv"]
         self.hname = hero_name
-        self.h_hp = self.h_max = hero_hp
+        self.h_hp = self.h_max = max(1, hero_hp)     # >=1 so HP bars never /0
         self.h_lv = hero_lv
         self.items = self.ITEMS
         self.over = False
@@ -12862,7 +12864,7 @@ class EldermarkBattleLogic:
     def act(self, action):
         """Apply one player action plus the creature's gentle response; return
         the message to show. Idempotent once the battle is over."""
-        if self.over:
+        if self.over or action not in ("run", "item", "fight", "skill"):
             return self.log
         self.turn += 1
         if action == "run":
@@ -12873,10 +12875,13 @@ class EldermarkBattleLogic:
             if self.items <= 0:
                 self.log = "Your pack is empty — no glow-berries left."
                 return self.log
+            if self.h_hp >= self.h_max:             # full: keep the berry, no penalty
+                self.log = "You're already full of glow. (You keep the berry.)"
+                return self.log
             self.items -= 1
             self.h_hp = min(self.h_max, self.h_hp + self.HEAL)
             msg = f"You share a glow-berry. (+{self.HEAL})"
-        elif action in ("fight", "skill"):
+        else:                                       # fight / skill
             move = ELDER_MOVES[0] if action == "fight" else ELDER_MOVES[1]
             self.e_hp = max(0, self.e_hp - self._power(move))
             msg = move["flavor"]
@@ -12884,8 +12889,6 @@ class EldermarkBattleLogic:
                 self.over, self.won = True, True
                 self.log = ELDER_BATTLERS[self.ekey]["win"]
                 return self.log
-        else:
-            return self.log
         self.h_hp = max(0, self.h_hp - self.e_atk)      # gentle response
         if self.h_hp <= 0:
             self.over, self.won = True, False
@@ -12936,6 +12939,8 @@ class EldermarkBattle:
         self.phase = "message"          # message (intro/result) | menu
         self._anim = 0
         self._loop = None
+        self._leave = None              # RUN auto-close timer
+        self._closed = False
         self._set_message(self.logic.log)
         self._render_menu()
         self.win.bind("<KeyPress>", self._key)
@@ -13085,7 +13090,7 @@ class EldermarkBattle:
         self._set_message(msg)
         self._render_menu()
         if self.logic.won is None and self.logic.over:   # ran away — leave at once
-            self.win.after(700, self.close)
+            self._leave = self.win.after(700, self.close)
 
     # -- input ---------------------------------------------------------------
     def _key(self, e):
@@ -13124,12 +13129,16 @@ class EldermarkBattle:
         self._loop = self.win.after(40, self._tick)
 
     def close(self):
-        if self._loop is not None:
-            try:
-                self.win.after_cancel(self._loop)
-            except Exception:
-                pass
-            self._loop = None
+        if self._closed:                 # idempotent: on_close fires exactly once
+            return
+        self._closed = True
+        for job in (self._loop, self._leave):
+            if job is not None:
+                try:
+                    self.win.after_cancel(job)
+                except Exception:
+                    pass
+        self._loop = self._leave = None
         try:
             if self.win.winfo_exists():
                 self.win.destroy()

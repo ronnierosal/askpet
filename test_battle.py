@@ -1,5 +1,5 @@
 """Headless tests for the gentle Eldermark battle logic (no tkinter)."""
-from askpet import EldermarkBattleLogic, ELDER_BATTLERS, ELDER_MOVES
+from askpet import EldermarkBattleLogic, ELDER_BATTLERS, ELDER_MOVES, ELDER_SLICE
 
 
 def test_meet_and_contract():
@@ -81,12 +81,52 @@ def test_hp_never_negative():
     print("hp never negative OK")
 
 
+def test_item_at_full_hp_is_free():
+    L = EldermarkBattleLogic("gloomling")        # constructed at full HP
+    items = L.items
+    L.act("item")
+    assert not L.over
+    assert L.h_hp == L.h_max          # no wasted heal and no retaliation
+    assert L.items == items           # berry kept
+    print("item at full HP is free OK")
+
+
+def test_killing_blow_wins_cleanly():
+    L = EldermarkBattleLogic("gloomling")
+    L.e_hp = 1
+    hp = L.h_hp
+    L.act("fight")
+    assert L.over and L.won is True
+    assert L.e_hp == 0 and L.h_hp == hp   # winning turn -> no retaliation
+    print("killing blow wins cleanly OK")
+
+
+def test_unknown_action_is_noop():
+    L = EldermarkBattleLogic("gloomling")
+    snap = (L.e_hp, L.h_hp, L.turn, L.over)
+    L.act("wiggle")
+    assert (L.e_hp, L.h_hp, L.turn, L.over) == snap
+    print("unknown action no-op OK")
+
+
+def test_scene_battle_keys_resolve():
+    for npc in ELDER_SLICE["npcs"]:
+        key = npc.get("battle")
+        if key:
+            assert key in ELDER_BATTLERS, f"unknown battler {key!r}"
+    print("scene battle keys resolve OK")
+
+
 if __name__ == "__main__":
     test_meet_and_contract()
     test_win_by_fight()
     test_item_heals_and_caps()
+    test_item_at_full_hp_is_free()
+    test_killing_blow_wins_cleanly()
+    test_unknown_action_is_noop()
     test_run_ends()
     test_lose_path_is_gentle()
     test_determinism()
     test_hp_never_negative()
+    test_scene_battle_keys_resolve()
     print("BATTLE TEST PASSED")

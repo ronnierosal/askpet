@@ -30,9 +30,13 @@ a file here is missing the game draws a simple placeholder, so it always runs.
 `raw/` is gitignored (inputs only). The normalized PNGs here ARE committed.
 
 ## Shipping in the installer
-These PNGs are committed, but still need bundling into the frozen build. For
-each file, add a line to `build-installer.ps1` and `AskPet.spec`, e.g.:
+These PNGs are committed and bundled automatically — `build-installer.ps1` uses a
+glob:
 
 ```
---add-data "assets\eldermark\mosslight_gate_bg.png;assets\eldermark"
+--add-data "assets\eldermark\*.png;assets\eldermark"
 ```
+
+so any new PNG dropped here ships with no build-script change. (PyInstaller
+regenerates `AskPet.spec` from those CLI args every build; the spec is gitignored
+— don't hand-edit it.)
