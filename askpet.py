@@ -12497,13 +12497,13 @@ ELDER_SLICE = {
     "bg": "mosslight_gate_bg.png",
     "spawn": (340, 410),
     "solids": [
-        (0, 0, SCENE_W, 64),             # back tree line
-        (0, 0, 40, SCENE_H),             # left edge
-        (SCENE_W - 40, 0, 40, SCENE_H),  # right edge
-        (300, 64, 40, 150),              # left arch pillar
-        (440, 64, 40, 150),              # right arch pillar
-        (70, 150, 120, 96),              # cottage
-        (556, 120, 96, 96),              # tree cluster
+        (0, 0, SCENE_W, 80),             # top canopy
+        (0, 0, 80, SCENE_H),             # left-edge tree
+        (SCENE_W - 80, 0, 80, SCENE_H),  # right-edge tree
+        (270, 110, 60, 200),             # left arch pillar (lantern post)
+        (440, 110, 60, 200),             # right arch pillar (lantern post)
+        (60, 320, 70, 90),               # bottom-left mossy stone
+        (600, 300, 70, 130),             # bottom-right mossy stones
     ],
     "npcs": [
         {"id": "mossback", "sprite": "mossback.png", "pos": (250, 300),
@@ -12636,9 +12636,13 @@ class EldermarkScene:
         self.box_tip = self.canvas.create_text(
             SCENE_W - m - 16, SCENE_H - m - 12, anchor="se", fill=ELDER_GREEN[1],
             font=("Consolas", 12), state="hidden")
+        self._hint_walk = "Arrows / WASD to walk   Space to talk   Esc to leave"
+        self.hint_sh = self.canvas.create_text(          # drop shadow for contrast
+            15, 13, anchor="nw", fill=ELDER_GREEN[0], font=("Consolas", 13, "bold"),
+            text=self._hint_walk)
         self.hint = self.canvas.create_text(
             14, 12, anchor="nw", fill=ELDER_GREEN[3], font=("Consolas", 13, "bold"),
-            text="Arrows / WASD to walk   Space to talk   Esc to leave")
+            text=self._hint_walk)
 
         self._dirs = set()
         self._talk = None            # active NPC dialogue dict, or None
@@ -12762,10 +12766,9 @@ class EldermarkScene:
             self.canvas.coords(it, bxx + ox, byy + oy, bxx + ox + 5, byy + oy + 5)
         if self._talk is None:
             near = self.logic.npc_in_range() is not None
-            self.canvas.itemconfigure(
-                self.hint,
-                text=("Press Space to talk" if near
-                      else "Arrows / WASD to walk   Space to talk   Esc to leave"))
+            txt = "Press Space to talk" if near else self._hint_walk
+            self.canvas.itemconfigure(self.hint_sh, text=txt)
+            self.canvas.itemconfigure(self.hint, text=txt)
         self._loop = self.win.after(33, self._tick)
 
     def close(self):

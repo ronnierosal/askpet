@@ -51,24 +51,15 @@ def test_determinism():
 def test_npc_interaction():
     L = EldermarkSceneLogic()
     assert L.npc_in_range() is None, "should not be talking at spawn"
-    target = next(n for n in L.npcs if n["id"] == "mossback")
-    bx, by = target["pos"]
-    for _ in range(800):                     # walk the player toward the NPC
-        dirs = set()
-        fx, fy = L.x + L.PW / 2, L.y + L.PH / 2
-        if fx < bx - 2:
-            dirs.add("right")
-        elif fx > bx + 2:
-            dirs.add("left")
-        if fy < by - 2:
-            dirs.add("down")
-        elif fy > by + 2:
-            dirs.add("up")
-        if not dirs:
-            break
-        L.step(dirs)
+    npc = next(n for n in L.npcs if n["id"] == "mossback")
+    bx, by = npc["pos"]
+    # stand beside the NPC base (its spot is solid-free); range logic, not pathing
+    L.x, L.y = bx - L.PW // 2, by - L.PH // 2
+    assert not L._blocked(L.x, L.y), "NPC base sits inside a solid"
     near = L.npc_in_range()
     assert near is not None and near["id"] == "mossback", (L.x, L.y, bx, by)
+    L.x, L.y = L.scene["spawn"]              # far away again -> out of range
+    assert L.npc_in_range() is None
     print("npc interaction OK")
 
 

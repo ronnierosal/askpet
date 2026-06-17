@@ -66,6 +66,7 @@ Write-Host "== 2/4 Building AskPet.exe (PyInstaller) =="
     --add-data "assets\kogi\spritesheet.png;assets\kogi" `
     --add-data "assets\kogi\manifest.json;assets\kogi" `
     --add-data "data\english-words.txt;data" `
+    --add-data "assets\eldermark\*.png;assets\eldermark" `
     askpet.py | Out-Null
 
 Write-Host "== 3/4 Signing application =="
