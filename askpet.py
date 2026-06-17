@@ -12461,6 +12461,327 @@ class EldermarkWorld:
             pass
 
 
+# ===========================================================================
+# Eldermark — asset-driven SCENE engine (vertical slice: Mosslight Gate).
+#
+# The next step beyond the programmatic tile world above: instead of code-drawn
+# tiles it shows a PAINTED pixel-art background (one PNG per location) with
+# character/creature sprite PNGs on top, a bottom dialogue box, and reading-as-
+# gameplay. The art is generated separately (Game-Boy-green pixel art) and
+# normalized by tools/prep_eldermark_art.py into assets/eldermark/. Until that
+# art exists the engine draws simple placeholders so it still runs. The LOGIC
+# (movement, rectangle collision, NPC interaction) is GUI-free and headless-
+# testable — see test_scene.py.
+# ===========================================================================
+
+# The Eldermark look: 4 Game-Boy greens, darkest -> lightest.
+ELDER_GREEN = ("#0f380f", "#306230", "#8bac0f", "#9bbc0f")
+ELDER_KEY = "#fe00fe"        # magenta key colour used in the source sprite art
+
+# Bundled scene/sprite art sits beside the pet art; resolve for frozen builds.
+if getattr(sys, "frozen", False):
+    ELDER_ASSETS = Path(sys._MEIPASS) / "assets" / "eldermark"
+else:
+    ELDER_ASSETS = Path(__file__).resolve().parent / "assets" / "eldermark"
+
+# Canonical scene pixel space, shown 1:1. Backgrounds are normalized to exactly
+# this size by the prep tool, so collision/positions are plain pixel coords.
+SCENE_W, SCENE_H = 720, 480
+
+# The slice's one location. `solids` are rectangles the player can't enter
+# (x, y, w, h); `npcs` are interaction points (sprite optional) with reading
+# pages. A position is the sprite BASE (feet), anchored bottom-centre on draw.
+ELDER_SLICE = {
+    "id": "mosslight_gate",
+    "name": "Mosslight Gate",
+    "bg": "mosslight_gate_bg.png",
+    "spawn": (340, 410),
+    "solids": [
+        (0, 0, SCENE_W, 64),             # back tree line
+        (0, 0, 40, SCENE_H),             # left edge
+        (SCENE_W - 40, 0, 40, SCENE_H),  # right edge
+        (300, 64, 40, 150),              # left arch pillar
+        (440, 64, 40, 150),              # right arch pillar
+        (70, 150, 120, 96),              # cottage
+        (556, 120, 96, 96),              # tree cluster
+    ],
+    "npcs": [
+        {"id": "mossback", "sprite": "mossback.png", "pos": (250, 300),
+         "pages": [
+             "A round, mossy creature blinks up at you,\nmushrooms swaying on its back.",
+             "\"Welcome to Eldermark, little wanderer.\"",
+             "\"Follow the lantern path up through the\nMosslight Gate...\"",
+             "\"...and the old Wayshrine will light your\nway safely home.\"",
+         ]},
+        {"id": "gate", "sprite": None, "pos": (380, 150),
+         "pages": [
+             "Beyond the moss-covered arch the trees\nlean close and the path grows quiet.",
+             "The way to Whisperwood opens soon...",
+         ]},
+    ],
+}
+
+
+class EldermarkSceneLogic:
+    """GUI-free Eldermark scene state: player position, rectangle collision,
+    and NPC interaction range. Deterministic and headless-testable."""
+
+    PW, PH = 40, 22          # player feet collision box (pixels)
+    SPEED = 3
+    TALK = 56                # interaction reach to an NPC base point
+
+    def __init__(self, scene=ELDER_SLICE):
+        self.scene = scene
+        self.solids = [tuple(r) for r in scene.get("solids", [])]
+        self.npcs = scene.get("npcs", [])
+        self.x, self.y = scene.get("spawn", (SCENE_W // 2, SCENE_H // 2))
+        self.facing = "up"
+        self.anim = 0
+
+    def _blocked(self, x, y):
+        if x < 0 or y < 0 or x + self.PW > SCENE_W or y + self.PH > SCENE_H:
+            return True
+        for (rx, ry, rw, rh) in self.solids:
+            if x < rx + rw and x + self.PW > rx and y < ry + rh and y + self.PH > ry:
+                return True
+        return False
+
+    def step(self, dirs):
+        """Advance one tick. Each axis moves separately so the player slides
+        along walls and never enters a solid rectangle."""
+        self.anim += 1
+        dx = (1 if "right" in dirs else 0) - (1 if "left" in dirs else 0)
+        dy = (1 if "down" in dirs else 0) - (1 if "up" in dirs else 0)
+        moved = False
+        if dx:
+            self.facing = "right" if dx > 0 else "left"
+            nx = self.x + dx * self.SPEED
+            if not self._blocked(nx, self.y):
+                self.x, moved = nx, True
+        if dy:
+            self.facing = "down" if dy > 0 else "up"
+            ny = self.y + dy * self.SPEED
+            if not self._blocked(self.x, ny):
+                self.y, moved = ny, True
+        return moved
+
+    def npc_in_range(self):
+        """The first NPC whose base is within reach of the player feet, else None."""
+        fx, fy = self.x + self.PW / 2, self.y + self.PH / 2
+        for npc in self.npcs:
+            bx, by = npc["pos"]
+            if abs(fx - bx) <= self.TALK and abs(fy - by) <= self.TALK:
+                return npc
+        return None
+
+
+class EldermarkScene:
+    """The painted Eldermark scene window: a PNG background, sprite actors,
+    fireflies, a bottom dialogue box, and reading-as-gameplay. Falls back to
+    simple placeholder art until the generated pixel art is dropped in.
+    Crash-isolated by its caller (a scene bug must never break the chat)."""
+
+    _KEYS = {"up": "up", "w": "up", "down": "down", "s": "down",
+             "left": "left", "a": "left", "right": "right", "d": "right"}
+
+    def __init__(self, pet):
+        self.pet = pet
+        self.scene = ELDER_SLICE
+        self.logic = EldermarkSceneLogic(self.scene)
+        self._refs = []                      # keep PhotoImages alive (anti-GC)
+
+        self.win = tk.Toplevel(pet.root)
+        self.win.title(f"Eldermark — {self.scene['name']}")
+        self.win.resizable(False, False)
+        self.canvas = tk.Canvas(self.win, width=SCENE_W, height=SCENE_H,
+                                highlightthickness=0, bg=ELDER_GREEN[0])
+        self.canvas.pack()
+
+        # background (painted PNG if present, else a placeholder sketch)
+        self.bg = self._load(self.scene["bg"], self._placeholder_bg)
+        self.canvas.create_image(0, 0, anchor="nw", image=self.bg)
+        if not (ELDER_ASSETS / self.scene["bg"]).exists():
+            self.canvas.create_text(
+                SCENE_W // 2, 40, fill=ELDER_GREEN[3], font=("Consolas", 12),
+                text="(placeholder art — add PNGs to assets/eldermark)")
+
+        # hero sprites per facing; NPC sprites (static, feet-anchored)
+        self.hero = {f: self._load(f"hero_{f}.png",
+                                   lambda: self._placeholder_hero())
+                     for f in ("down", "up", "left", "right")}
+        for npc in self.scene["npcs"]:
+            if npc.get("sprite"):
+                img = self._load(npc["sprite"], self._placeholder_npc)
+                self.canvas.create_image(npc["pos"][0], npc["pos"][1],
+                                         anchor="s", image=img)
+
+        self.player_item = self.canvas.create_image(
+            self.logic.x + self.logic.PW // 2, self.logic.y + self.logic.PH,
+            anchor="s", image=self.hero[self.logic.facing])
+
+        # drifting fireflies (code-drawn)
+        self._fly_base = [(150, 110), (210, 90), (470, 120), (540, 150),
+                          (380, 80), (300, 130)]
+        self.fly_items = [self.canvas.create_oval(0, 0, 5, 5,
+                          fill=ELDER_GREEN[3], outline="") for _ in self._fly_base]
+
+        # bottom dialogue box (hidden until a conversation starts)
+        m, top = 24, int(SCENE_H * 0.72)
+        self.box_bg = self.canvas.create_rectangle(
+            m, top, SCENE_W - m, SCENE_H - m, fill=ELDER_GREEN[3],
+            outline=ELDER_GREEN[0], width=5, state="hidden")
+        self.box_txt = self.canvas.create_text(
+            m + 22, top + 18, anchor="nw", fill=ELDER_GREEN[0],
+            font=("Consolas", 18, "bold"), state="hidden")
+        self.box_tip = self.canvas.create_text(
+            SCENE_W - m - 16, SCENE_H - m - 12, anchor="se", fill=ELDER_GREEN[1],
+            font=("Consolas", 12), state="hidden")
+        self.hint = self.canvas.create_text(
+            14, 12, anchor="nw", fill=ELDER_GREEN[3], font=("Consolas", 13, "bold"),
+            text="Arrows / WASD to walk   Space to talk   Esc to leave")
+
+        self._dirs = set()
+        self._talk = None            # active NPC dialogue dict, or None
+        self._page = 0
+        self._anim = 0
+        self._loop = None
+        self.win.bind("<KeyPress>", self._key_down)
+        self.win.bind("<KeyRelease>", self._key_up)
+        self.win.protocol("WM_DELETE_WINDOW", self.close)
+        sw, sh = pet.root.winfo_screenwidth(), pet.root.winfo_screenheight()
+        self.win.update_idletasks()
+        self.win.geometry(f"+{max(0, (sw - SCENE_W) // 2)}"
+                          f"+{max(0, (sh - SCENE_H) // 2 - 30)}")
+        self.win.focus_force()
+        self._tick()
+
+    # -- art -----------------------------------------------------------------
+    def _load(self, fname, placeholder):
+        """A PhotoImage for `fname` from assets/eldermark, else a placeholder."""
+        p = ELDER_ASSETS / fname
+        if p.exists():
+            try:
+                img = tk.PhotoImage(file=str(p))
+                self._refs.append(img)
+                return img
+            except tk.TclError:
+                pass
+        img = placeholder()
+        self._refs.append(img)
+        return img
+
+    def _placeholder_bg(self):
+        im = tk.PhotoImage(width=SCENE_W, height=SCENE_H)
+        im.put(ELDER_GREEN[1], to=(0, 0, SCENE_W, SCENE_H))      # grass
+        im.put(ELDER_GREEN[0], to=(0, 0, SCENE_W, 64))           # tree line
+        im.put(ELDER_GREEN[2], to=(320, 64, 400, SCENE_H))       # lantern path
+        im.put(ELDER_GREEN[0], to=(300, 64, 340, 214))           # arch pillar L
+        im.put(ELDER_GREEN[0], to=(440, 64, 480, 214))           # arch pillar R
+        im.put(ELDER_GREEN[0], to=(300, 64, 480, 96))            # arch top
+        im.put(ELDER_GREEN[2], to=(70, 150, 190, 246))           # cottage
+        im.put(ELDER_GREEN[0], to=(556, 120, 652, 216))          # tree blob
+        return im
+
+    def _placeholder_hero(self):
+        w, h = 44, 68
+        im = tk.PhotoImage(width=w, height=h)
+        im.put(ELDER_GREEN[2], to=(w // 4, 2, 3 * w // 4, h // 2))     # hair
+        im.put(ELDER_GREEN[3], to=(w // 3, h // 6, 2 * w // 3, h // 2))  # face
+        im.put(ELDER_GREEN[1], to=(w // 6, h // 2, 5 * w // 6, h - 4))   # body
+        im.put(ELDER_GREEN[0], to=(w // 6, h - 8, 5 * w // 6, h))        # feet
+        return im
+
+    def _placeholder_npc(self):
+        w, h = 84, 72
+        im = tk.PhotoImage(width=w, height=h)
+        im.put(ELDER_GREEN[1], to=(w // 6, h // 4, 5 * w // 6, h))       # body
+        im.put(ELDER_GREEN[2], to=(w // 4, h // 8, 3 * w // 4, h // 2))  # head
+        im.put(ELDER_GREEN[0], to=(w // 3, h // 3, w // 3 + 8, h // 3 + 8))      # eye
+        im.put(ELDER_GREEN[0], to=(3 * w // 5, h // 3, 3 * w // 5 + 8, h // 3 + 8))  # eye
+        return im
+
+    # -- input ---------------------------------------------------------------
+    def _key_down(self, e):
+        ks = (e.keysym or "").lower()
+        if ks == "escape":
+            self.close()
+            return
+        if ks in ("space", "return"):
+            self._interact()
+            return
+        d = self._KEYS.get(ks)
+        if d:
+            self._dirs.add(d)
+
+    def _key_up(self, e):
+        d = self._KEYS.get((e.keysym or "").lower())
+        if d:
+            self._dirs.discard(d)
+
+    def _interact(self):
+        if self._talk is not None:
+            self._page += 1
+            if self._page >= len(self._talk["pages"]):
+                self._talk = None
+                for it in (self.box_bg, self.box_txt, self.box_tip):
+                    self.canvas.itemconfigure(it, state="hidden")
+            else:
+                self._render_page()
+            return
+        npc = self.logic.npc_in_range()
+        if npc:
+            self._talk = npc
+            self._page = 0
+            self._dirs.clear()
+            self._render_page()
+
+    def _render_page(self):
+        pages = self._talk["pages"]
+        last = self._page == len(pages) - 1
+        self.canvas.itemconfigure(self.box_bg, state="normal")
+        self.canvas.itemconfigure(self.box_txt, state="normal", text=pages[self._page])
+        self.canvas.itemconfigure(self.box_tip, state="normal",
+                                  text="Space to close  >" if last else "Space  >")
+
+    # -- loop ----------------------------------------------------------------
+    def _tick(self):
+        if not self.win.winfo_exists():
+            return
+        self._anim += 1
+        if self._talk is None:
+            self.logic.step(self._dirs)
+        bob = -2 if (self._talk is None and self._dirs and (self._anim // 5) % 2) else 0
+        self.canvas.coords(self.player_item,
+                           self.logic.x + self.logic.PW // 2,
+                           self.logic.y + self.logic.PH + bob)
+        self.canvas.itemconfigure(self.player_item, image=self.hero[self.logic.facing])
+        for i, it in enumerate(self.fly_items):
+            bxx, byy = self._fly_base[i]
+            ox = math.sin(self._anim * 0.05 + i) * 10
+            oy = math.cos(self._anim * 0.04 + i * 1.7) * 8
+            self.canvas.coords(it, bxx + ox, byy + oy, bxx + ox + 5, byy + oy + 5)
+        if self._talk is None:
+            near = self.logic.npc_in_range() is not None
+            self.canvas.itemconfigure(
+                self.hint,
+                text=("Press Space to talk" if near
+                      else "Arrows / WASD to walk   Space to talk   Esc to leave"))
+        self._loop = self.win.after(33, self._tick)
+
+    def close(self):
+        if self._loop is not None:
+            try:
+                self.win.after_cancel(self._loop)
+            except Exception:
+                pass
+            self._loop = None
+        try:
+            if self.win.winfo_exists():
+                self.win.destroy()
+        except Exception:
+            pass
+
+
 class ChatWindow:
     """iMessage-style chat window opened by clicking the pet.
 
@@ -13216,12 +13537,12 @@ class ChatWindow:
             self._standard_request(arg, cleaned, rec)
 
     def _open_eldermark_world(self):
-        """Open the walkable Eldermark pixel world in its own window. A world
-        bug must never break the chat, so failure is caught and reported."""
-        self._add("game", "Opening the world of Eldermark... use the arrow keys "
-                          "(or WASD) to walk, and reach the Wayshrine. 🌿")
+        """Open the painted Eldermark scene (Mosslight Gate) in its own window.
+        A scene bug must never break the chat, so failure is caught/reported."""
+        self._add("game", "Opening Eldermark — Mosslight Gate. Use the arrow keys "
+                          "(or WASD) to explore, and press Space to talk. 🌿")
         try:
-            EldermarkWorld(self.pet)
+            EldermarkScene(self.pet)
         except Exception:
             self._add("pet", "Hmm, I couldn't open Eldermark just now — let's "
                              "play a game instead? Say /play. 🐾")

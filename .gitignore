@@ -19,6 +19,9 @@ assets/*.webp
 assets/*.zip
 assets/askpet.ico
 
+# Eldermark: raw AI art exports are inputs only; the normalized PNGs are kept.
+assets/eldermark/raw/
+
 # Local scratch (the committed copy lives in docs/)
 /chat-screenshot.png
 launch-err.txt
