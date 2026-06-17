@@ -8934,50 +8934,72 @@ def _center_block(s, width=GAME_ART_W):
 
 GAMES_BANNER = _ascii_banner("G A M E   A R C A D E")
 
-# Small scene/enemy motifs. Pure ASCII (no backslashes/quotes) so columns stay
-# aligned in the fixed-width screen. Kept narrow to fit the panel at any size.
+# Scene/enemy motifs drawn as block "pixel art" in the monospace panel. Only
+# block-element glyphs proven to render single-width in the app's Consolas are
+# used (full/shaded/half blocks: █ ▓ ▒ ░ ▀ ▄) — NOT the quadrant blocks
+# (▟▙▜▛), which fall back to tofu boxes in Consolas.
 ELDER_ART = {
     "Mosslight Gate":
-        "       .-~~~-.\n"
-        "      | () () |  zZ\n"
-        "      |  mossy |\n"
-        "    __|_______|__",
+        "   ▄██████████▄\n"
+        "   ███▀▀▀▀▀▀███\n"
+        "   ██▒      ▒██\n"
+        "   ██░      ░██\n"
+        "   ██        ██\n"
+        "   ██▄▄▄▄▄▄▄▄██",
     "Whisperwood":
-        "      ^   ^    ^   ^\n"
-        "      T   T    T   T\n"
-        "    __|___|____|___|__",
+        "   ▄██▄  ▄██▄  ▄██▄\n"
+        "   ▓██▓  ▓██▓  ▓██▓\n"
+        "   ████  ████  ████\n"
+        "   ▀██▀  ▀██▀  ▀██▀\n"
+        "    ██    ██    ██",
     "Lantern Glade":
-        "      (*)   (*)   (*)\n"
-        "       |     |     |\n"
-        "    ~~~~~~~~~~~~~~~~~~~",
+        "    █     █     █\n"
+        "   ▄█▄   ▄█▄   ▄█▄\n"
+        "   █▒█   █▒█   █▒█\n"
+        "   ▀█▀   ▀█▀   ▀█▀",
     "Hollow Steps":
-        "      _\n"
-        "     |_|_\n"
-        "     | |_|_\n"
-        "     |_|_|_|  ...down",
+        "   ██\n"
+        "   ████\n"
+        "   ██████\n"
+        "   ████████\n"
+        "   ██████████   down",
     "The Dimmed Wayshrine":
-        "        .==.\n"
-        "       /    .   (dark)\n"
-        "      | []   |\n"
-        "    __|======|__",
+        "      ░▒▒░\n"
+        "     ▒▓██▓▒\n"
+        "     ▓████▓\n"
+        "     █▓▒▒▓█\n"
+        "     ▓████▓\n"
+        "    ▄██████▄",
     "trails":
-        "      *   .   *   .  *\n"
-        "    ~~~~~~~~~~~~~~~~~~~~\n"
-        "      sunny eldermark",
+        "            ░▒▓▒░\n"
+        "           ▒▓███▓▒\n"
+        "           ▓█████▓\n"
+        "           ▒▓███▓▒\n"
+        "            ░▒▓▒░\n"
+        "   ▄▄▄              ▄▄\n"
+        "  ▒▓▓▓▒░        ░▒▓▓▒\n"
+        " ░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒░\n"
+        "       sunny eldermark",
     "gloomling":
-        "      .-~~-.\n"
-        "     ( o  o )   ~puff~\n"
-        "      '-..-'",
+        "     ▄▒▓▓▒▄\n"
+        "    ▒▓████▓▒\n"
+        "    ▓█░██░█▓\n"
+        "    ▓██████▓\n"
+        "    ▒▓████▓▒\n"
+        "     ▀▒▓▒▀",
     "thistlewisp":
-        "      *|*|*\n"
-        "     *( oo )*   *prickle*\n"
-        "      *|*|*",
+        "    ▀  ▀  ▀\n"
+        "   ▄██████▄\n"
+        "   █░████░█\n"
+        "   ▀██████▀\n"
+        "    ▄  ▄  ▄",
     "mire-warden":
-        "     .----------.\n"
-        "    |  >    <    |\n"
-        "    |  M I R E   |\n"
-        "    |  warden    |\n"
-        "     '----------'",
+        "   ▄██████████▄\n"
+        "   ████░██░████\n"
+        "   ████████████\n"
+        "   ███▄████▄███\n"
+        "   ▀██████████▀\n"
+        "    ██▀    ▀██",
 }
 
 
