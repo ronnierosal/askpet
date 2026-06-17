@@ -66,18 +66,30 @@ def test_persistence_roundtrip():
     s = EldermarkState()
     s.befriend("mossback")
     s.meet("gloomling")
+    s.relit = True
     disk = {}
     s.save_into(disk)
     assert disk["eldermark_friends"] == ["mossback"]
     assert disk["eldermark_met"] == ["gloomling", "mossback"]
+    assert disk["eldermark_relit"] is True
     s2 = EldermarkState()
     s2.load(disk)
     assert s2.friends == {"mossback"} and s2.met == {"gloomling", "mossback"}
-    # junk ids in stored settings are dropped on load
+    assert s2.relit is True
+    # junk ids in stored settings are dropped on load; relit defaults False
     s3 = EldermarkState()
     s3.load({"eldermark_met": ["mossback", "junk"], "eldermark_friends": ["junk"]})
-    assert s3.met == {"mossback"} and s3.friends == set()
+    assert s3.met == {"mossback"} and s3.friends == set() and s3.relit is False
     print("persistence round-trip OK")
+
+
+def test_shrine_pages():
+    from askpet import elder_shrine_pages
+    dim = elder_shrine_pages(2, 5)
+    assert len(dim) == 2 and "2 of 5" in dim[1]
+    done = elder_shrine_pages(5, 5)
+    assert len(done) >= 3 and any("The End" in p for p in done)
+    print("shrine pages OK")
 
 
 if __name__ == "__main__":
@@ -88,4 +100,6 @@ if __name__ == "__main__":
     test_global_state_singleton()
     test_scene_battle_keys_resolve_fully()
     test_state_rejects_unknown_ids()
+    test_persistence_roundtrip()
+    test_shrine_pages()
     print("JOURNAL TEST PASSED")

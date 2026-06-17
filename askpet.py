@@ -12543,10 +12543,30 @@ ELDER_SCENES = {
              ]},
             {"id": "brambles", "sprite": None, "pos": (500, 330),
              "battle": "thistlewisp", "pages": ["The brambles shiver..."]},
-            {"id": "warden", "sprite": None, "pos": (360, 150),
+            {"id": "warden", "sprite": None, "pos": (360, 190),
              "battle": "mire_warden", "pages": ["A great mossy shape stirs..."]},
         ],
-        "exits": [{"at": (300, 446, 120, 34), "to": "mosslight_gate", "spawn": (384, 150)}],
+        "exits": [
+            {"at": (300, 446, 120, 34), "to": "mosslight_gate", "spawn": (384, 150)},
+            {"at": (320, 74, 120, 40), "to": "wayshrine", "spawn": (360, 400)},
+        ],
+    },
+    "wayshrine": {
+        "id": "wayshrine",
+        "name": "The Wayshrine",
+        "bg": "wayshrine_bg.png",
+        "spawn": (360, 410),
+        "solids": [
+            (0, 0, SCENE_W, 64),             # canopy
+            (0, 0, 80, SCENE_H),             # left-edge trees
+            (SCENE_W - 80, 0, 80, SCENE_H),  # right-edge trees
+            (290, 100, 140, 140),            # the shrine itself (approach from below)
+        ],
+        "npcs": [
+            {"id": "shrine", "sprite": None, "pos": (360, 250), "shrine": True,
+             "pages": ["The Wayshrine waits, quiet and old."]},
+        ],
+        "exits": [{"at": (300, 446, 120, 34), "to": "whisperwood", "spawn": (360, 280)}],
     },
 }
 ELDER_SLICE = ELDER_SCENES["mosslight_gate"]   # back-compat alias for tests
@@ -12577,12 +12597,13 @@ ELDER_CREATURES = {
 
 
 class EldermarkState:
-    """Shared, in-session memory of which creatures you've met / befriended.
-    (In-memory for now; persisting to user settings is a future step.)"""
+    """Shared memory of which creatures you've met / befriended and whether the
+    Wayshrine is relit. Persisted to user settings via load/save_into."""
 
     def __init__(self):
         self.met = set()
         self.friends = set()
+        self.relit = False
 
     def meet(self, cid):
         if cid in ELDER_CREATURES:        # only ever record journal creatures
@@ -12598,14 +12619,32 @@ class EldermarkState:
         self.met = {c for c in settings.get("eldermark_met", []) if c in ELDER_CREATURES}
         self.friends = {c for c in settings.get("eldermark_friends", [])
                         if c in ELDER_CREATURES}
+        self.relit = bool(settings.get("eldermark_relit", False))
 
     def save_into(self, disk):
-        """Write met/friends as sorted lists for stable JSON."""
+        """Write met/friends/relit as stable JSON (sets -> sorted lists)."""
         disk["eldermark_met"] = sorted(self.met)
         disk["eldermark_friends"] = sorted(self.friends)
+        disk["eldermark_relit"] = self.relit
 
 
 ELDER_STATE = EldermarkState()
+
+
+def elder_shrine_pages(friends, total):
+    """The Wayshrine's reading — a closing story once every friend is made, else
+    a gentle nudge. Pure function so it's headless-testable."""
+    if friends >= total:
+        return [
+            "The Wayshrine drinks in the warmth of\nevery friend you have made...",
+            "...and WAKES! Soft light spills across\nthe moss, and Eldermark glows again.",
+            "The creatures gather close, no longer\nlonely. You did it — Eldermark is bright.",
+            "Thank you for being so kind.\n*   The End   *",
+        ]
+    return [
+        "The Wayshrine glimmers faintly, waiting\nfor the warmth of every friend.",
+        f"Friends made: {friends} of {total}.\nBefriend them all, then return to light it.",
+    ]
 
 
 class EldermarkSceneLogic:
@@ -12837,6 +12876,15 @@ class EldermarkScene:
             self._dirs.clear()
             if npc.get("battle"):
                 self._start_battle(npc["battle"])
+                return
+            if npc.get("shrine"):
+                total, n = len(ELDER_CREATURES), len(ELDER_STATE.friends)
+                if n >= total and not ELDER_STATE.relit:
+                    ELDER_STATE.relit = True
+                    self._persist()
+                self._talk = {"pages": elder_shrine_pages(n, total)}
+                self._page = 0
+                self._render_page()
                 return
             if npc.get("creature"):
                 ELDER_STATE.meet(npc["creature"])

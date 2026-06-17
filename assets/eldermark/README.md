@@ -24,7 +24,8 @@ a file here is missing the game draws a simple placeholder, so it always runs.
      the Creature Journal + future scenes, on solid magenta `#fe00fe`
    - `battle_bg.png` — optional battle backdrop, ~3:2 (defaults to reusing
      `mosslight_gate_bg.png`). The battle player back-sprite reuses `hero_up.png`.
-   - `whisperwood_bg.png` — the next exploration scene background, ~3:2 landscape
+   - `whisperwood_bg.png` — the Whisperwood exploration scene, ~3:2 landscape
+   - `wayshrine_bg.png` — the glowing Wayshrine ending scene, ~3:2 landscape
 3. Run: `python tools/prep_eldermark_art.py`
    - resizes the background to 720x480, keys magenta -> transparent on sprites,
      quantizes everything to the 4 greens, and auto-mirrors `hero_left.png`.
