@@ -12507,6 +12507,7 @@ ELDER_SLICE = {
     ],
     "npcs": [
         {"id": "mossback", "sprite": "mossback.png", "pos": (250, 300),
+         "creature": "mossback",
          "pages": [
              "A round, mossy creature blinks up at you,\nmushrooms swaying on its back.",
              "\"Welcome to Eldermark, little wanderer.\"",
@@ -12522,6 +12523,49 @@ ELDER_SLICE = {
          "pages": ["The ferns rustle..."]},
     ],
 }
+
+
+# The creatures of Eldermark — for the Journal (a gentle "dex"): each has a
+# sprite, a short lore paragraph to READ, and is recorded when you meet or
+# befriend it. Sprites you don't have yet fall back to a placeholder.
+ELDER_CREATURES = {
+    "mossback": {"name": "Mossback", "sprite": "mossback.png",
+        "lore": "A gentle moss-furred guardian with little antlers and a cap of "
+                "mushrooms. It tends the Mosslight Gate and teaches travellers "
+                "the old calming song."},
+    "gloomling": {"name": "Gloomling", "sprite": "gloomling.png",
+        "lore": "A shy forest spirit with leaf-shaped ears and a wispy cloud "
+                "tail. It hides in the ferns until a kind, patient voice coaxes "
+                "it gently out."},
+    "thistlewisp": {"name": "Thistlewisp", "sprite": "thistlewisp.png",
+        "lore": "A round, bouncy sprite dotted with soft thorns and a "
+                "mischievous grin. It adores hide-and-seek in the brambles."},
+    "hedge_pixie": {"name": "Hedge-Pixie", "sprite": "hedge_pixie.png",
+        "lore": "A tiny woodland helper who carries a lantern on a crooked "
+                "staff, humming as it lights the way for lost wanderers."},
+    "mire_warden": {"name": "Mire Warden", "sprite": "mire_warden.png",
+        "lore": "A large, ancient guardian crowned with stone antlers and "
+                "trailing moss. Lonely for an age, it wishes only for a friend."},
+}
+
+
+class EldermarkState:
+    """Shared, in-session memory of which creatures you've met / befriended.
+    (In-memory for now; persisting to user settings is a future step.)"""
+
+    def __init__(self):
+        self.met = set()
+        self.friends = set()
+
+    def meet(self, cid):
+        self.met.add(cid)
+
+    def befriend(self, cid):
+        self.met.add(cid)
+        self.friends.add(cid)
+
+
+ELDER_STATE = EldermarkState()
 
 
 class EldermarkSceneLogic:
@@ -12638,7 +12682,7 @@ class EldermarkScene:
         self.box_tip = self.canvas.create_text(
             SCENE_W - m - 16, SCENE_H - m - 12, anchor="se", fill=ELDER_GREEN[1],
             font=("Consolas", 12), state="hidden")
-        self._hint_walk = "Arrows / WASD to walk   Space to talk   Esc to leave"
+        self._hint_walk = "WASD/Arrows walk   Space talk   J journal   Esc leave"
         self.hint_sh = self.canvas.create_text(          # drop shadow for contrast
             15, 13, anchor="nw", fill=ELDER_GREEN[0], font=("Consolas", 13, "bold"),
             text=self._hint_walk)
@@ -12715,6 +12759,9 @@ class EldermarkScene:
         if ks in ("space", "return"):
             self._interact()
             return
+        if ks == "j":
+            self._open_journal()
+            return
         d = self._KEYS.get(ks)
         if d:
             self._dirs.add(d)
@@ -12740,6 +12787,8 @@ class EldermarkScene:
             if npc.get("battle"):
                 self._start_battle(npc["battle"])
                 return
+            if npc.get("creature"):
+                ELDER_STATE.meet(npc["creature"])
             self._talk = npc
             self._page = 0
             self._render_page()
@@ -12753,9 +12802,22 @@ class EldermarkScene:
                                   text="Space to close  >" if last else "Space  >")
 
     def _start_battle(self, enemy_key):
-        """Launch a battle screen. A battle bug must never break the scene."""
+        """Launch a battle; befriend the creature on a win. A battle bug must
+        never break the scene."""
+        ELDER_STATE.meet(enemy_key)
+
+        def done(won):
+            if won:
+                ELDER_STATE.befriend(enemy_key)
         try:
-            EldermarkBattle(self.pet, enemy_key)
+            EldermarkBattle(self.pet, enemy_key, on_close=done)
+        except Exception:
+            pass
+
+    def _open_journal(self):
+        """Open the Creature Journal. A journal bug must never break the scene."""
+        try:
+            EldermarkJournal(self.pet)
         except Exception:
             pass
 
@@ -13149,6 +13211,125 @@ class EldermarkBattle:
                 self.on_close(self.logic.won)
             except Exception:
                 pass
+
+
+class EldermarkJournal:
+    """The Creature Journal — a gentle 'dex': every creature you've met, with a
+    sprite and a few lines to READ. Befriended ones get a check. Esc closes."""
+
+    def __init__(self, pet):
+        self.pet = pet
+        self._refs = []
+        self._cache = {}
+        self.ids = list(ELDER_CREATURES.keys())
+        self.sel = 0
+        self._closed = False
+
+        self.win = tk.Toplevel(pet.root)
+        self.win.title("Eldermark — Creature Journal")
+        self.win.resizable(False, False)
+        self.canvas = tk.Canvas(self.win, width=SCENE_W, height=SCENE_H,
+                                highlightthickness=0, bg=ELDER_GREEN[1])
+        self.canvas.pack()
+
+        self.canvas.create_text(28, 22, anchor="nw", fill=ELDER_GREEN[0],
+                                font=("Consolas", 20, "bold"), text="Creature Journal")
+        self.count = self.canvas.create_text(SCENE_W - 28, 30, anchor="ne",
+                                             fill=ELDER_GREEN[0], font=("Consolas", 14, "bold"),
+                                             text="")
+        self.canvas.create_line(24, 62, SCENE_W - 24, 62, fill=ELDER_GREEN[0], width=2)
+
+        self.rows = [self.canvas.create_text(50, 92 + i * 42, anchor="w",
+                     fill=ELDER_GREEN[0], font=("Consolas", 16, "bold"), text="")
+                     for i in range(len(self.ids))]
+        self.cursor = self.canvas.create_text(28, 92, anchor="w", fill=ELDER_GREEN[0],
+                                              font=("Consolas", 16, "bold"), text="▸")
+
+        self.canvas.create_rectangle(356, 80, SCENE_W - 24, SCENE_H - 58,
+                                     fill=ELDER_GREEN[3], outline=ELDER_GREEN[0], width=4)
+        cx = (356 + SCENE_W - 24) // 2
+        self.d_name = self.canvas.create_text(cx, 92, anchor="n", fill=ELDER_GREEN[0],
+                                              font=("Consolas", 18, "bold"), text="")
+        self.d_sprite = self.canvas.create_image(cx, 262, anchor="s")
+        self.d_lore = self.canvas.create_text(378, 276, anchor="nw", fill=ELDER_GREEN[0],
+                                              font=("Consolas", 13, "bold"),
+                                              width=SCENE_W - 24 - 378 - 14, text="")
+
+        self.canvas.create_text(28, SCENE_H - 26, anchor="w", fill=ELDER_GREEN[0],
+                                font=("Consolas", 13, "bold"),
+                                text="Up / Down to browse    Esc to close")
+
+        self._render()
+        self.win.bind("<KeyPress>", self._key)
+        self.win.protocol("WM_DELETE_WINDOW", self.close)
+        sw, sh = pet.root.winfo_screenwidth(), pet.root.winfo_screenheight()
+        self.win.update_idletasks()
+        self.win.geometry(f"+{max(0, (sw - SCENE_W) // 2)}"
+                          f"+{max(0, (sh - SCENE_H) // 2 - 30)}")
+        self.win.focus_force()
+
+    def _sprite(self, cid):
+        if cid not in self._cache:
+            p = ELDER_ASSETS / ELDER_CREATURES[cid]["sprite"]
+            img = None
+            if p.exists():
+                try:
+                    img = tk.PhotoImage(file=str(p))
+                except tk.TclError:
+                    img = None
+            img = img or self._placeholder()
+            self._cache[cid] = img
+            self._refs.append(img)
+        return self._cache[cid]
+
+    def _placeholder(self):
+        w, h = 96, 96
+        im = tk.PhotoImage(width=w, height=h)
+        im.put(ELDER_GREEN[2], to=(w // 6, h // 4, 5 * w // 6, h))
+        im.put(ELDER_GREEN[3], to=(w // 4, h // 8, 3 * w // 4, h // 2))
+        return im
+
+    def _render(self):
+        self.canvas.itemconfigure(
+            self.count, text=f"Friends {len(ELDER_STATE.friends)}/{len(self.ids)}")
+        for i, cid in enumerate(self.ids):
+            met = cid in ELDER_STATE.met
+            mark = " ✓" if cid in ELDER_STATE.friends else (" ·" if met else "")
+            name = ELDER_CREATURES[cid]["name"] if met else "???"
+            self.canvas.itemconfigure(self.rows[i], text=f"{name}{mark}")
+        self.canvas.coords(self.cursor, 28, 92 + self.sel * 42)
+        cid = self.ids[self.sel]
+        if cid in ELDER_STATE.met:
+            self.canvas.itemconfigure(self.d_name, text=ELDER_CREATURES[cid]["name"])
+            self.canvas.itemconfigure(self.d_lore, text=ELDER_CREATURES[cid]["lore"])
+            self.canvas.itemconfigure(self.d_sprite, image=self._sprite(cid), state="normal")
+        else:
+            self.canvas.itemconfigure(self.d_name, text="???")
+            self.canvas.itemconfigure(self.d_lore,
+                                      text="A creature you haven't met yet.\n"
+                                           "Explore Eldermark to find it!")
+            self.canvas.itemconfigure(self.d_sprite, state="hidden")
+
+    def _key(self, e):
+        ks = (e.keysym or "").lower()
+        if ks == "escape":
+            self.close()
+        elif ks in ("up", "w"):
+            self.sel = (self.sel - 1) % len(self.ids)
+            self._render()
+        elif ks in ("down", "s"):
+            self.sel = (self.sel + 1) % len(self.ids)
+            self._render()
+
+    def close(self):
+        if self._closed:
+            return
+        self._closed = True
+        try:
+            if self.win.winfo_exists():
+                self.win.destroy()
+        except Exception:
+            pass
 
 
 class ChatWindow:

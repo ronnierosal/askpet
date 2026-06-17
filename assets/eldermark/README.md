@@ -20,8 +20,11 @@ a file here is missing the game draws a simple placeholder, so it always runs.
    - `hero_down.png` `hero_up.png` `hero_right.png` — on solid magenta `#fe00fe`
    - `mossback.png` — on solid magenta `#fe00fe`
    - `gloomling.png` — battle creature, on solid magenta `#fe00fe`
+   - `thistlewisp.png` `hedge_pixie.png` `mire_warden.png` — more creatures for
+     the Creature Journal + future scenes, on solid magenta `#fe00fe`
    - `battle_bg.png` — optional battle backdrop, ~3:2 (defaults to reusing
      `mosslight_gate_bg.png`). The battle player back-sprite reuses `hero_up.png`.
+   - `whisperwood_bg.png` — the next exploration scene background, ~3:2 landscape
 3. Run: `python tools/prep_eldermark_art.py`
    - resizes the background to 720x480, keys magenta -> transparent on sprites,
      quantizes everything to the 4 greens, and auto-mirrors `hero_left.png`.
