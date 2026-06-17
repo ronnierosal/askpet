@@ -6391,6 +6391,7 @@ SLASH_COMMANDS = [
     ("/games", "See the games we can play", "games"),
     ("/play", "Start a game — e.g. /play hangman", "play"),
     ("/eldermark", "Walk the world of Eldermark (pixel adventure)", "eldermark"),
+    ("/spinstory", "Spirit-Beast Blades — a manga story you steer", "spinstory"),
     ("/help", "Show what AskPet can do", "help"),
 ]
 SLASH_BY_NAME = {name[1:]: (desc, action) for name, desc, action in SLASH_COMMANDS}
@@ -13475,6 +13476,295 @@ class EldermarkJournal:
             pass
 
 
+# ===========================================================================
+# Spirit-Beast Blades — an interactive BLACK-AND-WHITE MANGA story (visual-novel
+# style). A branching story graph: each node shows a manga panel (painted B&W
+# background + a character sprite with an EXPRESSION) and narration/dialogue;
+# choices set flags that branch the path and the ending. Original IP (the Spin
+# League's spinner battler). Art is generated separately and dropped into
+# assets/spinstory/; placeholders draw until then. The graph LOGIC is GUI-free
+# and headless-tested (test_spinstory.py).
+# ===========================================================================
+
+SPIN_INK = "#181712"        # manga ink (near-black)
+SPIN_PAPER = "#f2efe6"      # paper / speech-bubble fill
+SPIN_GRAY = "#8c8a80"       # mid grey
+SPIN_TONE = "#c8c5bb"       # light screentone
+
+if getattr(sys, "frozen", False):
+    SPIN_ASSETS = Path(sys._MEIPASS) / "assets" / "spinstory"
+else:
+    SPIN_ASSETS = Path(__file__).resolve().parent / "assets" / "spinstory"
+
+SPIN_W, SPIN_H = 720, 480
+
+
+def spin_ending_text(flags):
+    """The finale changes with how you carried yourself — proof the story reacts."""
+    if "bold" in flags:
+        return ("You thrust your blade to the sky and the crowd ROARS your name!\n"
+                "Kael smirks: \"...Not bad, rookie. We rematch soon.\"")
+    return ("You bow to Kael. He blinks, then returns it with quiet respect.\n"
+            "\"You earned that win. I'll be watching for you.\"")
+
+
+# The vertical-slice chapter. Each node: bg id, char (id, expression) or None,
+# optional speaker name, text, and ONE of next / choices / end. A choice may
+# set a flag and jumps to another node.
+SPIN_STORY = {
+    "intro": {
+        "bg": "arena", "char": None, "name": None,
+        "text": "The Spirit-Beast Blade arena thunders with the crowd.\n"
+                "Tonight, the rookie faces Kael — the reigning champion.",
+        "next": "taunt"},
+    "taunt": {
+        "bg": "arena", "char": ("kael", "smug"), "name": "Kael",
+        "text": "\"A rookie? Hah. This'll be over before it even begins.\"",
+        "choices": [
+            {"label": "Breathe. Stay calm and focused.", "set": "calm", "to": "ready_calm"},
+            {"label": "Fire right back at him.", "set": "bold", "to": "ready_bold"}]},
+    "ready_calm": {
+        "bg": "arena", "char": ("kael", "neutral"), "name": None,
+        "text": "You take a slow breath and let your nerves settle.\n"
+                "Steady hands. You'll let the blade do the talking.",
+        "next": "clash"},
+    "ready_bold": {
+        "bg": "arena", "char": ("kael", "fierce"), "name": "Kael",
+        "text": "\"Big words for a beginner! Let's see you back them up!\"",
+        "next": "clash"},
+    "clash": {
+        "bg": "arena", "char": None, "name": None,
+        "text": "Both launchers lock in. The arena holds its breath.\n"
+                "3...   2...   1...   LET IT RIP!",
+        "choices": [
+            {"label": "Unleash your Spirit Move!", "to": "win_power"},
+            {"label": "Defend, read him, then counter.", "to": "win_clever"}]},
+    "win_power": {
+        "bg": "arena", "char": ("kael", "shocked"), "name": None,
+        "text": "Your blade blazes and SLAMS into Kael's!\n"
+                "His spins out of the ring in a shower of sparks. You win!",
+        "next": "ending"},
+    "win_clever": {
+        "bg": "arena", "char": ("kael", "shocked"), "name": None,
+        "text": "You hold... wait for it... then strike at the perfect moment!\n"
+                "Kael overreaches and wobbles out of the ring. You win!",
+        "next": "ending"},
+    "ending": {
+        "bg": "arena", "char": ("kael", "neutral"), "name": None,
+        "text": None,            # filled from flags by spin_ending_text()
+        "end": True},
+}
+
+
+class SpinStoryLogic:
+    """GUI-free branching-story state: current node, flags, choices. Deterministic
+    and headless-testable."""
+
+    def __init__(self, story=SPIN_STORY, start="intro"):
+        self.story = story
+        self.start = start
+        self.node_id = start
+        self.flags = set()
+
+    @property
+    def node(self):
+        return self.story[self.node_id]
+
+    @property
+    def over(self):
+        return bool(self.node.get("end"))
+
+    def text(self):
+        n = self.node
+        if n.get("text") is None and n.get("end"):
+            return spin_ending_text(self.flags)
+        return n.get("text", "")
+
+    def choices(self):
+        return self.node.get("choices", [])
+
+    def advance(self):
+        """Auto-advance a non-choice node; returns the new node id, or None."""
+        n = self.node
+        if n.get("end") or "choices" in n:
+            return None
+        if "next" in n:
+            self.node_id = n["next"]
+            return self.node_id
+        return None
+
+    def choose(self, i):
+        chs = self.choices()
+        if not (0 <= i < len(chs)):
+            return None
+        ch = chs[i]
+        if ch.get("set"):
+            self.flags.add(ch["set"])
+        self.node_id = ch["to"]
+        return self.node_id
+
+
+class SpinMangaScreen:
+    """A black-and-white manga visual-novel screen: a painted panel background, a
+    character sprite with an expression, and a code-drawn speech box + choices.
+    Crash-isolated by its caller."""
+
+    def __init__(self, pet):
+        self.pet = pet
+        self.logic = SpinStoryLogic()
+        self._refs = []
+        self._cache = {}
+        self.sel = 0
+        self._closed = False
+
+        self.win = tk.Toplevel(pet.root)
+        self.win.title("Spirit-Beast Blades")
+        self.win.resizable(False, False)
+        self.canvas = tk.Canvas(self.win, width=SPIN_W, height=SPIN_H,
+                                highlightthickness=0, bg=SPIN_PAPER)
+        self.canvas.pack()
+
+        self.bg_item = self.canvas.create_image(0, 0, anchor="nw")
+        self.char_item = self.canvas.create_image(SPIN_W // 2, 316, anchor="s")
+        self.canvas.create_rectangle(3, 3, SPIN_W - 3, SPIN_H - 3,
+                                     outline=SPIN_INK, width=5)         # manga frame
+
+        top = 318
+        self.canvas.create_rectangle(20, top, SPIN_W - 20, SPIN_H - 16,
+                                     fill=SPIN_PAPER, outline=SPIN_INK, width=4)
+        self.name_box = self.canvas.create_rectangle(20, top - 26, 178, top,
+                                                     fill=SPIN_INK, outline=SPIN_INK,
+                                                     state="hidden")
+        self.name_txt = self.canvas.create_text(34, top - 13, anchor="w", fill=SPIN_PAPER,
+                                                font=("Consolas", 13, "bold"), state="hidden")
+        self.body = self.canvas.create_text(42, top + 16, anchor="nw", fill=SPIN_INK,
+                                            font=("Consolas", 15, "bold"),
+                                            width=SPIN_W - 100, text="")
+        self.choice_items = [self.canvas.create_text(
+            60, top + 76 + k * 28, anchor="w", fill=SPIN_INK,
+            font=("Consolas", 14, "bold"), text="", state="hidden") for k in range(3)]
+        self.cursor = self.canvas.create_text(40, top + 76, anchor="w", fill=SPIN_INK,
+                                              font=("Consolas", 14, "bold"), text="▸",
+                                              state="hidden")
+        self.tip = self.canvas.create_text(SPIN_W - 32, SPIN_H - 26, anchor="se",
+                                           fill=SPIN_GRAY, font=("Consolas", 11, "bold"),
+                                           text="")
+        self._ctop = top + 76
+
+        self._render()
+        self.win.bind("<KeyPress>", self._key)
+        self.win.protocol("WM_DELETE_WINDOW", self.close)
+        sw, sh = pet.root.winfo_screenwidth(), pet.root.winfo_screenheight()
+        self.win.update_idletasks()
+        self.win.geometry(f"+{max(0, (sw - SPIN_W) // 2)}+{max(0, (sh - SPIN_H) // 2 - 30)}")
+        self.win.focus_force()
+
+    # -- art -----------------------------------------------------------------
+    def _img(self, name, placeholder):
+        if name not in self._cache:
+            p = SPIN_ASSETS / name
+            img = None
+            if p.exists():
+                try:
+                    img = tk.PhotoImage(file=str(p))
+                except tk.TclError:
+                    img = None
+            img = img or placeholder()
+            self._cache[name] = img
+            self._refs.append(img)
+        return self._cache[name]
+
+    def _placeholder_bg(self):
+        im = tk.PhotoImage(width=SPIN_W, height=SPIN_H)
+        im.put(SPIN_PAPER, to=(0, 0, SPIN_W, SPIN_H))
+        im.put(SPIN_TONE, to=(0, 250, SPIN_W, SPIN_H))          # arena floor
+        im.put(SPIN_GRAY, to=(0, 246, SPIN_W, 250))            # horizon
+        im.put(SPIN_INK, to=(230, 296, 490, 301))              # ring (front)
+        im.put(SPIN_INK, to=(270, 232, 450, 236))              # ring (back)
+        return im
+
+    def _placeholder_char(self):
+        w, h = 150, 250
+        im = tk.PhotoImage(width=w, height=h)
+        im.put(SPIN_INK, to=(w // 3, 0, 2 * w // 3, 70))               # head
+        im.put(SPIN_PAPER, to=(w // 3 + 12, 16, 2 * w // 3 - 12, 52))  # face
+        im.put(SPIN_INK, to=(w // 5, 70, 4 * w // 5, h))              # body
+        return im
+
+    # -- render --------------------------------------------------------------
+    def _render(self):
+        n = self.logic.node
+        self.canvas.itemconfigure(
+            self.bg_item, image=self._img(f"{n.get('bg', 'arena')}_bg.png",
+                                          self._placeholder_bg))
+        ch = n.get("char")
+        if ch:
+            self.canvas.itemconfigure(
+                self.char_item, state="normal",
+                image=self._img(f"{ch[0]}_{ch[1]}.png", self._placeholder_char))
+        else:
+            self.canvas.itemconfigure(self.char_item, state="hidden")
+        nm = n.get("name")
+        st = "normal" if nm else "hidden"
+        self.canvas.itemconfigure(self.name_box, state=st)
+        self.canvas.itemconfigure(self.name_txt, state=st, text=nm or "")
+        self.canvas.itemconfigure(self.body, text=self.logic.text())
+        chs = self.logic.choices()
+        for k, it in enumerate(self.choice_items):
+            if k < len(chs):
+                self.canvas.itemconfigure(it, state="normal", text=f"{k + 1}. {chs[k]['label']}")
+            else:
+                self.canvas.itemconfigure(it, state="hidden")
+        if chs:
+            self.sel = min(self.sel, len(chs) - 1)
+            self.canvas.coords(self.cursor, 40, self._ctop + self.sel * 28)
+            self.canvas.itemconfigure(self.cursor, state="normal")
+            self.canvas.itemconfigure(self.tip, text="1/2 or arrows + Enter")
+        else:
+            self.canvas.itemconfigure(self.cursor, state="hidden")
+            self.canvas.itemconfigure(
+                self.tip, text="Space to close" if self.logic.over else "Space  ▸")
+
+    # -- input ---------------------------------------------------------------
+    def _key(self, e):
+        ks = (e.keysym or "").lower()
+        if ks == "escape":
+            self.close()
+            return
+        chs = self.logic.choices()
+        if chs:
+            if ks in ("down", "s", "right"):
+                self.sel = (self.sel + 1) % len(chs)
+                self._render()
+            elif ks in ("up", "w", "left"):
+                self.sel = (self.sel - 1) % len(chs)
+                self._render()
+            elif ks in ("1", "2", "3") and int(ks) - 1 < len(chs):
+                self.logic.choose(int(ks) - 1)
+                self.sel = 0
+                self._render()
+            elif ks in ("return", "space"):
+                self.logic.choose(self.sel)
+                self.sel = 0
+                self._render()
+        elif ks in ("return", "space"):
+            if self.logic.over:
+                self.close()
+            else:
+                self.logic.advance()
+                self._render()
+
+    def close(self):
+        if self._closed:
+            return
+        self._closed = True
+        try:
+            if self.win.winfo_exists():
+                self.win.destroy()
+        except Exception:
+            pass
+
+
 class ChatWindow:
     """iMessage-style chat window opened by clicking the pet.
 
@@ -14212,6 +14502,9 @@ class ChatWindow:
         if action == "eldermark":
             self._open_eldermark_world()
             return
+        if action == "spinstory":
+            self._open_spin_story()
+            return
         if not arg:
             self._add("pet", f"Add your text after /{name} — e.g. “/{name} …”.")
             return
@@ -14239,6 +14532,16 @@ class ChatWindow:
         except Exception:
             self._add("pet", "Hmm, I couldn't open Eldermark just now — let's "
                              "play a game instead? Say /play. 🐾")
+
+    def _open_spin_story(self):
+        """Open the Spirit-Beast Blades manga story. A bug must never break chat."""
+        self._add("game", "Opening Spirit-Beast Blades — a manga story. Read on; "
+                          "your choices steer how it goes. 🌀")
+        try:
+            SpinMangaScreen(self.pet)
+        except Exception:
+            self._add("pet", "Hmm, I couldn't open the story just now — try /games "
+                             "for the arcade instead. 🐾")
 
     def _build_template_prompt(self, task, template_key):
         """Build a prompt with a specific template forced (used by the

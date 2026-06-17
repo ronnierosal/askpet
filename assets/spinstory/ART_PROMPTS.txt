@@ -1,0 +1,63 @@
+SPIRIT-BEAST BLADES  —  manga story art prompts
+================================================
+Generate each image in ChatGPT, then SAVE it using the FILENAME shown above its
+prompt — into:  AskPet\assets\spinstory\raw\   (or your Downloads folder; either
+works, I can grab them).
+
+STYLE: black-and-white MANGA — ink line-art with screentone (dot) shading, NO
+color, high contrast, shounen-manga energy. Kid-friendly (ages 6-12): heroic and
+fun, never scary or violent, fully clothed, no blood.
+
+IMPORTANT for the four "kael_*" images: they must look like the SAME character —
+identical hair, outfit, face shape and proportions — with ONLY the expression
+changing. Generate them back-to-back and tell ChatGPT "same character, new
+expression, identical design" so they stay consistent.
+
+
+------------------------------------------------------------------
+FILE:  arena_bg.png        (the background scene)
+------------------------------------------------------------------
+Black-and-white MANGA panel, ink line-art with screentone shading, no color.
+A dramatic spinner-battle arena (a stadium for spinning-top duels): a big round
+battle dish / ring in the center-foreground, tiered crowd seats blurred in the
+background, dynamic speed-lines and spotlight beams, exciting shounen atmosphere.
+NO characters, NO text, NO speech bubbles. Landscape about 3:2 (e.g. 720x480).
+Clean, high-contrast black and white.
+
+
+------------------------------------------------------------------
+FILE:  kael_neutral.png    (the rival — calm)
+------------------------------------------------------------------
+Black-and-white MANGA character, ink line-art + screentone shading, no color.
+"Kael", a confident teenage rival blade-spinner in shounen-manga style: cool
+spiky hair, a sporty jacket, holding a spinner launcher. NEUTRAL, calm, cool
+expression. Facing the viewer, head-and-upper-body. Place him on a SOLID FLAT
+MAGENTA (#fe00fe) background — nothing else: no shadow, no border, no text.
+Portrait-ish (e.g. 600x900). High-contrast black and white. Kid-friendly.
+
+
+------------------------------------------------------------------
+FILE:  kael_smug.png       (the rival — smug / taunting)
+------------------------------------------------------------------
+The SAME character "Kael" as kael_neutral — identical hair, jacket, face and
+proportions — ONLY the expression changes: a SMUG, cocky smirk, looking down on
+the viewer, one eyebrow raised. Black-and-white MANGA, ink + screentone, no
+color. SOLID FLAT MAGENTA (#fe00fe) background only. Same framing and size.
+
+
+------------------------------------------------------------------
+FILE:  kael_fierce.png     (the rival — fired up)
+------------------------------------------------------------------
+The SAME character "Kael" — identical design — ONLY the expression changes:
+FIERCE and fired-up, an intense determined battle face, maybe mid-shout, with
+manga action energy. Black-and-white MANGA, ink + screentone, no color. SOLID
+FLAT MAGENTA (#fe00fe) background only. Same framing and size.
+
+
+------------------------------------------------------------------
+FILE:  kael_shocked.png    (the rival — caught off guard / just lost)
+------------------------------------------------------------------
+The SAME character "Kael" — identical design — ONLY the expression changes:
+SHOCKED, wide-eyed, gasping, caught completely off guard (he just lost the
+battle). Surprised, not scary. Black-and-white MANGA, ink + screentone, no
+color. SOLID FLAT MAGENTA (#fe00fe) background only. Same framing and size.

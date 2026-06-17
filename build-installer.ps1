@@ -61,6 +61,7 @@ Invoke-Test test_world.py
 Invoke-Test test_scene.py
 Invoke-Test test_battle.py
 Invoke-Test test_journal.py
+Invoke-Test test_spinstory.py
 
 Write-Host "== 2/4 Building AskPet.exe (PyInstaller) =="
 & $pyinstaller --noconfirm --clean --windowed --name AskPet `

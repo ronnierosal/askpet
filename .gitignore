@@ -22,6 +22,9 @@ assets/askpet.ico
 # Eldermark: raw AI art exports are inputs only; the normalized PNGs are kept.
 assets/eldermark/raw/
 
+# Spirit-Beast Blades manga: raw art inputs (normalized PNGs are kept).
+assets/spinstory/raw/
+
 # Local scratch (the committed copy lives in docs/)
 /chat-screenshot.png
 launch-err.txt

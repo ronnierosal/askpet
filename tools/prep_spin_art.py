@@ -1,0 +1,93 @@
+"""Normalize raw ChatGPT black-and-white manga art into Spirit-Beast Blades assets.
+
+Drop raw PNGs into assets/spinstory/raw/ using these base names:
+    arena_bg.png                              (background, ~3:2, any size)
+    kael_neutral.png kael_smug.png kael_fierce.png kael_shocked.png
+                                              (the rival, on solid magenta #fe00fe)
+Then run:  python tools/prep_spin_art.py
+Outputs normalized GRAYSCALE PNGs into assets/spinstory/.
+
+Build-time tool only; needs Pillow (pip install pillow). The game never imports PIL.
+"""
+import sys
+from pathlib import Path
+
+try:
+    from PIL import Image
+except ImportError:
+    sys.exit("This tool needs Pillow:  pip install pillow")
+
+ROOT = Path(__file__).resolve().parent.parent
+RAW = ROOT / "assets" / "spinstory" / "raw"
+OUT = ROOT / "assets" / "spinstory"
+KEY = (0xfe, 0x00, 0xfe)            # magenta -> transparent
+BG_SIZE = (720, 480)
+SPRITE_H = 300
+BACKGROUNDS = ("arena_bg.png",)
+SPRITES = ("kael_neutral", "kael_smug", "kael_fierce", "kael_shocked")
+
+
+def key_to_alpha(img, tol=70):
+    img = img.convert("RGBA")
+    px = img.load()
+    w, h = img.size
+    for y in range(h):
+        for x in range(w):
+            r, g, b, a = px[x, y]
+            if r > 255 - tol and g < tol and b > 255 - tol:
+                px[x, y] = (0, 0, 0, 0)
+    return img
+
+
+def grayscale_rgba(img):
+    img = img.convert("RGBA")
+    a = img.split()[-1]
+    lum = img.convert("L")
+    return Image.merge("RGBA", (lum, lum, lum, a))
+
+
+def autocrop(img):
+    bbox = img.split()[-1].getbbox()
+    return img.crop(bbox) if bbox else img
+
+
+def resize_h(img, target_h):
+    w, h = img.size
+    return img.resize((max(1, round(w * target_h / h)), target_h), Image.NEAREST)
+
+
+def do_bg(name):
+    src = RAW / name
+    if not src.exists():
+        return False
+    img = Image.open(src).convert("L").convert("RGB").resize(BG_SIZE, Image.LANCZOS)
+    img.save(OUT / name)
+    print(f"  bg   {name}  -> {BG_SIZE[0]}x{BG_SIZE[1]} (grayscale)")
+    return True
+
+
+def do_sprite(base):
+    src = RAW / f"{base}.png"
+    if not src.exists():
+        return False
+    img = grayscale_rgba(key_to_alpha(Image.open(src)))
+    img = resize_h(autocrop(img), SPRITE_H)
+    img.save(OUT / f"{base}.png")
+    print(f"  spr  {base}.png  -> {img.size[0]}x{img.size[1]} (B&W, keyed)")
+    return True
+
+
+def main():
+    OUT.mkdir(parents=True, exist_ok=True)
+    RAW.mkdir(parents=True, exist_ok=True)
+    did = False
+    for bg in BACKGROUNDS:
+        did |= do_bg(bg)
+    for base in SPRITES:
+        did |= do_sprite(base)
+    print("Done. Normalized art written to " + str(OUT) if did
+          else "No raw art found in " + str(RAW))
+
+
+if __name__ == "__main__":
+    main()

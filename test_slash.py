@@ -27,7 +27,8 @@ print("parse_slash OK")
 
 # --- registry ----------------------------------------------------------------
 VALID_ACTIONS = {"rewrite", "email", "summarize", "review", "answer",
-                 "knowledge", "prompt", "help", "games", "play", "eldermark"}
+                 "knowledge", "prompt", "help", "games", "play", "eldermark",
+                 "spinstory"}
 names = [n for n, _, _ in pm.SLASH_COMMANDS]
 assert all(n.startswith("/") for n in names), names
 assert len(names) == len(set(names)), "duplicate command names"
