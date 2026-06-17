@@ -33,7 +33,7 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 APP_NAME = "AskPet"
-APP_VERSION = "0.38.0"
+APP_VERSION = "0.38.1"
 CONTENT_VERSION = "2026.06.17"
 
 # ---------------------------------------------------------------------------
@@ -9888,19 +9888,19 @@ class FrostfallRPG(RPGQuest):
 QUEST_REGIONS = [TideHollowRPG, EmberPeakRPG, FrostfallRPG]
 # Pixel-art region emblems (sea / fire / snow), shown on the region-select.
 REGION_EMBLEMS = [
-    "    ▟█▙    ▟█▙\n"
-    "  ▒▓███▓▒▒▓███▓▒\n"
-    "  ░▒▓▓▒░  ░▒▓▓▒░\n"
-    "  ~~~~~~~~~~~~~~~",
-    "       ▟▙\n"
-    "      ▟██▙\n"
-    "    ▟██████▙\n"
-    "   ▟████████▙\n"
-    "   ░▒▓████▓▒░",
+    "   ▄███▄   ▄███▄\n"
+    "  ▒▓█████▓▒▓█████▓▒\n"
+    "  ░▒▓███▓▒░▒▓███▓░\n"
+    "  ~~~~~~~~~~~~~~~~~",
+    "       ▄█▄\n"
+    "      ▄███▄\n"
+    "    ▄███████▄\n"
+    "   ▄█████████▄\n"
+    "   ░▒▓█████▓▒░",
     "   *   *   *   *\n"
-    "     ▟██████▙\n"
-    "    ▟████████▙\n"
-    "    ░▒▓▓▓▓▓▓▒░\n"
+    "     ▄███████▄\n"
+    "    ▄█████████▄\n"
+    "    ░▒▓▓▓▓▓▓▓▒░\n"
     "   *   *   *   *",
 ]
 
@@ -10675,15 +10675,15 @@ SPIN_STARTERS = [
     {"name": "Emberwyrm", "type": "atk", "atk": 7, "guard": 4, "sta": 5,
      "desc": "a fiery dragon spirit that loves to charge in",
      "special": "Ember Drive",
-     "art": "    ▟▙     ▟▙\n   ░▓███████▓░\n   ▒▓█o███o█▓▒\n   ░▓██▀█▀██▓░\n    ░▒▓▓▓▓▒░"},
+     "art": "   ▀█▄     ▄█▀\n  ▒▓█████████▓▒\n  ▒▓██o███o██▓▒\n  ▒▓███▀▀▀███▓▒\n   ░▒▓█████▓▒░"},
     {"name": "Stonemaw", "type": "def", "atk": 4, "guard": 7, "sta": 5,
      "desc": "a rugged rock-bear spirit that shrugs off hits",
      "special": "Bastion Crash",
-     "art": "   ▟▙       ▟▙\n   ▓████████▓\n   ▓█o████o█▓\n   ▓███▄▄███▓\n   ░▒▓▓▓▓▓▓▒░"},
+     "art": "   ██       ██\n  ▓███████████▓\n  ▓██o█████o██▓\n  ▓████▄▄▄████▓\n   ▒▓███████▓▒"},
     {"name": "Galelynx", "type": "sta", "atk": 5, "guard": 4, "sta": 7,
      "desc": "a swift wind-cat spirit that spins and spins",
      "special": "Cyclone Whirl",
-     "art": "   ▜▙       ▟▛\n   ░▓██████▓░\n   ▒▓█^██^█▓▒\n   ░▓███▄███▓░\n    ░▒▓▓▓▓▒░"},
+     "art": "   █▄       ▄█\n  ░▓█████████▓░\n  ░▓██^███^██▓░\n  ░▓████▄████▓░\n   ░▒▓█████▓▒░"},
 ]
 
 # The league ladder of ORIGINAL rivals (last one is the Champion).
