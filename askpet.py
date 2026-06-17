@@ -12493,38 +12493,63 @@ SCENE_W, SCENE_H = 720, 480
 # The slice's one location. `solids` are rectangles the player can't enter
 # (x, y, w, h); `npcs` are interaction points (sprite optional) with reading
 # pages. A position is the sprite BASE (feet), anchored bottom-centre on draw.
-ELDER_SLICE = {
-    "id": "mosslight_gate",
-    "name": "Mosslight Gate",
-    "bg": "mosslight_gate_bg.png",
-    "spawn": (340, 410),
-    "solids": [
-        (0, 0, SCENE_W, 80),             # top canopy
-        (0, 0, 80, SCENE_H),             # left-edge tree
-        (SCENE_W - 80, 0, 80, SCENE_H),  # right-edge tree
-        (270, 110, 60, 200),             # left arch pillar (lantern post)
-        (440, 110, 60, 200),             # right arch pillar (lantern post)
-        (60, 320, 70, 90),               # bottom-left mossy stone
-        (600, 300, 70, 130),             # bottom-right mossy stones
-    ],
-    "npcs": [
-        {"id": "mossback", "sprite": "mossback.png", "pos": (250, 300),
-         "creature": "mossback",
-         "pages": [
-             "A round, mossy creature blinks up at you,\nmushrooms swaying on its back.",
-             "\"Welcome to Eldermark, little wanderer.\"",
-             "\"Follow the lantern path up through the\nMosslight Gate...\"",
-             "\"...and the old Wayshrine will light your\nway safely home.\"",
-         ]},
-        {"id": "gate", "sprite": None, "pos": (380, 150),
-         "pages": [
-             "Beyond the moss-covered arch the trees\nlean close and the path grows quiet.",
-             "The way to Whisperwood opens soon...",
-         ]},
-        {"id": "ferns", "sprite": None, "pos": (150, 360), "battle": "gloomling",
-         "pages": ["The ferns rustle..."]},
-    ],
+ELDER_SCENES = {
+    "mosslight_gate": {
+        "id": "mosslight_gate",
+        "name": "Mosslight Gate",
+        "bg": "mosslight_gate_bg.png",
+        "spawn": (340, 410),
+        "solids": [
+            (0, 0, SCENE_W, 80),             # top canopy
+            (0, 0, 80, SCENE_H),             # left-edge tree
+            (SCENE_W - 80, 0, 80, SCENE_H),  # right-edge tree
+            (270, 110, 60, 200),             # left arch pillar (lantern post)
+            (440, 110, 60, 200),             # right arch pillar (lantern post)
+            (60, 320, 70, 90),               # bottom-left mossy stone
+            (600, 300, 70, 130),             # bottom-right mossy stones
+        ],
+        "npcs": [
+            {"id": "mossback", "sprite": "mossback.png", "pos": (250, 300),
+             "creature": "mossback",
+             "pages": [
+                 "A round, mossy creature blinks up at you,\nmushrooms swaying on its back.",
+                 "\"Welcome to Eldermark, little wanderer.\"",
+                 "\"Walk up through the Mosslight Gate to\nreach the Whisperwood...\"",
+                 "\"...and make a friend or two along the way.\"",
+             ]},
+            {"id": "ferns", "sprite": None, "pos": (150, 360), "battle": "gloomling",
+             "pages": ["The ferns rustle..."]},
+        ],
+        "exits": [{"at": (336, 84, 104, 60), "to": "whisperwood", "spawn": (360, 400)}],
+    },
+    "whisperwood": {
+        "id": "whisperwood",
+        "name": "Whisperwood",
+        "bg": "whisperwood_bg.png",
+        "spawn": (360, 410),
+        "solids": [
+            (0, 0, SCENE_W, 64),             # canopy
+            (0, 0, 90, SCENE_H),             # left-edge trees
+            (SCENE_W - 90, 0, 90, SCENE_H),  # right-edge trees
+            (520, 200, 96, 96),              # mossy stone block (right)
+        ],
+        "npcs": [
+            {"id": "hedge", "sprite": "hedge_pixie.png", "pos": (210, 330),
+             "creature": "hedge_pixie",
+             "pages": [
+                 "A cheerful Hedge-Pixie lifts its little\nlantern to light your way.",
+                 "\"Welcome to the Whisperwood! Mind the\nbrambles — a Thistlewisp loves to play there.\"",
+                 "\"And deeper in, the old Mire Warden waits.\nIt's lonely... will you be its friend?\"",
+             ]},
+            {"id": "brambles", "sprite": None, "pos": (500, 330),
+             "battle": "thistlewisp", "pages": ["The brambles shiver..."]},
+            {"id": "warden", "sprite": None, "pos": (360, 150),
+             "battle": "mire_warden", "pages": ["A great mossy shape stirs..."]},
+        ],
+        "exits": [{"at": (300, 446, 120, 34), "to": "mosslight_gate", "spawn": (384, 150)}],
+    },
 }
+ELDER_SLICE = ELDER_SCENES["mosslight_gate"]   # back-compat alias for tests
 
 
 # The creatures of Eldermark — for the Journal (a gentle "dex"): each has a
@@ -12591,11 +12616,12 @@ class EldermarkSceneLogic:
     SPEED = 3
     TALK = 56                # interaction reach to an NPC base point
 
-    def __init__(self, scene=ELDER_SLICE):
+    def __init__(self, scene=ELDER_SLICE, spawn=None):
         self.scene = scene
         self.solids = [tuple(r) for r in scene.get("solids", [])]
         self.npcs = scene.get("npcs", [])
-        self.x, self.y = scene.get("spawn", (SCENE_W // 2, SCENE_H // 2))
+        self.exits = scene.get("exits", [])
+        self.x, self.y = spawn or scene.get("spawn", (SCENE_W // 2, SCENE_H // 2))
         self.facing = "up"
         self.anim = 0
 
@@ -12635,6 +12661,15 @@ class EldermarkSceneLogic:
                 return npc
         return None
 
+    def exit_at(self):
+        """The exit whose zone holds the player's feet centre, or None."""
+        fx, fy = self.x + self.PW / 2, self.y + self.PH / 2
+        for ex in self.exits:
+            rx, ry, rw, rh = ex["at"]
+            if rx <= fx <= rx + rw and ry <= fy <= ry + rh:
+                return ex
+        return None
+
 
 class EldermarkScene:
     """The painted Eldermark scene window: a PNG background, sprite actors,
@@ -12645,10 +12680,11 @@ class EldermarkScene:
     _KEYS = {"up": "up", "w": "up", "down": "down", "s": "down",
              "left": "left", "a": "left", "right": "right", "d": "right"}
 
-    def __init__(self, pet):
+    def __init__(self, pet, scene_id="mosslight_gate", spawn=None):
         self.pet = pet
-        self.scene = ELDER_SLICE
-        self.logic = EldermarkSceneLogic(self.scene)
+        self.scene_id = scene_id
+        self.scene = ELDER_SCENES.get(scene_id, ELDER_SLICE)
+        self.logic = EldermarkSceneLogic(self.scene, spawn=spawn)
         self._refs = []                      # keep PhotoImages alive (anti-GC)
 
         self.win = tk.Toplevel(pet.root)
@@ -12827,7 +12863,7 @@ class EldermarkScene:
                 ELDER_STATE.befriend(enemy_key)
                 self._persist()
         try:
-            EldermarkBattle(self.pet, enemy_key, on_close=done)
+            EldermarkBattle(self.pet, enemy_key, bg=self.scene.get("bg"), on_close=done)
         except Exception:
             pass
 
@@ -12847,6 +12883,15 @@ class EldermarkScene:
             except Exception:
                 pass
 
+    def _go(self, scene_id, spawn):
+        """Walk to an adjacent scene: open the new one, close this one."""
+        pet = self.pet
+        self.close()
+        try:
+            EldermarkScene(pet, scene_id, spawn)
+        except Exception:
+            pass
+
     # -- loop ----------------------------------------------------------------
     def _tick(self):
         if not self.win.winfo_exists():
@@ -12854,6 +12899,10 @@ class EldermarkScene:
         self._anim += 1
         if self._talk is None:
             self.logic.step(self._dirs)
+            ex = self.logic.exit_at()
+            if ex:
+                self._go(ex["to"], ex.get("spawn"))
+                return
         bob = -2 if (self._talk is None and self._dirs and (self._anim // 5) % 2) else 0
         self.canvas.coords(self.player_item,
                            self.logic.x + self.logic.PW // 2,
@@ -12916,6 +12965,22 @@ ELDER_BATTLERS = {
         "poke": "The Gloomling bumps you softly.",
         "win": "The Gloomling gives a happy wiggle and drifts beside you — a new friend!",
         "lose": "You grow sleepy and sit to rest. The Gloomling waits nearby, kind and patient.",
+    },
+    "thistlewisp": {
+        "name": "Thistlewisp", "sprite": "thistlewisp.png",
+        "hp": 22, "atk": 4, "lv": 5,
+        "meet": "A Thistlewisp bounces out of the brambles, grinning!",
+        "poke": "The Thistlewisp boings off you, giggling.",
+        "win": "The Thistlewisp does a happy spin and bounces along at your side!",
+        "lose": "You stop for a breather. The Thistlewisp waits, bouncing softly.",
+    },
+    "mire_warden": {
+        "name": "Mire Warden", "sprite": "mire_warden.png",
+        "hp": 30, "atk": 4, "lv": 7,
+        "meet": "The ancient Mire Warden rises slowly, its kind eyes meeting yours.",
+        "poke": "The Mire Warden shifts; soft mossy dust drifts over you.",
+        "win": "The Mire Warden smiles for the first time in an age and walks beside you — no longer alone.",
+        "lose": "You rest against a soft mound of moss. The Warden waits, gentle and patient.",
     },
 }
 
@@ -12993,9 +13058,10 @@ class EldermarkBattle:
     MENU = [("fight", "FIGHT"), ("skill", "SKILL"), ("item", "ITEM"), ("run", "RUN")]
 
     def __init__(self, pet, enemy_key="gloomling", hero_name="Wanderer",
-                 hero_lv=5, hero_hp=26, on_close=None):
+                 hero_lv=5, hero_hp=26, on_close=None, bg=None):
         self.pet = pet
         self.on_close = on_close
+        self._bg_name = bg
         self.logic = EldermarkBattleLogic(enemy_key, hero_name, hero_lv, hero_hp)
         self._refs = []
 
@@ -13055,8 +13121,8 @@ class EldermarkBattle:
         return img
 
     def _load_bg(self):
-        for name in ("battle_bg.png", "mosslight_gate_bg.png"):
-            if (ELDER_ASSETS / name).exists():
+        for name in (self._bg_name, "battle_bg.png", "mosslight_gate_bg.png"):
+            if name and (ELDER_ASSETS / name).exists():
                 try:
                     img = tk.PhotoImage(file=str(ELDER_ASSETS / name))
                     self._refs.append(img)

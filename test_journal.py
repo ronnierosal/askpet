@@ -1,6 +1,6 @@
 """Headless tests for the Creature Journal data + meet/befriend state."""
 from askpet import (EldermarkState, ELDER_CREATURES, ELDER_BATTLERS,
-                    ELDER_SLICE, ELDER_STATE)
+                    ELDER_SCENES, ELDER_STATE)
 
 
 def test_state_meet_befriend():
@@ -29,10 +29,11 @@ def test_battlers_have_journal_entries():
 
 
 def test_scene_creature_keys_resolve():
-    for npc in ELDER_SLICE["npcs"]:
-        cid = npc.get("creature")
-        if cid:
-            assert cid in ELDER_CREATURES, f"npc creature {cid!r} not in registry"
+    for s in ELDER_SCENES.values():
+        for npc in s["npcs"]:
+            cid = npc.get("creature")
+            if cid:
+                assert cid in ELDER_CREATURES, f"npc creature {cid!r} not in registry"
     print("scene creature keys resolve OK")
 
 
@@ -44,11 +45,12 @@ def test_global_state_singleton():
 def test_scene_battle_keys_resolve_fully():
     # every scene battle key must be both a battler AND a journal creature, so a
     # win can open the battle and befriend a real, displayable creature
-    for npc in ELDER_SLICE["npcs"]:
-        bk = npc.get("battle")
-        if bk:
-            assert bk in ELDER_BATTLERS, f"battle {bk!r} not a battler"
-            assert bk in ELDER_CREATURES, f"battle {bk!r} has no journal entry"
+    for s in ELDER_SCENES.values():
+        for npc in s["npcs"]:
+            bk = npc.get("battle")
+            if bk:
+                assert bk in ELDER_BATTLERS, f"battle {bk!r} not a battler"
+                assert bk in ELDER_CREATURES, f"battle {bk!r} has no journal entry"
     print("scene battle keys resolve fully OK")
 
 

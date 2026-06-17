@@ -1,5 +1,5 @@
 """Headless tests for the gentle Eldermark battle logic (no tkinter)."""
-from askpet import EldermarkBattleLogic, ELDER_BATTLERS, ELDER_MOVES, ELDER_SLICE
+from askpet import EldermarkBattleLogic, ELDER_BATTLERS, ELDER_MOVES, ELDER_SCENES
 
 
 def test_meet_and_contract():
@@ -110,11 +110,27 @@ def test_unknown_action_is_noop():
 
 
 def test_scene_battle_keys_resolve():
-    for npc in ELDER_SLICE["npcs"]:
-        key = npc.get("battle")
-        if key:
-            assert key in ELDER_BATTLERS, f"unknown battler {key!r}"
+    for s in ELDER_SCENES.values():
+        for npc in s["npcs"]:
+            key = npc.get("battle")
+            if key:
+                assert key in ELDER_BATTLERS, f"unknown battler {key!r}"
     print("scene battle keys resolve OK")
+
+
+def test_all_battlers_winnable():
+    # every battler can be befriended (won) via FIGHT and leaves the hero standing
+    for key in ELDER_BATTLERS:
+        L = EldermarkBattleLogic(key)
+        guard = 0
+        while not L.over and guard < 60:
+            L.act("fight")
+            guard += 1
+        assert L.over and L.won is True, f"{key} not winnable"
+        assert L.h_hp >= 0
+        for field in ("meet", "poke", "win", "lose"):
+            assert ELDER_BATTLERS[key][field], f"{key} missing {field}"
+    print("all battlers winnable OK")
 
 
 if __name__ == "__main__":
@@ -129,4 +145,5 @@ if __name__ == "__main__":
     test_determinism()
     test_hp_never_negative()
     test_scene_battle_keys_resolve()
+    test_all_battlers_winnable()
     print("BATTLE TEST PASSED")
