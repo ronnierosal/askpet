@@ -92,6 +92,21 @@ def test_shrine_pages():
     print("shrine pages OK")
 
 
+def test_ending_is_reachable():
+    # every journal creature must be befriendable (talked to, or fought) somewhere,
+    # so the Wayshrine ending (gated on all ELDER_CREATURES) can actually trigger
+    befriendable = set()
+    for s in ELDER_SCENES.values():
+        for npc in s["npcs"]:
+            if npc.get("creature"):
+                befriendable.add(npc["creature"])
+            if npc.get("battle"):
+                befriendable.add(npc["battle"])
+    missing = set(ELDER_CREATURES) - befriendable
+    assert not missing, f"unreachable creatures (ending can't complete): {missing}"
+    print("ending is reachable OK")
+
+
 if __name__ == "__main__":
     test_state_meet_befriend()
     test_creatures_wellformed()
@@ -102,4 +117,5 @@ if __name__ == "__main__":
     test_state_rejects_unknown_ids()
     test_persistence_roundtrip()
     test_shrine_pages()
+    test_ending_is_reachable()
     print("JOURNAL TEST PASSED")

@@ -12887,7 +12887,7 @@ class EldermarkScene:
                 self._render_page()
                 return
             if npc.get("creature"):
-                ELDER_STATE.meet(npc["creature"])
+                ELDER_STATE.befriend(npc["creature"])   # friendly NPCs join when you talk
                 self._persist()
             self._talk = npc
             self._page = 0
