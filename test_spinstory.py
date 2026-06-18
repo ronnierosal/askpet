@@ -265,6 +265,41 @@ def test_comic_render_styles():
     print("comic render styles OK")
 
 
+def test_comic_quads():
+    """spin_comic_quads: identity when flat, tessellating + in-bounds + non-inverting
+    trapezoids when slanted; _spin_quad_safe stays inside the quad."""
+    from askpet import (spin_comic_quads, spin_comic_rects, _spin_quad_safe,
+                        _spin_auto_slants, SPIN_COMIC_STORY as S, SPIN_COMIC_SAMPLE)
+
+    def bbox(q):
+        xs = [c[0] for c in q]; ys = [c[1] for c in q]
+        return min(xs), min(ys), max(xs), max(ys)
+
+    # (a) IDENTITY + (d) safe-rect: slants=None -> quad bbox == spin_comic_rects rect
+    for pg in [n["page"] for n in S.values()] + [SPIN_COMIC_SAMPLE]:
+        rects = spin_comic_rects(pg["panels"], pg["cols"], pg["rows"], 600, 724)
+        quads = spin_comic_quads(pg["panels"], pg["cols"], pg["rows"], 600, 724)
+        for (x, y, w, h), q in zip(rects, quads):
+            assert bbox(q) == (x, y, x + w, y + h), (x, y, w, h, q)
+            sx, sy, sw, sh = _spin_quad_safe(q)
+            assert sw >= 1 and sh >= 1 and sx >= x and sy >= y and sx + sw <= x + w
+
+    # (b)+(c)+(e): a dynamic 3-row page is in-bounds, tessellates, never inverts
+    panels = [{"grid": (0, 0, 1, 1)}, {"grid": (0, 1, 1, 1)}, {"grid": (0, 2, 1, 1)}]
+    quads = spin_comic_quads(panels, 1, 3, 600, 724, slants=_spin_auto_slants(3))
+    for q in quads:
+        for (px, py) in q:
+            assert 0 <= px <= 600 and 0 <= py <= 724, q          # (b) in bounds
+        assert q[3][1] > q[0][1] and q[2][1] > q[1][1]           # (e) bottom below top
+    assert quads[0][3] == quads[1][0] and quads[0][2] == quads[1][1]   # (c) shared seam 0
+    assert quads[1][3] == quads[2][0] and quads[1][2] == quads[2][1]   # (c) shared seam 1
+
+    # (e) a huge tilt is clamped so no panel inverts
+    for q in spin_comic_quads(panels, 1, 3, 600, 724, slants=[("seam", 0, 9999)]):
+        assert q[3][1] > q[0][1] and q[2][1] > q[1][1]
+    print("comic quads OK")
+
+
 if __name__ == "__main__":
     test_graph_integrity()
     test_all_nodes_reachable()
@@ -272,5 +307,6 @@ if __name__ == "__main__":
     test_ending_varies_and_choose_guard()
     test_comic_layout()
     test_comic_story()
+    test_comic_quads()
     test_comic_render_styles()
     print("SPINSTORY TEST PASSED")

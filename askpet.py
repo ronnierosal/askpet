@@ -13807,6 +13807,50 @@ def spin_comic_rects(panels, cols, rows, W, H, margin=24, gutter=14):
     return rects
 
 
+SPIN_SLANT = 22          # default seam tilt (px) for a frame="dynamic" page
+SPIN_MINH = 130          # a slanted panel never gets shorter than this on a side
+
+
+def _spin_auto_slants(rows):
+    """frame='dynamic' shorthand: alternating diagonal tilts on each row seam."""
+    return [("seam", r, SPIN_SLANT if r % 2 == 0 else -SPIN_SLANT) for r in range(rows - 1)]
+
+
+def spin_comic_quads(panels, cols, rows, W, H, margin=24, gutter=14, slants=None):
+    """Each panel as 4 clockwise corners [TL, TR, BR, BL]. With slants=None this
+    is exactly spin_comic_rects (the rectangles emitted as corners) — identity. A
+    'slants' list of ('seam', row, dy) tilts the shared SEAM below `row` into a
+    diagonal: the panels above and below reference the SAME two endpoints, so they
+    tessellate with no gap and no overlap (full-width / cols=1 pages). Pure
+    function — headless-testable like spin_comic_rects."""
+    base = spin_comic_rects(panels, cols, rows, W, H, margin, gutter)
+    quads = [[(x, y), (x + w, y), (x + w, y + h), (x, y + h)] for (x, y, w, h) in base]
+    if not slants:
+        return quads
+    ch = (H - 2 * margin - (rows - 1) * gutter) / rows
+    for kind, r, amt in slants:
+        seam_y = margin + (r + 1) * ch + r * gutter + gutter / 2
+        cap = max(0.0, (ch - SPIN_MINH) / 2)            # never starve a panel
+        dy = max(-cap, min(amt, cap))
+        Pa, Pb = (margin, seam_y - dy), (W - margin, seam_y + dy)
+        for q, p in zip(quads, panels):
+            _, row, _, rs = p["grid"]
+            if row + rs - 1 == r:                        # this panel's BOTTOM rides the seam
+                q[3], q[2] = Pa, Pb
+            if row == r + 1:                             # this panel's TOP rides the seam
+                q[0], q[1] = Pa, Pb
+    return quads
+
+
+def _spin_quad_safe(quad):
+    """The largest axis-aligned rect inscribed in a (possibly slanted) quad —
+    where a character/caption/bubble can sit without crossing a diagonal edge."""
+    (x0, y0), (x1, y1), (x2, y2), (x3, y3) = quad
+    sx, sx2 = max(x0, x3), min(x1, x2)
+    sy, sy2 = max(y0, y1), min(y2, y3)
+    return sx, sy, max(1, sx2 - sx), max(1, sy2 - sy)
+
+
 def _spin_bg_crop(bgid, w, h, cache, refs):
     """A panel-sized centre crop of a manga background, else a tone fill."""
     w, h = max(1, w), max(1, h)
@@ -14050,32 +14094,123 @@ def _spin_fx(canvas, x, y, w, h, fx="tone", fcy=None):
                                fill=SPIN_INK, width=(2 if i % 4 == 0 else 1))
 
 
+def _spin_quad_jagged(quad, step, wob):
+    """Points walking a quad's 4 edges clockwise, each pushed along that edge's
+    OUTWARD normal by wob(i) — the impact/soft frame, generalised to a trapezoid."""
+    cx = sum(p[0] for p in quad) / 4.0
+    cy = sum(p[1] for p in quad) / 4.0
+    pts, i = [], 0
+    for e in range(4):
+        ax, ay = quad[e]
+        bx, by = quad[(e + 1) % 4]
+        ex, ey = bx - ax, by - ay
+        length = math.hypot(ex, ey) or 1.0
+        nx, ny = -ey / length, ex / length                  # a perpendicular
+        mx, my = (ax + bx) / 2, (ay + by) / 2
+        if (mx + nx - cx) ** 2 + (my + ny - cy) ** 2 < (mx - cx) ** 2 + (my - cy) ** 2:
+            nx, ny = -nx, -ny                                # ...flipped to point OUTWARD
+        for k in range(max(1, int(length / step))):
+            t, d = k / max(1, int(length / step)), wob(i)
+            i += 1
+            pts += [ax + ex * t + nx * d, ay + ey * t + ny * d]
+    return pts
+
+
+def _spin_border_quad(canvas, quad, style="plain"):
+    """A (possibly slanted) panel's manga frame, as a polygon. plain/bold/none/
+    double/impact/soft all follow the trapezoid edges."""
+    flat = [c for pt in quad for c in pt]
+    if style == "none":
+        return
+    if style == "impact":
+        canvas.create_polygon(_spin_quad_jagged(quad, 20, lambda i: 8 if i % 2 else 0),
+                              fill="", outline=SPIN_INK, width=3)
+        return
+    if style == "soft":
+        canvas.create_polygon(_spin_quad_jagged(quad, 24, lambda i: 5 * math.sin(i * 1.1)),
+                              fill="", outline=SPIN_INK, width=3, smooth=True)
+        return
+    canvas.create_polygon(flat, fill="", outline=SPIN_INK,
+                          width=(8 if style == "bold" else 4), joinstyle="miter")
+    if style == "double":
+        cx = sum(pt[0] for pt in quad) / 4.0
+        cy = sum(pt[1] for pt in quad) / 4.0
+        inner = [(px + (cx - px) * 0.05, py + (cy - py) * 0.05) for (px, py) in quad]
+        canvas.create_polygon([c for pt in inner for c in pt], fill="",
+                              outline=SPIN_INK, width=2, joinstyle="miter")
+
+
+def _spin_draw_quad_panel(canvas, p, quad, cache, refs):
+    """Render one SLANTED (trapezoid) panel: fill the whole cell, place the
+    character / caption / bubble inside the inscribed safe-rect, then stroke the
+    quad frame LAST so its ink edge re-cuts any sprite that grazes a diagonal."""
+    flat = [c for pt in quad for c in pt]
+    sx, sy, sw, sh = _spin_quad_safe(quad)
+    canvas.create_polygon(flat, fill=SPIN_PAPER, outline="")          # base: the slanted cell
+    if p.get("bg"):
+        canvas.create_image(int(sx), int(sy), anchor="nw",
+                            image=_spin_bg_crop(p["bg"], int(sw), int(sh), cache, refs))
+    else:
+        fx = p.get("fx") or ("tone12" if p.get("char") else "tone")
+        st = _SPIN_STIPPLE.get(fx)
+        if st:                                                       # halftone fills the whole quad
+            canvas.create_polygon(flat, fill=SPIN_INK, outline="", stipple=st)
+        elif fx == "tone":
+            canvas.create_polygon(flat, fill=SPIN_TONE, outline="")
+        else:                                                        # line fx live in the safe-rect
+            _spin_fx(canvas, sx, sy, sw, sh, fx, sy + int(sh * 0.6) if p.get("char") else None)
+    ch = p.get("char")
+    if ch:
+        canvas.create_image(int(sx + sw / 2), int(sy + sh - 6), anchor="s",
+                            image=_spin_char(ch[0], ch[1], int(sh) - 16, cache, refs))
+    cap = p.get("caption")
+    if cap:
+        canvas.create_rectangle(sx + 6, sy + 6, sx + 18 + len(cap) * 9, sy + 30,
+                                fill=SPIN_INK, outline=SPIN_INK)
+        canvas.create_text(sx + 12, sy + 18, anchor="w", text=cap,
+                           fill=SPIN_PAPER, font=("Consolas", 12, "bold"))
+    if p.get("bubble"):
+        by = sy + (38 if cap else 10)
+        _spin_bubble(canvas, sx, sw, by, p["bubble"], p.get("bubble_style", "speech"))
+    _spin_border_quad(canvas, quad, p.get("border", "plain"))
+
+
 def spin_draw_page(canvas, page, W, H, cache, refs):
     """Draw a comic page (its panels) onto a canvas region (0,0)-(W,H). cache/refs
-    are owned by the caller; refs keeps the PhotoImages alive."""
-    rects = spin_comic_rects(page["panels"], page["cols"], page["rows"], W, H)
-    for p, (x, y, w, h) in zip(page["panels"], rects):
-        if p.get("bg"):
-            canvas.create_image(x, y, anchor="nw",
-                                image=_spin_bg_crop(p["bg"], w, h, cache, refs))
-        else:                                   # no scene art -> a manga effect fill
-            fx = p.get("fx") or ("tone12" if p.get("char") else "tone")
-            _spin_fx(canvas, x, y, w, h, fx,
-                     y + int(h * 0.6) if p.get("char") else None)
-        ch = p.get("char")
-        if ch:
-            canvas.create_image(x + w // 2, y + h - 6, anchor="s",
-                                image=_spin_char(ch[0], ch[1], h - 16, cache, refs))
-        cap = p.get("caption")
-        if cap:
-            canvas.create_rectangle(x + 6, y + 6, x + 18 + len(cap) * 9, y + 30,
-                                    fill=SPIN_INK, outline=SPIN_INK)
-            canvas.create_text(x + 12, y + 18, anchor="w", text=cap,
-                               fill=SPIN_PAPER, font=("Consolas", 12, "bold"))
-        if p.get("bubble"):
-            by = y + (38 if p.get("caption") else 10)   # drop below a top-left caption tag
-            _spin_bubble(canvas, x, w, by, p["bubble"], p.get("bubble_style", "speech"))
-        _spin_border(canvas, x, y, w, h, p.get("border", "plain"))
+    are owned by the caller; refs keeps the PhotoImages alive. A page may opt into
+    angled manga frames via page['frame']='dynamic' (or an explicit 'slants' list);
+    panels then become tessellating trapezoids. Plain pages render unchanged."""
+    slants = page.get("slants")
+    if not slants and page.get("frame") == "dynamic":
+        slants = _spin_auto_slants(page["rows"])
+    quads = spin_comic_quads(page["panels"], page["cols"], page["rows"], W, H, slants=slants)
+    for p, quad in zip(page["panels"], quads):
+        (x0, y0), (x1, y1), (x2, y2), (x3, y3) = quad
+        if y0 == y1 and y2 == y3 and x0 == x3 and x1 == x2:    # axis-aligned -> unchanged path
+            x, y, w, h = x0, y0, x1 - x0, y3 - y0
+            if p.get("bg"):
+                canvas.create_image(x, y, anchor="nw",
+                                    image=_spin_bg_crop(p["bg"], w, h, cache, refs))
+            else:                                   # no scene art -> a manga effect fill
+                fx = p.get("fx") or ("tone12" if p.get("char") else "tone")
+                _spin_fx(canvas, x, y, w, h, fx,
+                         y + int(h * 0.6) if p.get("char") else None)
+            ch = p.get("char")
+            if ch:
+                canvas.create_image(x + w // 2, y + h - 6, anchor="s",
+                                    image=_spin_char(ch[0], ch[1], h - 16, cache, refs))
+            cap = p.get("caption")
+            if cap:
+                canvas.create_rectangle(x + 6, y + 6, x + 18 + len(cap) * 9, y + 30,
+                                        fill=SPIN_INK, outline=SPIN_INK)
+                canvas.create_text(x + 12, y + 18, anchor="w", text=cap,
+                                   fill=SPIN_PAPER, font=("Consolas", 12, "bold"))
+            if p.get("bubble"):
+                by = y + (38 if p.get("caption") else 10)   # drop below a top-left caption tag
+                _spin_bubble(canvas, x, w, by, p["bubble"], p.get("bubble_style", "speech"))
+            _spin_border(canvas, x, y, w, h, p.get("border", "plain"))
+        else:
+            _spin_draw_quad_panel(canvas, p, quad, cache, refs)
 
 
 class SpinComicPage:
@@ -14168,7 +14303,7 @@ def spin_comic_ending(flags):
 SPIN_COMIC_STORY = {
     # -- prologue: the mentor sets the stage ------------------------------
     "open": {
-        "page": {"cols": 1, "rows": 3, "panels": [
+        "page": {"frame": "dynamic", "cols": 1, "rows": 3, "panels": [
             {"grid": (0, 0, 1, 1), "bg": "arena", "caption": "THE BOND TOURNAMENT",
              "border": "bold"},
             {"grid": (0, 1, 1, 1), "char": ("mentor", "neutral"),
@@ -14179,13 +14314,13 @@ SPIN_COMIC_STORY = {
 
     # == CHAPTER 1 : KAEL — the cocky qualifier ===========================
     "ch1_meet": {
-        "page": {"cols": 1, "rows": 2, "panels": [
+        "page": {"frame": "dynamic", "cols": 1, "rows": 2, "panels": [
             {"grid": (0, 0, 1, 1), "bg": "arena", "caption": "ROUND 1 — KAEL"},
             {"grid": (0, 1, 1, 1), "char": ("kael", "smug"),
              "bubble": "So YOU'RE the new kid\neveryone's talking\nabout? Heh."}]},
         "next": "ch1_taunt"},
     "ch1_taunt": {
-        "page": {"cols": 1, "rows": 2, "panels": [
+        "page": {"frame": "dynamic", "cols": 1, "rows": 2, "panels": [
             {"grid": (0, 0, 1, 1), "char": ("kael", "smug"),
              "bubble": "This'll be over before\nit even starts, rookie!"},
             {"grid": (0, 1, 1, 1), "bg": "arena", "bubble": "How do I\nplay this?",
@@ -14206,7 +14341,7 @@ SPIN_COMIC_STORY = {
              "bubble": "HA! Big talk—\nnow back it up!"}]},
         "next": "ch1_battle"},
     "ch1_battle": {
-        "page": {"cols": 1, "rows": 2, "panels": [
+        "page": {"frame": "dynamic", "cols": 1, "rows": 2, "panels": [
             {"grid": (0, 0, 1, 1), "bg": "arena", "caption": "3... 2... 1... SPIRITS, FLY!",
              "border": "impact"},
             {"grid": (0, 1, 1, 1), "char": ("kael", "fierce"), "fx": "focus",
@@ -14239,13 +14374,13 @@ SPIN_COMIC_STORY = {
 
     # == CHAPTER 2 : MIRA — the calm strategist ===========================
     "ch2_meet": {
-        "page": {"cols": 1, "rows": 2, "panels": [
+        "page": {"frame": "dynamic", "cols": 1, "rows": 2, "panels": [
             {"grid": (0, 0, 1, 1), "bg": "arena", "caption": "ROUND 2 — MIRA"},
             {"grid": (0, 1, 1, 1), "char": ("mira", "neutral"),
              "bubble": "I've studied every spin\nyou've made. I know\nyour tricks."}]},
         "next": "ch2_taunt"},
     "ch2_taunt": {
-        "page": {"cols": 1, "rows": 2, "panels": [
+        "page": {"frame": "dynamic", "cols": 1, "rows": 2, "panels": [
             {"grid": (0, 0, 1, 1), "char": ("mira", "cool"),
              "bubble": "Precision beats passion.\nWatch and learn."},
             {"grid": (0, 1, 1, 1), "bg": "arena", "bubble": "Okay...\nmy move.",
@@ -14266,7 +14401,7 @@ SPIN_COMIC_STORY = {
              "bubble": "So reckless—\nbut so FAST!"}]},
         "next": "ch2_battle"},
     "ch2_battle": {
-        "page": {"cols": 1, "rows": 2, "panels": [
+        "page": {"frame": "dynamic", "cols": 1, "rows": 2, "panels": [
             {"grid": (0, 0, 1, 1), "bg": "arena", "caption": "Steel sings! Tops collide!",
              "border": "impact"},
             {"grid": (0, 1, 1, 1), "char": ("mira", "fierce"), "fx": "focus",
@@ -14307,13 +14442,13 @@ SPIN_COMIC_STORY = {
 
     # == CHAPTER 3 : BRAKK — the big-hearted powerhouse ===================
     "ch3_meet": {
-        "page": {"cols": 1, "rows": 2, "panels": [
+        "page": {"frame": "dynamic", "cols": 1, "rows": 2, "panels": [
             {"grid": (0, 0, 1, 1), "bg": "arena", "caption": "SEMIFINAL — BRAKK"},
             {"grid": (0, 1, 1, 1), "char": ("brakk", "fierce"),
              "bubble": "GRAAH! I'm the\nSTRONGEST blade\nin the league!", "bubble_style": "shout"}]},
         "next": "ch3_taunt"},
     "ch3_taunt": {
-        "page": {"cols": 1, "rows": 2, "panels": [
+        "page": {"frame": "dynamic", "cols": 1, "rows": 2, "panels": [
             {"grid": (0, 0, 1, 1), "char": ("brakk", "grin"),
              "bubble": "Little blade,\nlittle chance!"},
             {"grid": (0, 1, 1, 1), "bg": "arena", "bubble": "He's huge!\nWhat now?",
@@ -14334,7 +14469,7 @@ SPIN_COMIC_STORY = {
              "bubble": "YES! Show me\nyour POWER!", "bubble_style": "shout"}]},
         "next": "ch3_battle"},
     "ch3_battle": {
-        "page": {"cols": 1, "rows": 2, "panels": [
+        "page": {"frame": "dynamic", "cols": 1, "rows": 2, "panels": [
             {"grid": (0, 0, 1, 1), "bg": "arena", "caption": "A QUAKING CLASH!",
              "border": "impact"},
             {"grid": (0, 1, 1, 1), "char": ("brakk", "fierce"), "fx": "focus",
@@ -14367,7 +14502,7 @@ SPIN_COMIC_STORY = {
 
     # == CHAPTER 4 : THE GRAND FINAL — a friendly rematch vs Kael =========
     "finals_open": {
-        "page": {"cols": 1, "rows": 3, "panels": [
+        "page": {"frame": "dynamic", "cols": 1, "rows": 3, "panels": [
             {"grid": (0, 0, 1, 1), "bg": "finals", "caption": "THE GRAND FINAL",
              "border": "bold"},
             {"grid": (0, 1, 1, 1), "char": ("mentor", "smile"),
@@ -14376,14 +14511,14 @@ SPIN_COMIC_STORY = {
              "caption": "Mira & Brakk cheer from the stands!"}]},
         "next": "finals_meet"},
     "finals_meet": {
-        "page": {"cols": 1, "rows": 2, "panels": [
+        "page": {"frame": "dynamic", "cols": 1, "rows": 2, "panels": [
             {"grid": (0, 0, 1, 1), "bg": "finals",
              "caption": "Across the ring stands... Kael, the other finalist!"},
             {"grid": (0, 1, 1, 1), "char": ("kael", "neutral"),
              "bubble": "We both made it, rookie.\nNo holding back—\nas friends!"}]},
         "next": "finals_battle"},
     "finals_battle": {
-        "page": {"cols": 1, "rows": 2, "panels": [
+        "page": {"frame": "dynamic", "cols": 1, "rows": 2, "panels": [
             {"grid": (0, 0, 1, 1), "bg": "finals", "caption": "FINAL SPIN— SPIRITS, FLY!",
              "border": "impact"},
             {"grid": (0, 1, 1, 1), "char": ("kael", "fierce"), "fx": "focus",
@@ -14410,7 +14545,7 @@ SPIN_COMIC_STORY = {
 
     # -- the ending: the champion TITLE is injected from your STYLE flags --
     "ending": {
-        "page": {"cols": 1, "rows": 3, "panels": [
+        "page": {"frame": "dynamic", "cols": 1, "rows": 3, "panels": [
             {"grid": (0, 0, 1, 1), "bg": "finals", "caption": "BOND TOURNAMENT CHAMPION!",
              "border": "bold"},
             {"grid": (0, 1, 1, 1), "char": ("mentor", "smile"), "fx": "flash", "ending_bubble": True},
