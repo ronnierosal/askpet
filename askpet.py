@@ -13851,10 +13851,12 @@ def _spin_quad_safe(quad):
     return sx, sy, max(1, sx2 - sx), max(1, sy2 - sy)
 
 
-def _spin_bg_crop(bgid, w, h, cache, refs):
-    """A panel-sized centre crop of a manga background, else a tone fill."""
+def _spin_bg_crop(bgid, w, h, cache, refs, zoom=1):
+    """A panel-sized centre crop of a manga background (optionally zoomed in for a
+    close-up behind a character — lets us reuse one scene at several depths), else
+    a tone fill."""
     w, h = max(1, w), max(1, h)
-    key = ("bg", bgid, w, h)
+    key = ("bg", bgid, w, h, zoom)
     if key not in cache:
         src = None
         p = SPIN_ASSETS / f"{bgid}_bg.png"
@@ -13867,6 +13869,10 @@ def _spin_bg_crop(bgid, w, h, cache, refs):
         if src is None:
             img.put(SPIN_TONE, to=(0, 0, w, h))
         else:
+            if zoom > 1:                                # zoom in, then centre-crop
+                z = src.zoom(int(zoom), int(zoom))
+                refs.append(src)
+                src = z
             sw, sh = src.width(), src.height()
             sx, sy = max(0, (sw - w) // 2), max(0, (sh - h) // 2)
             img.tk.call(img, "copy", src, "-from", sx, sy,
@@ -14140,77 +14146,81 @@ def _spin_border_quad(canvas, quad, style="plain"):
                               outline=SPIN_INK, width=2, joinstyle="miter")
 
 
-def _spin_draw_quad_panel(canvas, p, quad, cache, refs):
-    """Render one SLANTED (trapezoid) panel: fill the whole cell, place the
-    character / caption / bubble inside the inscribed safe-rect, then stroke the
-    quad frame LAST so its ink edge re-cuts any sprite that grazes a diagonal."""
-    flat = [c for pt in quad for c in pt]
-    sx, sy, sw, sh = _spin_quad_safe(quad)
-    canvas.create_polygon(flat, fill=SPIN_PAPER, outline="")          # base: the slanted cell
-    if p.get("bg"):
+def _spin_bubble_h(text, style="speech"):
+    """Roughly how much vertical space a bubble occupies — used to size the
+    character so the speech box never covers it."""
+    boxh = len(text.split("\n")) * 20 + 14
+    if style == "narration":
+        return boxh
+    if style == "shout":
+        return int(2 * boxh * 1.05)
+    if style == "thought":
+        return int(2 * boxh * 0.95) + 24
+    if style in ("round", "whisper"):
+        return int(boxh * 1.3) + 24
+    return boxh + 13                                       # speech box + tail
+
+
+def _spin_panel_content(canvas, p, sx, sy, sw, sh, setting, cache, refs):
+    """Fill + character + caption + bubble for one panel (a rect, or a slanted
+    panel's inscribed safe-rect). A character with no scene of its own is given a
+    ZOOMED reuse of the page's background (close-up behind it), and is sized to sit
+    BELOW the speech bubble so text never overlaps the character."""
+    has_char = bool(p.get("char"))
+    bg = p.get("bg")
+    fx = p.get("fx")
+    focal = sy + int(sh * 0.6) if has_char else None
+    if bg:                                                # explicit scene (zoom in behind a character)
         canvas.create_image(int(sx), int(sy), anchor="nw",
-                            image=_spin_bg_crop(p["bg"], int(sw), int(sh), cache, refs))
-    else:
-        fx = p.get("fx") or ("tone12" if p.get("char") else "tone")
-        st = _SPIN_STIPPLE.get(fx)
-        if st:                                                       # halftone fills the whole quad
-            canvas.create_polygon(flat, fill=SPIN_INK, outline="", stipple=st)
-        elif fx == "tone":
-            canvas.create_polygon(flat, fill=SPIN_TONE, outline="")
-        else:                                                        # line fx live in the safe-rect
-            _spin_fx(canvas, sx, sy, sw, sh, fx, sy + int(sh * 0.6) if p.get("char") else None)
-    ch = p.get("char")
-    if ch:
-        canvas.create_image(int(sx + sw / 2), int(sy + sh - 6), anchor="s",
-                            image=_spin_char(ch[0], ch[1], int(sh) - 16, cache, refs))
+                            image=_spin_bg_crop(bg, int(sw), int(sh), cache, refs, 2 if has_char else 1))
+    elif fx:                                              # an explicit manga effect wins (focus/flash/tone*)
+        _spin_fx(canvas, sx, sy, sw, sh, fx, focal)
+    elif has_char and setting:                            # reuse the page's scene, zoomed close-up
+        canvas.create_image(int(sx), int(sy), anchor="nw",
+                            image=_spin_bg_crop(setting, int(sw), int(sh), cache, refs, 2))
+    else:                                                 # no scene at all -> a manga effect fill
+        _spin_fx(canvas, sx, sy, sw, sh, "tone12" if has_char else "tone", focal)
+
     cap = p.get("caption")
+    bub = p.get("bubble")
+    bub_top = sy + (38 if cap else 10)
+    bub_bottom = bub_top + (_spin_bubble_h(bub, p.get("bubble_style", "speech")) if bub else 0)
+    ch = p.get("char")
+    if ch:                                                # keep the sprite clear of the bubble
+        avail = (sy + sh - 6) - (bub_bottom + 6)
+        max_h = int(min(sh - 16, max(64, avail)))
+        canvas.create_image(int(sx + sw / 2), int(sy + sh - 6), anchor="s",
+                            image=_spin_char(ch[0], ch[1], max_h, cache, refs))
     if cap:
         canvas.create_rectangle(sx + 6, sy + 6, sx + 18 + len(cap) * 9, sy + 30,
                                 fill=SPIN_INK, outline=SPIN_INK)
         canvas.create_text(sx + 12, sy + 18, anchor="w", text=cap,
                            fill=SPIN_PAPER, font=("Consolas", 12, "bold"))
-    if p.get("bubble"):
-        by = sy + (38 if cap else 10)
-        _spin_bubble(canvas, sx, sw, by, p["bubble"], p.get("bubble_style", "speech"))
-    _spin_border_quad(canvas, quad, p.get("border", "plain"))
+    if bub:
+        _spin_bubble(canvas, sx, sw, bub_top, bub, p.get("bubble_style", "speech"))
 
 
 def spin_draw_page(canvas, page, W, H, cache, refs):
     """Draw a comic page (its panels) onto a canvas region (0,0)-(W,H). cache/refs
     are owned by the caller; refs keeps the PhotoImages alive. A page may opt into
-    angled manga frames via page['frame']='dynamic' (or an explicit 'slants' list);
-    panels then become tessellating trapezoids. Plain pages render unchanged."""
+    angled manga frames via page['frame']='dynamic'; panels become tessellating
+    trapezoids. Character panels reuse the page's scene (zoomed) behind them, and
+    text boxes are kept off the characters."""
     slants = page.get("slants")
     if not slants and page.get("frame") == "dynamic":
         slants = _spin_auto_slants(page["rows"])
     quads = spin_comic_quads(page["panels"], page["cols"], page["rows"], W, H, slants=slants)
+    setting = next((q["bg"] for q in page["panels"] if q.get("bg")), None)   # reused behind chars
     for p, quad in zip(page["panels"], quads):
         (x0, y0), (x1, y1), (x2, y2), (x3, y3) = quad
-        if y0 == y1 and y2 == y3 and x0 == x3 and x1 == x2:    # axis-aligned -> unchanged path
-            x, y, w, h = x0, y0, x1 - x0, y3 - y0
-            if p.get("bg"):
-                canvas.create_image(x, y, anchor="nw",
-                                    image=_spin_bg_crop(p["bg"], w, h, cache, refs))
-            else:                                   # no scene art -> a manga effect fill
-                fx = p.get("fx") or ("tone12" if p.get("char") else "tone")
-                _spin_fx(canvas, x, y, w, h, fx,
-                         y + int(h * 0.6) if p.get("char") else None)
-            ch = p.get("char")
-            if ch:
-                canvas.create_image(x + w // 2, y + h - 6, anchor="s",
-                                    image=_spin_char(ch[0], ch[1], h - 16, cache, refs))
-            cap = p.get("caption")
-            if cap:
-                canvas.create_rectangle(x + 6, y + 6, x + 18 + len(cap) * 9, y + 30,
-                                        fill=SPIN_INK, outline=SPIN_INK)
-                canvas.create_text(x + 12, y + 18, anchor="w", text=cap,
-                                   fill=SPIN_PAPER, font=("Consolas", 12, "bold"))
-            if p.get("bubble"):
-                by = y + (38 if p.get("caption") else 10)   # drop below a top-left caption tag
-                _spin_bubble(canvas, x, w, by, p["bubble"], p.get("bubble_style", "speech"))
-            _spin_border(canvas, x, y, w, h, p.get("border", "plain"))
-        else:
-            _spin_draw_quad_panel(canvas, p, quad, cache, refs)
+        if y0 == y1 and y2 == y3 and x0 == x3 and x1 == x2:    # axis-aligned panel
+            _spin_panel_content(canvas, p, x0, y0, x1 - x0, y3 - y0, setting, cache, refs)
+            _spin_border(canvas, x0, y0, x1 - x0, y3 - y0, p.get("border", "plain"))
+        else:                                                  # slanted trapezoid
+            canvas.create_polygon([c for pt in quad for c in pt], fill=SPIN_PAPER, outline="")
+            sx, sy, sw, sh = _spin_quad_safe(quad)
+            _spin_panel_content(canvas, p, sx, sy, sw, sh, setting, cache, refs)
+            _spin_border_quad(canvas, quad, p.get("border", "plain"))
 
 
 class SpinComicPage:
@@ -14293,7 +14303,9 @@ def spin_comic_ending(flags):
 #   Ch2 Mira  : kind   | fierce
 #   Ch3 Brakk : steady | reckless
 #   all heart -> Champion of Heart ; all fire -> Champion of Fire ; mix -> Heart of the Blade
-# Ch4 is a friendly championship rematch vs a grown Kael that ties it together.
+# Ch4 is the GRAND FINAL vs the Masked Ace (Raze, the Coach's old rival's heir):
+# you fall behind, your three befriended rivals unite, and the bond awakens your
+# spirit-beast's TRUE FORM to win. The interludes are the Coach's secret past.
 #
 # Every node is a comic PAGE + exactly one of next / choices / end (the engine
 # format — no new node types invented). Art keys (cid_expr.png / id_bg.png)
@@ -14443,7 +14455,7 @@ SPIN_COMIC_STORY = {
         "page": {"cols": 1, "rows": 1, "panels": [
             {"grid": (0, 0, 1, 1), "bg": "training", "char": ("mentor", "neutral"),
              "border": "soft",
-             "bubble": "Then a rival who scorned\nbonds shattered mine— my\nspirit-blade has been silent\never since."}]},
+             "bubble": "Then a rival who scorned\nbonds spun mine out cold— my\nspirit-blade's been quiet\never since."}]},
         "next": "mentor_secret3"},
     "mentor_secret3": {
         "page": {"cols": 1, "rows": 1, "panels": [
@@ -14528,9 +14540,9 @@ SPIN_COMIC_STORY = {
     "finals_unmask": {                                   # TWIST: the Coach's old rival
         "page": {"frame": "dynamic", "cols": 1, "rows": 2, "panels": [
             {"grid": (0, 0, 1, 1), "char": ("raze", "cold"), "fx": "focus",
-             "caption": "He tears off his mask—"},
+             "caption": "He tears off his mask— it's RAZE!"},
             {"grid": (0, 1, 1, 1), "char": ("mentor", "neutral"),
-             "bubble": "That cold style— it's my old\nrival's! He came to silence\nbonds for good!"}]},
+             "bubble": "That cold style— my old\nrival's HEIR! Here to spin\nout every bonded blade!"}]},
         "next": "finals_clash"},
     "finals_clash": {
         "page": {"frame": "dynamic", "cols": 1, "rows": 2, "panels": [
@@ -14538,11 +14550,14 @@ SPIN_COMIC_STORY = {
             {"grid": (0, 1, 1, 1), "char": ("raze", "cold"), "fx": "focus",
              "bubble": "Is that ALL? Bonds only\nmake you SLOW!", "bubble_style": "shout"}]},
         "next": "finals_low"},
-    "finals_low": {
+    "finals_low": {                                      # a choice AT the climax (calls the rivals)
         "page": {"cols": 1, "rows": 1, "panels": [
             {"grid": (0, 0, 1, 1), "bg": "launch",
-             "caption": "Your top is knocked spinning into the air— you're losing!"}]},
-        "next": "finals_unite"},
+             "caption": "Your top spins into the air— you're losing! What do you do?"}]},
+        "choices": [
+            {"label": "Reach for the bonds you forged", "to": "finals_unite"},
+            {"label": "Stand your ground— never give up", "to": "finals_unite"},
+            {"label": "Trust your friends are with you", "to": "finals_unite"}]},
     "finals_unite": {                                    # TWIST: rivals unite
         "page": {"frame": "dynamic", "cols": 1, "rows": 3, "panels": [
             {"grid": (0, 0, 1, 1), "bg": "finals", "caption": "Then— three voices ring out!"},
@@ -14556,7 +14571,7 @@ SPIN_COMIC_STORY = {
             {"grid": (0, 0, 1, 1), "bg": "spirit", "caption": "Your spirit-beast awakens— its TRUE FORM!",
              "border": "bold"},
             {"grid": (0, 1, 1, 1), "char": ("mentor", "smile"), "fx": "flash",
-             "bubble": "There it is... a TRUE spirit!\nMy old blade— it's stirring\ntoo!", "bubble_style": "shout"}]},
+             "bubble": "There it is... a TRUE spirit!\nI feel my old bond alive\nagain— through YOU!", "bubble_style": "shout"}]},
         "next": "finals_finish"},
     "finals_finish": {
         "page": {"frame": "dynamic", "cols": 1, "rows": 2, "panels": [
@@ -14572,7 +14587,7 @@ SPIN_COMIC_STORY = {
              "border": "bold"},
             {"grid": (0, 1, 1, 1), "char": ("mentor", "smile"), "fx": "flash", "ending_bubble": True},
             {"grid": (0, 2, 1, 1), "bg": "finals", "border": "double",
-             "caption": "Raze bows. The Coach's blade shines. Your bonds light the arena!"}]},
+             "caption": "Raze bows. Your bonds light up the whole arena!"}]},
         "end": True},
 }
 
