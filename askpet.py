@@ -14309,7 +14309,7 @@ SPIN_COMIC_STORY = {
             {"grid": (0, 1, 1, 1), "char": ("mentor", "neutral"),
              "bubble": "Welcome, rookie! Three\nrivals stand between you\nand the crown."},
             {"grid": (0, 2, 1, 1), "char": ("mentor", "smile"),
-             "bubble": "Win with skill— but the\nreal prize is the bonds\nyou forge. Spirits, fly!"}]},
+             "bubble": "Win with bonds, not just\nskill. But beware the Masked\nAce— they say bonds make\nyou WEAK!"}]},
         "next": "ch1_meet"},
 
     # == CHAPTER 1 : KAEL — the cocky qualifier ===========================
@@ -14430,14 +14430,25 @@ SPIN_COMIC_STORY = {
             {"grid": (0, 0, 1, 1), "char": ("mira", "cool"),
              "caption": "Mira's top spins out— you advance!",
              "bubble": "Teach me that\nsometime? ...Friends.", "bubble_style": "round"}]},
-        "next": "mentor_mid"},
+        "next": "mentor_secret"},
 
-    # -- mentor interlude --------------------------------------------------
-    "mentor_mid": {
+    # -- INTERLUDE : the Coach's secret (TWIST) ---------------------------
+    "mentor_secret": {
+        "page": {"frame": "dynamic", "cols": 1, "rows": 2, "panels": [
+            {"grid": (0, 0, 1, 1), "bg": "training", "caption": "Between rounds, the Coach grows quiet."},
+            {"grid": (0, 1, 1, 1), "bg": "training", "char": ("mentor", "neutral"),
+             "bubble": "Long ago, they called me the\nSpirit-Sage— the greatest\nchampion alive."}]},
+        "next": "mentor_secret2"},
+    "mentor_secret2": {
+        "page": {"cols": 1, "rows": 1, "panels": [
+            {"grid": (0, 0, 1, 1), "bg": "training", "char": ("mentor", "neutral"),
+             "border": "soft",
+             "bubble": "Then a rival who scorned\nbonds shattered mine— my\nspirit-blade has been silent\never since."}]},
+        "next": "mentor_secret3"},
+    "mentor_secret3": {
         "page": {"cols": 1, "rows": 1, "panels": [
             {"grid": (0, 0, 1, 1), "bg": "training", "char": ("mentor", "smile"),
-             "border": "soft",
-             "bubble": "Two rivals, two new friends!\nFeel that? Your bond with\nyour blade is growing.\nOne more— then the final."}]},
+             "bubble": "But watching your bonds...\nI feel it stirring again.\nGo— win it all, champ!"}]},
         "next": "ch3_meet"},
 
     # == CHAPTER 3 : BRAKK — the big-hearted powerhouse ===================
@@ -14500,47 +14511,58 @@ SPIN_COMIC_STORY = {
              "bubble": "HAHA! A worthy champ.\nGo win it all, friend!", "bubble_style": "round"}]},
         "next": "finals_open"},
 
-    # == CHAPTER 4 : THE GRAND FINAL — a friendly rematch vs Kael =========
+    # == CHAPTER 4 : THE GRAND FINAL — the Masked Ace (TWISTS) ============
     "finals_open": {
-        "page": {"frame": "dynamic", "cols": 1, "rows": 3, "panels": [
+        "page": {"frame": "dynamic", "cols": 1, "rows": 2, "panels": [
             {"grid": (0, 0, 1, 1), "bg": "finals", "caption": "THE GRAND FINAL",
              "border": "bold"},
             {"grid": (0, 1, 1, 1), "char": ("mentor", "smile"),
-             "bubble": "This is it. Everything\nyou've learned— let your spirit FLY!"},
-            {"grid": (0, 2, 1, 1), "bg": "finals", "border": "none",
-             "caption": "Mira & Brakk cheer from the stands!"}]},
-        "next": "finals_meet"},
-    "finals_meet": {
+             "bubble": "This is it, champ. One match\nleft— for the crown."}]},
+        "next": "finals_reveal"},
+    "finals_reveal": {                                   # TWIST: the masked finalist
         "page": {"frame": "dynamic", "cols": 1, "rows": 2, "panels": [
-            {"grid": (0, 0, 1, 1), "bg": "finals",
-             "caption": "Across the ring stands... Kael, the other finalist!"},
-            {"grid": (0, 1, 1, 1), "char": ("kael", "neutral"),
-             "bubble": "We both made it, rookie.\nNo holding back—\nas friends!"}]},
-        "next": "finals_battle"},
-    "finals_battle": {
+            {"grid": (0, 0, 1, 1), "bg": "finals", "caption": "Across the ring waits... the MASKED ACE."},
+            {"grid": (0, 1, 1, 1), "char": ("raze", "masked"), "fx": "focus",
+             "bubble": "Bonds? Sentiment. I've\nbeaten a hundred blades.\nYours is next.", "bubble_style": "shout"}]},
+        "next": "finals_unmask"},
+    "finals_unmask": {                                   # TWIST: the Coach's old rival
         "page": {"frame": "dynamic", "cols": 1, "rows": 2, "panels": [
-            {"grid": (0, 0, 1, 1), "bg": "finals", "caption": "FINAL SPIN— SPIRITS, FLY!",
-             "border": "impact"},
-            {"grid": (0, 1, 1, 1), "char": ("kael", "fierce"), "fx": "focus",
-             "bubble": "Show me how far\nyou've come!", "bubble_style": "shout"}]},
-        "choices": [
-            {"label": "Unleash everything", "to": "finals_unleash"},
-            {"label": "Read him, then counter", "to": "finals_counter"},
-            {"label": "Defend and outlast him", "to": "finals_defend"}]},
-    "finals_unleash": {
+            {"grid": (0, 0, 1, 1), "char": ("raze", "cold"), "fx": "focus",
+             "caption": "He tears off his mask—"},
+            {"grid": (0, 1, 1, 1), "char": ("mentor", "neutral"),
+             "bubble": "That cold style— it's my old\nrival's! He came to silence\nbonds for good!"}]},
+        "next": "finals_clash"},
+    "finals_clash": {
+        "page": {"frame": "dynamic", "cols": 1, "rows": 2, "panels": [
+            {"grid": (0, 0, 1, 1), "bg": "clash", "caption": "SPIRITS, FLY!", "border": "impact"},
+            {"grid": (0, 1, 1, 1), "char": ("raze", "cold"), "fx": "focus",
+             "bubble": "Is that ALL? Bonds only\nmake you SLOW!", "bubble_style": "shout"}]},
+        "next": "finals_low"},
+    "finals_low": {
         "page": {"cols": 1, "rows": 1, "panels": [
-            {"grid": (0, 0, 1, 1), "char": ("kael", "shocked"), "fx": "flash",
-             "caption": "Your spirit-beast blazes brighter than ever!", "bubble": "Whoa—!"}]},
-        "next": "ending"},
-    "finals_counter": {
-        "page": {"cols": 1, "rows": 1, "panels": [
-            {"grid": (0, 0, 1, 1), "char": ("kael", "shocked"), "fx": "focus",
-             "caption": "You read Kael like an open book!", "bubble": "Our first match—\nreversed!"}]},
-        "next": "ending"},
-    "finals_defend": {
-        "page": {"cols": 1, "rows": 1, "panels": [
-            {"grid": (0, 0, 1, 1), "char": ("kael", "shocked"), "fx": "focus",
-             "caption": "You hold the center till the last spin!", "bubble": "Rock solid!"}]},
+            {"grid": (0, 0, 1, 1), "bg": "launch",
+             "caption": "Your top is knocked spinning into the air— you're losing!"}]},
+        "next": "finals_unite"},
+    "finals_unite": {                                    # TWIST: rivals unite
+        "page": {"frame": "dynamic", "cols": 1, "rows": 3, "panels": [
+            {"grid": (0, 0, 1, 1), "bg": "finals", "caption": "Then— three voices ring out!"},
+            {"grid": (0, 1, 1, 1), "char": ("kael", "fierce"), "fx": "flash",
+             "bubble": "You're NOT alone,\nrookie!", "bubble_style": "shout"},
+            {"grid": (0, 2, 1, 1), "bg": "finals",
+             "caption": "Mira & Brakk stand with you— your bonds BLAZE!"}]},
+        "next": "finals_awaken"},
+    "finals_awaken": {                                   # TWIST: the blade awakens
+        "page": {"frame": "dynamic", "cols": 1, "rows": 2, "panels": [
+            {"grid": (0, 0, 1, 1), "bg": "spirit", "caption": "Your spirit-beast awakens— its TRUE FORM!",
+             "border": "bold"},
+            {"grid": (0, 1, 1, 1), "char": ("mentor", "smile"), "fx": "flash",
+             "bubble": "There it is... a TRUE spirit!\nMy old blade— it's stirring\ntoo!", "bubble_style": "shout"}]},
+        "next": "finals_finish"},
+    "finals_finish": {
+        "page": {"frame": "dynamic", "cols": 1, "rows": 2, "panels": [
+            {"grid": (0, 0, 1, 1), "bg": "clash", "caption": "ONE FINAL CLASH!", "border": "impact"},
+            {"grid": (0, 1, 1, 1), "char": ("raze", "shocked"), "fx": "flash",
+             "bubble": "Impossible— this\nBOND...!", "bubble_style": "shout"}]},
         "next": "ending"},
 
     # -- the ending: the champion TITLE is injected from your STYLE flags --
@@ -14550,7 +14572,7 @@ SPIN_COMIC_STORY = {
              "border": "bold"},
             {"grid": (0, 1, 1, 1), "char": ("mentor", "smile"), "fx": "flash", "ending_bubble": True},
             {"grid": (0, 2, 1, 1), "bg": "finals", "border": "double",
-             "caption": "Kael, Mira & Brakk lift you high!"}]},
+             "caption": "Raze bows. The Coach's blade shines. Your bonds light the arena!"}]},
         "end": True},
 }
 

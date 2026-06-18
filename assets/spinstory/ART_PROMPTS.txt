@@ -20,9 +20,13 @@ DONE (in the game)  — see ART_PROMPTS_DONE.txt
     Coach         neutral  smile
 
 TO CREATE (this file)
-    [ ] TOPS      top_hero   top_kael   top_mira   top_brakk      (the spinning blades)
+    [ ] VILLAIN   raze_masked  raze_cold  raze_shocked            (the Masked Ace — story!)
     [ ] ACTION    clash_bg   launch_bg  spirit_bg                 (cool battle scenes)
+    [ ] TOPS      top_hero   top_kael   top_mira   top_brakk      (the spinning blades)
     [ ] SCENERY   crowd_bg   gate_bg    sky_bg     podium_bg      (optional variety)
+
+(The finale already PLAYS on placeholders, but it really wants raze_* and the
+clash/launch/spirit action backgrounds to look its best.)
 
 
 KEEPING IT ORIGINAL  (not Beyblade)
@@ -42,6 +46,36 @@ clearly in the clear:
   (Optional, if you want extra distance: the launchers in the CURRENT character
    art look fairly generic — if you'd like, we can regenerate the cast later with
    a more distinct original launcher design. Just say the word.)
+
+
+==================================================================
+RAZE  —  the Masked Ace  (the villain)   *needed for the finale*
+==================================================================
+"Raze", the undefeated masked finalist who believes bonds make you weak — a cold,
+arrogant teen champion. Kid-friendly: aloof and intense, NOT scary or monstrous.
+Same character across the set; head-and-upper-body, on SOLID FLAT MAGENTA
+(#fe00fe), B&W manga, ink + screentone, ORIGINAL design (not based on any brand).
+
+------------------------------------------------------------------
+FILE:  raze_masked.png     (the masked finalist — mysterious)
+------------------------------------------------------------------
+Raze wearing a cool, sleek MASK covering his eyes / upper face, arms crossed or
+holding a dark launcher, a confident aloof posture. Mysterious and intimidating-
+cool, NOT scary. Magenta background, B&W manga, original design.
+
+------------------------------------------------------------------
+FILE:  raze_cold.png       (mask off — cold & arrogant)
+------------------------------------------------------------------
+The SAME character "Raze" with the mask OFF: a cold, arrogant, dismissive look —
+sharp eyes, a slight sneer, chin up. Aloof and proud, NOT monstrous or scary.
+Same magenta background + framing + style.
+
+------------------------------------------------------------------
+FILE:  raze_shocked.png    (mask off — stunned / humbled)
+------------------------------------------------------------------
+The SAME character "Raze" with the mask OFF: SHOCKED and stunned, wide-eyed,
+caught completely off guard (he just felt the power of a true bond) — surprised,
+on the edge of being humbled. Not scary. Same magenta background + framing.
 
 
 ==================================================================
