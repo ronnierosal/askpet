@@ -13883,26 +13883,57 @@ def _spin_bg_crop(bgid, w, h, cache, refs, zoom=1):
     return cache[key]
 
 
+def _spin_load_sprite(cid, expr, refs):
+    """The raw character expression PhotoImage (or a placeholder), kept alive."""
+    img = None
+    p = SPIN_ASSETS / f"{cid}_{expr}.png"
+    if p.exists():
+        try:
+            img = tk.PhotoImage(file=str(p))
+        except tk.TclError:
+            img = None
+    if img is None:
+        img = tk.PhotoImage(width=120, height=200)
+        img.put(SPIN_INK, to=(40, 0, 80, 56))
+        img.put(SPIN_INK, to=(24, 56, 96, 200))
+    refs.append(img)
+    return img
+
+
 def _spin_char(cid, expr, max_h, cache, refs):
-    """A character expression sprite, integer-subsampled to fit max_h."""
+    """A character expression sprite, integer-subsampled to fit max_h (medium shot)."""
     max_h = max(1, max_h)
     key = ("char", cid, expr, max_h)
     if key not in cache:
-        img = None
-        p = SPIN_ASSETS / f"{cid}_{expr}.png"
-        if p.exists():
-            try:
-                img = tk.PhotoImage(file=str(p))
-            except tk.TclError:
-                img = None
-        if img is None:
-            img = tk.PhotoImage(width=120, height=200)
-            img.put(SPIN_INK, to=(40, 0, 80, 56))
-            img.put(SPIN_INK, to=(24, 56, 96, 200))
+        img = _spin_load_sprite(cid, expr, refs)
         while img.height() > max_h and img.height() > 2:
             img = img.subsample(2, 2)
         cache[key] = img
         refs.append(img)
+    return cache[key]
+
+
+def _spin_char_crop(cid, expr, w, h, cache, refs):
+    """A tight upper-body/face crop of a sprite, filling w x h from the TOP of the
+    sprite (the head fills the frame) — a punchy manga reaction CLOSE-UP. Stdlib-
+    only: integer zoom to reach the panel width, then a top-centre pixel crop that
+    keeps the sprite's transparency (so it sits over the panel's tone/scene)."""
+    w, h = max(1, w), max(1, h)
+    key = ("crop", cid, expr, w, h)
+    if key not in cache:
+        src = _spin_load_sprite(cid, expr, refs)
+        sw, sh = src.width(), src.height()
+        z = max(1, round(w / sw))                       # zoom so the head ~fills the width
+        if z > 1:
+            src = src.zoom(z, z)
+            refs.append(src)
+            sw, sh = src.width(), src.height()
+        out = tk.PhotoImage(width=w, height=h)
+        sx0 = max(0, (sw - w) // 2)                      # centre horizontally, take the TOP
+        out.tk.call(out, "copy", src, "-from", sx0, 0,
+                    min(sw, sx0 + w), min(sh, h), "-to", 0, 0)
+        cache[key] = out
+        refs.append(out)
     return cache[key]
 
 
@@ -14169,7 +14200,7 @@ def _spin_panel_content(canvas, p, sx, sy, sw, sh, setting, cache, refs):
     has_char = bool(p.get("char"))
     bg = p.get("bg")
     fx = p.get("fx")
-    focal = sy + int(sh * 0.6) if has_char else None
+    focal = (sy + int(sh * (0.4 if p.get("shot") == "close" else 0.6))) if has_char else None
     bg_ready = bool(bg) and (SPIN_ASSETS / f"{bg}_bg.png").exists()
     set_ready = bool(setting) and (SPIN_ASSETS / f"{setting}_bg.png").exists()
     if bg_ready:                                          # explicit scene (zoom in behind a character)
@@ -14191,10 +14222,16 @@ def _spin_panel_content(canvas, p, sx, sy, sw, sh, setting, cache, refs):
     bub_bottom = bub_top + (_spin_bubble_h(bub, p.get("bubble_style", "speech")) if bub else 0)
     ch = p.get("char")
     if ch:                                                # keep the sprite clear of the bubble
-        avail = (sy + sh - 6) - (bub_bottom + 6)
-        max_h = int(min(sh - 16, max(64, avail)))
-        canvas.create_image(int(sx + sw / 2), int(sy + sh - 6), anchor="s",
-                            image=_spin_char(ch[0], ch[1], max_h, cache, refs))
+        top = bub_bottom + 6
+        avail = (sy + sh - 6) - top
+        if p.get("shot") == "close" and avail > 44:       # CLOSE-UP: the face fills the frame
+            canvas.create_image(int(sx + 6), int(top), anchor="nw",
+                                image=_spin_char_crop(ch[0], ch[1], int(sw - 12),
+                                                      int(avail), cache, refs))
+        else:                                             # medium shot, anchored to the floor
+            max_h = int(min(sh - 16, max(64, avail)))
+            canvas.create_image(int(sx + sw / 2), int(sy + sh - 6), anchor="s",
+                                image=_spin_char(ch[0], ch[1], max_h, cache, refs))
     if cap:
         cap_r = min(sx + 18 + len(cap) * 9, sx + sw - 6)   # keep the tag inside its panel
         canvas.create_rectangle(sx + 6, sy + 6, cap_r, sy + 30,
@@ -14345,7 +14382,7 @@ SPIN_COMIC_STORY = {
         "page": {"cols": 2, "rows": 3, "panels": [
             {"grid": (0, 0, 2, 1), "bg": "arena", "caption": "ROUND 1 — KAEL",
              "border": "bold"},
-            {"grid": (0, 1, 1, 2), "char": ("kael", "smug"),
+            {"grid": (0, 1, 1, 2), "char": ("kael", "smug"), "shot": "close",
              "bubble": "So YOU'RE Rin?\nThe new kid?"},
             {"grid": (1, 1, 1, 1), "fx": "screen", "caption": "The crowd hushes."},
             {"grid": (1, 2, 1, 1), "char": ("kael", "neutral"),
@@ -14429,7 +14466,7 @@ SPIN_COMIC_STORY = {
         "page": {"cols": 2, "rows": 3, "panels": [
             {"grid": (0, 0, 2, 1), "bg": "arena", "border": "bold",
              "caption": "Kael's top spins out— RIN WINS!"},
-            {"grid": (0, 1, 1, 1), "char": ("kael", "shocked"), "fx": "focus",
+            {"grid": (0, 1, 1, 1), "char": ("kael", "shocked"), "fx": "focus", "shot": "close",
              "caption": "GG."},
             {"grid": (1, 1, 1, 1), "char": ("kael", "neutral"),
              "bubble": "You're alright,\nRin."},
@@ -14442,7 +14479,7 @@ SPIN_COMIC_STORY = {
         "page": {"cols": 2, "rows": 3, "panels": [
             {"grid": (0, 0, 2, 1), "bg": "arena", "caption": "ROUND 2 — MIRA",
              "border": "bold"},
-            {"grid": (0, 1, 1, 2), "char": ("mira", "neutral"),
+            {"grid": (0, 1, 1, 2), "char": ("mira", "neutral"), "shot": "close",
              "bubble": "I've studied every\nspin you've made."},
             {"grid": (1, 1, 1, 1), "fx": "screen", "caption": "Cool. Calm."},
             {"grid": (1, 2, 1, 1), "char": ("mira", "cool"),
@@ -14527,7 +14564,7 @@ SPIN_COMIC_STORY = {
         "page": {"cols": 2, "rows": 3, "panels": [
             {"grid": (0, 0, 2, 1), "bg": "arena", "border": "bold",
              "caption": "Mira's top spins out— Rin advances!"},
-            {"grid": (0, 1, 1, 1), "char": ("mira", "shocked"), "fx": "focus",
+            {"grid": (0, 1, 1, 1), "char": ("mira", "shocked"), "fx": "focus", "shot": "close",
              "caption": "Incredible."},
             {"grid": (1, 1, 1, 1), "char": ("mira", "neutral"),
              "bubble": "Teach me that\nsometime?"},
@@ -14573,7 +14610,7 @@ SPIN_COMIC_STORY = {
         "page": {"cols": 2, "rows": 3, "panels": [
             {"grid": (0, 0, 2, 1), "bg": "arena", "caption": "SEMIFINAL — BRAKK",
              "border": "bold"},
-            {"grid": (0, 1, 1, 2), "char": ("brakk", "fierce"), "fx": "focus",
+            {"grid": (0, 1, 1, 2), "char": ("brakk", "fierce"), "fx": "focus", "shot": "close",
              "bubble": "GRAAH! I'm the\nSTRONGEST!", "bubble_style": "shout"},
             {"grid": (1, 1, 1, 1), "fx": "flash", "caption": "BOOM!"},
             {"grid": (1, 2, 1, 1), "char": ("brakk", "grin"),
@@ -14655,7 +14692,7 @@ SPIN_COMIC_STORY = {
         "page": {"cols": 2, "rows": 3, "panels": [
             {"grid": (0, 0, 2, 1), "bg": "arena", "border": "bold",
              "caption": "Brakk's top wobbles out— RIN WINS!"},
-            {"grid": (0, 1, 1, 1), "char": ("brakk", "shocked"), "fx": "focus",
+            {"grid": (0, 1, 1, 1), "char": ("brakk", "shocked"), "fx": "focus", "shot": "close",
              "caption": "Whoa!"},
             {"grid": (1, 1, 1, 1), "char": ("brakk", "grin"),
              "bubble": "HAHA! A worthy\nchamp!"},
@@ -14677,7 +14714,7 @@ SPIN_COMIC_STORY = {
         "page": {"cols": 2, "rows": 3, "panels": [
             {"grid": (0, 0, 2, 1), "bg": "finals", "border": "bold",
              "caption": "Across the ring waits... the MASKED ACE."},
-            {"grid": (0, 1, 1, 2), "char": ("raze", "masked"), "fx": "focus",
+            {"grid": (0, 1, 1, 2), "char": ("raze", "masked"), "fx": "focus", "shot": "close",
              "bubble": "Bonds?\nSentiment.", "bubble_style": "shout"},
             {"grid": (1, 1, 1, 1), "fx": "screen", "caption": "Cold eyes."},
             {"grid": (1, 2, 1, 1), "char": ("raze", "masked"),
@@ -14687,7 +14724,7 @@ SPIN_COMIC_STORY = {
         "page": {"cols": 2, "rows": 3, "panels": [
             {"grid": (0, 0, 2, 1), "char": ("raze", "cold"), "fx": "focus",
              "caption": "He tears off his mask— it's RAZE!", "border": "impact"},
-            {"grid": (0, 1, 1, 1), "char": ("raze", "cold"),
+            {"grid": (0, 1, 1, 1), "char": ("raze", "cold"), "shot": "close",
              "bubble": "A bonded blade.\nHow quaint."},
             {"grid": (1, 1, 1, 1), "char": ("mentor", "neutral"), "fx": "focus",
              "bubble": "That cold\nstyle...!"},
@@ -14698,7 +14735,7 @@ SPIN_COMIC_STORY = {
         "page": {"cols": 2, "rows": 3, "panels": [
             {"grid": (0, 0, 2, 1), "bg": "clash", "fx": "flash",
              "caption": "SPIRITS, FLY!", "border": "impact"},
-            {"grid": (0, 1, 1, 1), "char": ("raze", "cold"), "fx": "focus",
+            {"grid": (0, 1, 1, 1), "char": ("raze", "cold"), "fx": "focus", "shot": "close",
              "bubble": "Is that ALL?", "bubble_style": "shout"},
             {"grid": (1, 1, 1, 1), "fx": "flash", "caption": "CLASH!"},
             {"grid": (0, 2, 2, 1), "char": ("raze", "cold"),
@@ -14743,7 +14780,7 @@ SPIN_COMIC_STORY = {
             {"grid": (0, 0, 2, 1), "bg": "clash", "fx": "flash",
              "caption": "ONE FINAL CLASH!", "border": "impact"},
             {"grid": (0, 1, 1, 1), "fx": "flash", "caption": "KA-BOOM!"},
-            {"grid": (1, 1, 1, 1), "char": ("raze", "shocked"), "fx": "focus",
+            {"grid": (1, 1, 1, 1), "char": ("raze", "shocked"), "fx": "focus", "shot": "close",
              "bubble": "Impossible—", "bubble_style": "shout"},
             {"grid": (0, 2, 2, 1), "char": ("raze", "shocked"),
              "bubble": "this BOND...!", "bubble_style": "shout"}]},
