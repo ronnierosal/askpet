@@ -13900,36 +13900,62 @@ def _spin_load_sprite(cid, expr, refs):
     return img
 
 
+def _spin_ratio(f):
+    """Small integer (zoom, subsample) factors whose ratio best approximates f —
+    the only stdlib PhotoImage resize. Lets a sprite hit ~any target size (so it
+    FILLS its space) instead of just halving past it. a,b<=6 keeps the transient
+    zoomed image small."""
+    best = None
+    for b in range(1, 7):
+        for a in range(1, 7):
+            d = abs(a / b - f)
+            if best is None or d < best[2]:
+                best = (a, b, d)
+    return best[0], best[1]
+
+
+def _spin_apply_ratio(img, f):
+    """Scale a PhotoImage by ~f via an integer zoom/subsample ratio."""
+    if f <= 0:
+        return img
+    a, b = _spin_ratio(f)
+    if a > 1:
+        img = img.zoom(a, a)
+    if b > 1:
+        img = img.subsample(b, b)
+    return img
+
+
 def _spin_char(cid, expr, max_h, cache, refs):
-    """A character expression sprite, integer-subsampled to fit max_h (medium shot)."""
+    """A character expression sprite scaled to ~FILL max_h (medium shot) — sized to
+    the space (not halved past it), so it reads large and sits up near its bubble."""
     max_h = max(1, max_h)
     key = ("char", cid, expr, max_h)
     if key not in cache:
         img = _spin_load_sprite(cid, expr, refs)
-        while img.height() > max_h and img.height() > 2:
-            img = img.subsample(2, 2)
+        img = _spin_apply_ratio(img, max_h / max(1, img.height()))
         cache[key] = img
         refs.append(img)
     return cache[key]
 
 
 def _spin_char_crop(cid, expr, w, h, cache, refs):
-    """A tight upper-body/face crop of a sprite, filling w x h from the TOP of the
-    sprite (the head fills the frame) — a punchy manga reaction CLOSE-UP. Stdlib-
-    only: integer zoom to reach the panel width, then a top-centre pixel crop that
-    keeps the sprite's transparency (so it sits over the panel's tone/scene)."""
+    """An upper-body/face CLOSE-UP that COVERS the panel (w x h) — scaled so the
+    sprite fills both dimensions, then a top-centre pixel crop (the head fills the
+    frame, the body runs off the bottom edge under the border). No floating cut.
+    Stdlib-only; keeps the sprite's transparency so it sits over the panel scene."""
     w, h = max(1, w), max(1, h)
     key = ("crop", cid, expr, w, h)
     if key not in cache:
         src = _spin_load_sprite(cid, expr, refs)
         sw, sh = src.width(), src.height()
-        z = max(1, round(w / sw))                       # zoom so the head ~fills the width
-        if z > 1:
-            src = src.zoom(z, z)
+        f = max(w / sw, h / sh)                          # COVER: fill the whole panel
+        if abs(f - 1) > 0.03:
+            src = _spin_apply_ratio(src, f)
             refs.append(src)
             sw, sh = src.width(), src.height()
         out = tk.PhotoImage(width=w, height=h)
-        sx0 = max(0, (sw - w) // 2)                      # centre horizontally, take the TOP
+        sx0 = max(0, (sw - w) // 2)                      # centre horizontally, take the TOP (head)
         out.tk.call(out, "copy", src, "-from", sx0, 0,
                     min(sw, sx0 + w), min(sh, h), "-to", 0, 0)
         cache[key] = out

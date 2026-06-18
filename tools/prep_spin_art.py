@@ -27,7 +27,7 @@ RAW = ROOT / "assets" / "spinstory" / "raw"
 OUT = ROOT / "assets" / "spinstory"
 KEY = (0xfe, 0x00, 0xfe)            # magenta -> transparent
 BG_SIZE = (720, 480)
-SPRITE_H = 300
+SPRITE_H = 440                      # taller source -> sprites DOWNSCALE in-game (sharper)
 BACKGROUNDS = ("arena_bg.png", "training_bg.png", "finals_bg.png",
                "clash_bg.png", "launch_bg.png", "spirit_bg.png",          # action scenes
                "crowd_bg.png", "gate_bg.png", "sky_bg.png", "podium_bg.png")
@@ -66,7 +66,7 @@ def autocrop(img):
 
 def resize_h(img, target_h):
     w, h = img.size
-    return img.resize((max(1, round(w * target_h / h)), target_h), Image.NEAREST)
+    return img.resize((max(1, round(w * target_h / h)), target_h), Image.LANCZOS)
 
 
 def do_bg(name):
