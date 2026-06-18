@@ -13807,7 +13807,7 @@ def spin_comic_rects(panels, cols, rows, W, H, margin=24, gutter=14):
     return rects
 
 
-SPIN_SLANT = 22          # default seam tilt (px) for a frame="dynamic" page
+SPIN_SLANT = 16          # default seam tilt (px) for a frame="dynamic" page
 SPIN_MINH = 130          # a slanted panel never gets shorter than this on a side
 
 
@@ -14217,7 +14217,11 @@ def spin_draw_page(canvas, page, W, H, cache, refs):
             _spin_panel_content(canvas, p, x0, y0, x1 - x0, y3 - y0, setting, cache, refs)
             _spin_border(canvas, x0, y0, x1 - x0, y3 - y0, p.get("border", "plain"))
         else:                                                  # slanted trapezoid
-            canvas.create_polygon([c for pt in quad for c in pt], fill=SPIN_PAPER, outline="")
+            flat = [c for pt in quad for c in pt]
+            canvas.create_polygon(flat, fill=SPIN_PAPER, outline="")
+            # tone the WHOLE cell so the slanted margins outside the (rectangular)
+            # scene read as intentional screentone wedges, never blank paper
+            canvas.create_polygon(flat, fill=SPIN_INK, outline="", stipple="gray25")
             sx, sy, sw, sh = _spin_quad_safe(quad)
             _spin_panel_content(canvas, p, sx, sy, sw, sh, setting, cache, refs)
             _spin_border_quad(canvas, quad, p.get("border", "plain"))
