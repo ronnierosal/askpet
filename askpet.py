@@ -13536,7 +13536,7 @@ SPIN_STORY = {
     "clash": {
         "bg": "arena", "char": None, "name": None,
         "text": "Both launchers lock in. The arena holds its breath.\n"
-                "3...   2...   1...   LET IT RIP!",
+                "3...   2...   1...   SPIRITS, FLY!",
         "choices": [
             {"label": "Unleash your Spirit Move!", "to": "win_power"},
             {"label": "Defend, read him, then counter.", "to": "win_clever"}]},
@@ -13774,16 +13774,20 @@ class SpinMangaScreen:
 # single-panel SpinMangaScreen visual novel. Layout math is headless-testable.
 # ---------------------------------------------------------------------------
 
+# Also a small showcase of the border + bubble style variations (see
+# SPIN_BORDERS / SPIN_BUBBLES): bold frame + narration box, an oval (round)
+# balloon, an impact frame + shout balloon, a double frame + whisper balloon.
 SPIN_COMIC_SAMPLE = {
     "cols": 2, "rows": 3,
     "panels": [
-        {"grid": (0, 0, 2, 1), "bg": "arena", "caption": "The arena thunders..."},
+        {"grid": (0, 0, 2, 1), "bg": "arena", "border": "bold",
+         "bubble": "Tonight: the final qualifier.", "bubble_style": "narration"},
         {"grid": (0, 1, 1, 1), "char": ("kael", "smug"),
-         "bubble": "A rookie?\nThis'll be quick."},
-        {"grid": (1, 1, 1, 1), "char": ("kael", "fierce"),
-         "bubble": "Back it up,\nbeginner!"},
-        {"grid": (0, 2, 2, 1), "char": ("kael", "shocked"),
-         "caption": "LET IT RIP!", "bubble": "Wha—?!"},
+         "bubble": "A rookie?\nThis'll be quick.", "bubble_style": "round"},
+        {"grid": (1, 1, 1, 1), "char": ("kael", "fierce"), "border": "impact",
+         "bubble": "Back it up,\nbeginner!", "bubble_style": "shout"},
+        {"grid": (0, 2, 2, 1), "char": ("kael", "shocked"), "border": "double",
+         "caption": "SPIRITS, FLY!", "bubble": "...no\nway.", "bubble_style": "whisper"},
     ],
 }
 
@@ -13852,19 +13856,132 @@ def _spin_char(cid, expr, max_h, cache, refs):
     return cache[key]
 
 
-def _spin_bubble(canvas, px, pw, y, text):
-    """A manga speech bubble (clamped to the panel) with a downward tail."""
+# -- manga panel-border + speech-bubble style variations --------------------
+# All CODE-DRAWN (the game never imports PIL). A panel may set "border" to vary
+# its frame and (if it has a bubble) "bubble_style" to vary the balloon — clean
+# frames + plain balloons for calm beats, jagged "impact" frames + spiky "shout"
+# balloons for action, soft frames + "thought" clouds for quiet/reflective
+# beats. Unknown or absent -> the plain defaults, so old pages render unchanged.
+SPIN_BORDERS = ("plain", "bold", "none", "double", "impact", "soft")
+SPIN_BUBBLES = ("speech", "round", "shout", "thought", "whisper", "narration")
+
+
+def _spin_frame_pts(x, y, w, h, step, wob):
+    """Points around the rectangle (x,y,w,h) walking clockwise, each pushed along
+    that edge's OUTWARD normal by wob(i) px — used for jagged/wavy panel frames."""
+    x2, y2 = x + w, y + h
+    pts, idx = [], [0]
+
+    def edge(ax, ay, bx, by, nx, ny):
+        n = max(1, int(math.hypot(bx - ax, by - ay) / step))
+        for k in range(n):
+            t, d = k / n, wob(idx[0])
+            idx[0] += 1
+            pts.append(ax + (bx - ax) * t + nx * d)
+            pts.append(ay + (by - ay) * t + ny * d)
+
+    edge(x, y, x2, y, 0, -1)      # top    (normal up)
+    edge(x2, y, x2, y2, 1, 0)     # right  (normal right)
+    edge(x2, y2, x, y2, 0, 1)     # bottom (normal down)
+    edge(x, y2, x, y, -1, 0)      # left   (normal left)
+    return pts
+
+
+def _spin_border(canvas, x, y, w, h, style="plain"):
+    """Draw a panel's manga frame in the chosen style (see SPIN_BORDERS)."""
+    x2, y2 = x + w, y + h
+    if style == "none":
+        return
+    if style == "bold":
+        canvas.create_rectangle(x, y, x2, y2, outline=SPIN_INK, width=8)
+    elif style == "double":
+        canvas.create_rectangle(x, y, x2, y2, outline=SPIN_INK, width=5)
+        canvas.create_rectangle(x + 9, y + 9, x2 - 9, y2 - 9, outline=SPIN_INK, width=2)
+    elif style == "impact":                       # spiky action frame
+        canvas.create_polygon(_spin_frame_pts(x, y, w, h, 20, lambda i: 8 if i % 2 else 0),
+                              fill="", outline=SPIN_INK, width=3)
+    elif style == "soft":                         # gently wavy frame
+        canvas.create_polygon(_spin_frame_pts(x, y, w, h, 24, lambda i: 5 * math.sin(i * 1.1)),
+                              fill="", outline=SPIN_INK, width=3, smooth=True)
+    else:                                         # plain
+        canvas.create_rectangle(x, y, x2, y2, outline=SPIN_INK, width=4)
+
+
+def _spin_radial_pts(cx, cy, rx, ry, n, rmod):
+    """Points around an ellipse (cx,cy; semi-axes rx,ry) with each radius scaled
+    by rmod(i): sharp alternation -> a burst, gentle -> a cloud."""
+    pts = []
+    for i in range(n):
+        a = 2 * math.pi * i / n
+        f = rmod(i)
+        pts.append(cx + math.cos(a) * rx * f)
+        pts.append(cy + math.sin(a) * ry * f)
+    return pts
+
+
+def _spin_bubble(canvas, px, pw, y, text, style="speech"):
+    """A manga speech balloon, clamped inside its panel (see SPIN_BUBBLES):
+      speech    clean rounded box + downward tail (default)
+      round     oval dialogue balloon + tail
+      shout     spiky burst, for yelling
+      thought   puffy cloud + bubble-dot tail (inner voice)
+      whisper   soft dashed oval (quiet / nervous)
+      narration tail-less caption box
+    """
     lines = text.split("\n")
-    tw = max(1, min(pw - 18, max(len(s) for s in lines) * 9 + 24))
-    th = len(lines) * 20 + 14
+    boxw = max(1, min(pw - 18, max(len(s) for s in lines) * 9 + 24))
+    boxh = len(lines) * 20 + 14
     cx = px + pw // 2
-    x0 = max(px, min(cx - tw // 2, px + pw - tw))   # keep the bubble inside the panel
-    canvas.create_rectangle(x0, y, x0 + tw, y + th,
-                            fill=SPIN_PAPER, outline=SPIN_INK, width=3)
-    canvas.create_polygon(cx - 7, y + th, cx + 7, y + th, cx, y + th + 13,
-                          fill=SPIN_PAPER, outline=SPIN_INK, width=2)
-    canvas.create_text(cx, y + th // 2, text=text, fill=SPIN_INK,
-                       font=("Consolas", 13, "bold"), justify="center")
+
+    def label(cxx, cyy):
+        canvas.create_text(cxx, cyy, text=text, fill=SPIN_INK,
+                           font=("Consolas", 13, "bold"), justify="center")
+
+    # every style draws DOWNWARD from y (its top sits at y, never above), so a
+    # caption tag in the panel's top-left corner is never overlapped.
+    if style == "narration":
+        x0 = max(px, min(cx - boxw // 2, px + pw - boxw))
+        canvas.create_rectangle(x0, y, x0 + boxw, y + boxh,
+                                fill=SPIN_PAPER, outline=SPIN_INK, width=2)
+        label(x0 + boxw // 2, y + boxh // 2)
+    elif style == "shout":
+        rx, ry = min((pw - 6) / 2, boxw), boxh * 1.05
+        cx = max(px + int(rx), min(cx, px + pw - int(rx)))
+        cy = y + ry
+        canvas.create_polygon(_spin_radial_pts(cx, cy, rx, ry, 16,
+                              lambda i: 1.0 if i % 2 else 0.6),
+                              fill=SPIN_PAPER, outline=SPIN_INK, width=3)
+        label(cx, cy)
+    elif style == "thought":
+        rx, ry = min((pw - 6) / 2, boxw * 0.72), boxh * 0.95
+        cx = max(px + int(rx), min(cx, px + pw - int(rx)))
+        cy = y + ry
+        canvas.create_polygon(_spin_radial_pts(cx, cy, rx, ry, 18,
+                              lambda i: 1.0 if i % 2 else 0.84),
+                              fill=SPIN_PAPER, outline=SPIN_INK, width=3, smooth=True)
+        label(cx, cy)
+        for dx, dy, r in ((0, 4, 6), (4, 14, 4), (8, 22, 3)):   # bubble-dot tail
+            yy = cy + ry + dy
+            canvas.create_oval(cx + dx - r, yy - r, cx + dx + r, yy + r,
+                               fill=SPIN_PAPER, outline=SPIN_INK, width=2)
+    elif style in ("round", "whisper"):
+        ow = min(pw - 6, int(boxw * 1.35) + 18)
+        oh = int(boxh * 1.3) + 12
+        cx = max(px + ow // 2, min(cx, px + pw - ow // 2))
+        kw = {"dash": (4, 3)} if style == "whisper" else {}
+        canvas.create_oval(cx - ow // 2, y, cx + ow // 2, y + oh,
+                           fill=SPIN_PAPER, outline=SPIN_INK, width=3, **kw)
+        canvas.create_polygon(cx - 7, y + oh - 3, cx + 7, y + oh - 3,
+                              cx, y + oh + 12, fill=SPIN_PAPER, outline=SPIN_INK, width=2)
+        label(cx, y + oh // 2)
+    else:                                          # speech (default)
+        x0 = max(px, min(cx - boxw // 2, px + pw - boxw))
+        tcx = x0 + boxw // 2                        # tail tracks the (clamped) box
+        canvas.create_rectangle(x0, y, x0 + boxw, y + boxh,
+                                fill=SPIN_PAPER, outline=SPIN_INK, width=3)
+        canvas.create_polygon(tcx - 7, y + boxh, tcx + 7, y + boxh, tcx, y + boxh + 13,
+                              fill=SPIN_PAPER, outline=SPIN_INK, width=2)
+        label(tcx, y + boxh // 2)
 
 
 def spin_draw_page(canvas, page, W, H, cache, refs):
@@ -13888,8 +14005,9 @@ def spin_draw_page(canvas, page, W, H, cache, refs):
             canvas.create_text(x + 12, y + 18, anchor="w", text=cap,
                                fill=SPIN_PAPER, font=("Consolas", 12, "bold"))
         if p.get("bubble"):
-            _spin_bubble(canvas, x, w, y + 10, p["bubble"])
-        canvas.create_rectangle(x, y, x + w, y + h, outline=SPIN_INK, width=4)
+            by = y + (38 if p.get("caption") else 10)   # drop below a top-left caption tag
+            _spin_bubble(canvas, x, w, by, p["bubble"], p.get("bubble_style", "speech"))
+        _spin_border(canvas, x, y, w, h, p.get("border", "plain"))
 
 
 class SpinComicPage:
@@ -13937,54 +14055,299 @@ class SpinComicPage:
             pass
 
 
+SPIN_HEART = ("calm", "kind", "steady")     # the three "heart" style flags
+SPIN_FIRE = ("bold", "fierce", "reckless")  # the three "fire" style flags
+
+
 def spin_comic_ending(flags):
-    """Kael's short closing line — changes with how you played (choices matter)."""
-    if "bold" in flags:
-        return "Heh...\nRematch soon,\nrookie."
-    return "You earned\nthat win.\nRespect."
+    """The champion TITLE the player earns at the finale — injected into the
+    ending page's 'ending_bubble' from the STYLE flags accumulated across the
+    three rival matches (one per chapter). Three distinct, flag-driven endings:
+    all heart -> Champion of Heart, all fire -> Champion of Fire, a mix -> Heart
+    of the Blade. Pure function of flags — headless-testable."""
+    heart = sum(f in flags for f in SPIN_HEART)
+    fire = sum(f in flags for f in SPIN_FIRE)
+    if heart and not fire:
+        return "CHAMPION OF HEART!\nYou turned every rival\ninto a true friend."
+    if fire and not heart:
+        return "CHAMPION OF FIRE!\nThe crowd ROARS your\nname— a blazing champ!"
+    return "HEART OF THE BLADE!\nHeart and fire as one—\nyou found your own way."
 
 
-# The blended chapter: every node is a comic PAGE; choice nodes pop a choice bar.
+# ---------------------------------------------------------------------------
+# THE BOND TOURNAMENT — the full Spirit-Beast Blades story (original IP, kid-
+# safe, ages 6-12). A rookie climbs a 4-chapter ladder with their spirit-beast
+# blade. The real prize isn't just winning — it's growing a BOND with your
+# blade and turning rivals into friends (courage, sportsmanship, kindness over
+# ego; nothing scary or violent — blades simply "spin out").
+#
+# Each rival chapter runs the same beats: MEET -> a character CHOICE (sets one
+# STYLE flag) -> a BATTLE choice (unleash / read & counter / defend — branches
+# the win dialogue + the rival's expression) -> WIN -> BEFRIEND. A mentor drops
+# in for short interludes. The three character choices set the flags that
+# accumulate and drive the ending (see spin_comic_ending / SPIN_HEART/SPIN_FIRE):
+#   Ch1 Kael  : calm   | bold
+#   Ch2 Mira  : kind   | fierce
+#   Ch3 Brakk : steady | reckless
+#   all heart -> Champion of Heart ; all fire -> Champion of Fire ; mix -> Heart of the Blade
+# Ch4 is a friendly championship rematch vs a grown Kael that ties it together.
+#
+# Every node is a comic PAGE + exactly one of next / choices / end (the engine
+# format — no new node types invented). Art keys (cid_expr.png / id_bg.png)
+# resolve from assets/spinstory/; missing art draws a placeholder, so the whole
+# arc plays before the PNGs exist. Logic is GUI-free + headless-tested.
+# ---------------------------------------------------------------------------
 SPIN_COMIC_STORY = {
+    # -- prologue: the mentor sets the stage ------------------------------
     "open": {
         "page": {"cols": 1, "rows": 3, "panels": [
-            {"grid": (0, 0, 1, 1), "bg": "arena", "caption": "The arena thunders..."},
-            {"grid": (0, 1, 1, 2), "char": ("kael", "smug"),
-             "bubble": "A rookie?\nThis'll be over quick."}]},
+            {"grid": (0, 0, 1, 1), "bg": "arena", "caption": "THE BOND TOURNAMENT",
+             "border": "bold"},
+            {"grid": (0, 1, 1, 1), "char": ("mentor", "neutral"),
+             "bubble": "Welcome, rookie! Three\nrivals stand between you\nand the crown."},
+            {"grid": (0, 2, 1, 1), "char": ("mentor", "smile"),
+             "bubble": "Win with skill— but the\nreal prize is the bonds\nyou forge. Spirits, fly!"}]},
+        "next": "ch1_meet"},
+
+    # == CHAPTER 1 : KAEL — the cocky qualifier ===========================
+    "ch1_meet": {
+        "page": {"cols": 1, "rows": 2, "panels": [
+            {"grid": (0, 0, 1, 1), "bg": "arena", "caption": "ROUND 1 — KAEL"},
+            {"grid": (0, 1, 1, 1), "char": ("kael", "smug"),
+             "bubble": "So YOU'RE the new kid\neveryone's talking\nabout? Heh."}]},
+        "next": "ch1_taunt"},
+    "ch1_taunt": {
+        "page": {"cols": 1, "rows": 2, "panels": [
+            {"grid": (0, 0, 1, 1), "char": ("kael", "smug"),
+             "bubble": "This'll be over before\nit even starts, rookie!"},
+            {"grid": (0, 1, 1, 1), "bg": "arena", "bubble": "How do I\nplay this?",
+             "bubble_style": "thought"}]},
         "choices": [
-            {"label": "Stay calm and focused", "set": "calm", "to": "calm"},
-            {"label": "Fire right back at him", "set": "bold", "to": "bold"}]},
-    "calm": {
+            {"label": "Smile — offer him a fair match", "set": "calm", "to": "ch1_calm"},
+            {"label": "Fire right back at him", "set": "bold", "to": "ch1_bold"}]},
+    "ch1_calm": {
         "page": {"cols": 1, "rows": 1, "panels": [
             {"grid": (0, 0, 1, 1), "char": ("kael", "neutral"),
-             "caption": "You breathe. Steady.", "bubble": "Hmph.\nWe'll see."}]},
-        "next": "clash"},
-    "bold": {
+             "caption": "You: \"May the best blade win!\"",
+             "bubble": "...Tch. We'll\nsee about that."}]},
+        "next": "ch1_battle"},
+    "ch1_bold": {
         "page": {"cols": 1, "rows": 1, "panels": [
             {"grid": (0, 0, 1, 1), "char": ("kael", "fierce"),
-             "bubble": "Big words!\nBack them up!"}]},
-        "next": "clash"},
-    "clash": {
-        "page": {"cols": 1, "rows": 3, "panels": [
-            {"grid": (0, 0, 1, 1), "bg": "arena", "caption": "LET IT RIP!"},
-            {"grid": (0, 1, 1, 2), "char": ("kael", "fierce"), "bubble": "Here I come!"}]},
-        "choices": [
-            {"label": "Unleash your Spirit Move", "to": "power"},
-            {"label": "Defend, then counter", "to": "clever"}]},
-    "power": {
-        "page": {"cols": 1, "rows": 1, "panels": [
-            {"grid": (0, 0, 1, 1), "char": ("kael", "shocked"),
-             "caption": "Your blade SLAMS in!", "bubble": "Wha—?!"}]},
-        "next": "ending"},
-    "clever": {
-        "page": {"cols": 1, "rows": 1, "panels": [
-            {"grid": (0, 0, 1, 1), "char": ("kael", "shocked"),
-             "caption": "You counter at the last beat!", "bubble": "No way!"}]},
-        "next": "ending"},
-    "ending": {
+             "caption": "You: \"Bring it on!\"",
+             "bubble": "HA! Big talk—\nnow back it up!"}]},
+        "next": "ch1_battle"},
+    "ch1_battle": {
         "page": {"cols": 1, "rows": 2, "panels": [
-            {"grid": (0, 0, 1, 1), "bg": "arena", "caption": "VICTORY!  -  THE END"},
-            {"grid": (0, 1, 1, 1), "char": ("kael", "neutral"), "ending_bubble": True}]},
+            {"grid": (0, 0, 1, 1), "bg": "arena", "caption": "3... 2... 1... SPIRITS, FLY!",
+             "border": "impact"},
+            {"grid": (0, 1, 1, 1), "char": ("kael", "fierce"), "bubble": "Here I come!",
+             "bubble_style": "shout"}]},
+        "choices": [
+            {"label": "Unleash your spirit-beast", "to": "ch1_unleash"},
+            {"label": "Read him, then counter", "to": "ch1_counter"},
+            {"label": "Defend and outlast him", "to": "ch1_defend"}]},
+    "ch1_unleash": {
+        "page": {"cols": 1, "rows": 1, "panels": [
+            {"grid": (0, 0, 1, 1), "char": ("kael", "shocked"),
+             "caption": "Your blade BLAZES— a spinning storm!", "bubble": "Wha—?!"}]},
+        "next": "ch1_friend"},
+    "ch1_counter": {
+        "page": {"cols": 1, "rows": 1, "panels": [
+            {"grid": (0, 0, 1, 1), "char": ("kael", "shocked"),
+             "caption": "You wait... then strike on the perfect beat!", "bubble": "No way!"}]},
+        "next": "ch1_friend"},
+    "ch1_defend": {
+        "page": {"cols": 1, "rows": 1, "panels": [
+            {"grid": (0, 0, 1, 1), "char": ("kael", "shocked"),
+             "caption": "You hold steady till his spin fades!", "bubble": "Unreal..."}]},
+        "next": "ch1_friend"},
+    "ch1_friend": {
+        "page": {"cols": 1, "rows": 1, "panels": [
+            {"grid": (0, 0, 1, 1), "char": ("kael", "neutral"),
+             "caption": "Kael's top spins out— you WIN!",
+             "bubble": "Heh... you're alright,\nrookie. Friends?", "bubble_style": "round"}]},
+        "next": "ch2_meet"},
+
+    # == CHAPTER 2 : MIRA — the calm strategist ===========================
+    "ch2_meet": {
+        "page": {"cols": 1, "rows": 2, "panels": [
+            {"grid": (0, 0, 1, 1), "bg": "arena", "caption": "ROUND 2 — MIRA"},
+            {"grid": (0, 1, 1, 1), "char": ("mira", "neutral"),
+             "bubble": "I've studied every spin\nyou've made. I know\nyour tricks."}]},
+        "next": "ch2_taunt"},
+    "ch2_taunt": {
+        "page": {"cols": 1, "rows": 2, "panels": [
+            {"grid": (0, 0, 1, 1), "char": ("mira", "cool"),
+             "bubble": "Precision beats passion.\nWatch and learn."},
+            {"grid": (0, 1, 1, 1), "bg": "arena", "bubble": "Okay...\nmy move.",
+             "bubble_style": "thought"}]},
+        "choices": [
+            {"label": "Praise her skill, spin clean", "set": "kind", "to": "ch2_kind"},
+            {"label": "Push the pace — overwhelm her", "set": "fierce", "to": "ch2_fierce"}]},
+    "ch2_kind": {
+        "page": {"cols": 1, "rows": 1, "panels": [
+            {"grid": (0, 0, 1, 1), "char": ("mira", "neutral"),
+             "caption": "You: \"Your form is amazing!\"",
+             "bubble": "...Thank you.\nNow stay focused!"}]},
+        "next": "ch2_battle"},
+    "ch2_fierce": {
+        "page": {"cols": 1, "rows": 1, "panels": [
+            {"grid": (0, 0, 1, 1), "char": ("mira", "fierce"),
+             "caption": "You surge forward!",
+             "bubble": "So reckless—\nbut so FAST!"}]},
+        "next": "ch2_battle"},
+    "ch2_battle": {
+        "page": {"cols": 1, "rows": 2, "panels": [
+            {"grid": (0, 0, 1, 1), "bg": "arena", "caption": "Steel sings! Tops collide!",
+             "border": "impact"},
+            {"grid": (0, 1, 1, 1), "char": ("mira", "fierce"), "bubble": "Not bad!",
+             "bubble_style": "shout"}]},
+        "choices": [
+            {"label": "Unleash your spirit-beast", "to": "ch2_unleash"},
+            {"label": "Read her, then counter", "to": "ch2_counter"},
+            {"label": "Defend and outlast her", "to": "ch2_defend"}]},
+    "ch2_unleash": {
+        "page": {"cols": 1, "rows": 1, "panels": [
+            {"grid": (0, 0, 1, 1), "char": ("mira", "shocked"),
+             "caption": "Your spirit-beast roars to life!", "bubble": "Such power!"}]},
+        "next": "ch2_friend"},
+    "ch2_counter": {
+        "page": {"cols": 1, "rows": 1, "panels": [
+            {"grid": (0, 0, 1, 1), "char": ("mira", "shocked"),
+             "caption": "You read her pattern and counter!", "bubble": "You... predicted me?"}]},
+        "next": "ch2_friend"},
+    "ch2_defend": {
+        "page": {"cols": 1, "rows": 1, "panels": [
+            {"grid": (0, 0, 1, 1), "char": ("mira", "shocked"),
+             "caption": "You weather her assault and hold!", "bubble": "I can't break\nthrough!"}]},
+        "next": "ch2_friend"},
+    "ch2_friend": {
+        "page": {"cols": 1, "rows": 1, "panels": [
+            {"grid": (0, 0, 1, 1), "char": ("mira", "cool"),
+             "caption": "Mira's top spins out— you advance!",
+             "bubble": "Teach me that\nsometime? ...Friends.", "bubble_style": "round"}]},
+        "next": "mentor_mid"},
+
+    # -- mentor interlude --------------------------------------------------
+    "mentor_mid": {
+        "page": {"cols": 1, "rows": 1, "panels": [
+            {"grid": (0, 0, 1, 1), "bg": "training", "char": ("mentor", "smile"),
+             "border": "soft",
+             "bubble": "Two rivals, two new friends!\nFeel that? Your bond with\nyour blade is growing.\nOne more— then the final."}]},
+        "next": "ch3_meet"},
+
+    # == CHAPTER 3 : BRAKK — the big-hearted powerhouse ===================
+    "ch3_meet": {
+        "page": {"cols": 1, "rows": 2, "panels": [
+            {"grid": (0, 0, 1, 1), "bg": "arena", "caption": "SEMIFINAL — BRAKK"},
+            {"grid": (0, 1, 1, 1), "char": ("brakk", "fierce"),
+             "bubble": "GRAAH! I'm the\nSTRONGEST blade\nin the league!", "bubble_style": "shout"}]},
+        "next": "ch3_taunt"},
+    "ch3_taunt": {
+        "page": {"cols": 1, "rows": 2, "panels": [
+            {"grid": (0, 0, 1, 1), "char": ("brakk", "grin"),
+             "bubble": "Little blade,\nlittle chance!"},
+            {"grid": (0, 1, 1, 1), "bg": "arena", "bubble": "He's huge!\nWhat now?",
+             "bubble_style": "thought"}]},
+        "choices": [
+            {"label": "Stand tall — respect his strength", "set": "steady", "to": "ch3_steady"},
+            {"label": "Match his power head-on", "set": "reckless", "to": "ch3_reckless"}]},
+    "ch3_steady": {
+        "page": {"cols": 1, "rows": 1, "panels": [
+            {"grid": (0, 0, 1, 1), "char": ("brakk", "neutral"),
+             "caption": "You: \"You're strong— let's both go all out!\"",
+             "bubble": "Heh! You've got GUTS,\nsmall one. I respect that."}]},
+        "next": "ch3_battle"},
+    "ch3_reckless": {
+        "page": {"cols": 1, "rows": 1, "panels": [
+            {"grid": (0, 0, 1, 1), "char": ("brakk", "fierce"),
+             "caption": "You charge in, fearless!",
+             "bubble": "YES! Show me\nyour POWER!", "bubble_style": "shout"}]},
+        "next": "ch3_battle"},
+    "ch3_battle": {
+        "page": {"cols": 1, "rows": 2, "panels": [
+            {"grid": (0, 0, 1, 1), "bg": "arena", "caption": "A QUAKING CLASH!",
+             "border": "impact"},
+            {"grid": (0, 1, 1, 1), "char": ("brakk", "fierce"), "bubble": "Such SPIN!",
+             "bubble_style": "shout"}]},
+        "choices": [
+            {"label": "Unleash your spirit-beast", "to": "ch3_unleash"},
+            {"label": "Read him, then counter", "to": "ch3_counter"},
+            {"label": "Defend and outlast him", "to": "ch3_defend"}]},
+    "ch3_unleash": {
+        "page": {"cols": 1, "rows": 1, "panels": [
+            {"grid": (0, 0, 1, 1), "char": ("brakk", "shocked"),
+             "caption": "Your spirit-beast erupts in light!", "bubble": "Incredible!"}]},
+        "next": "ch3_friend"},
+    "ch3_counter": {
+        "page": {"cols": 1, "rows": 1, "panels": [
+            {"grid": (0, 0, 1, 1), "char": ("brakk", "shocked"),
+             "caption": "You slip his charge and counter!", "bubble": "So nimble!"}]},
+        "next": "ch3_friend"},
+    "ch3_defend": {
+        "page": {"cols": 1, "rows": 1, "panels": [
+            {"grid": (0, 0, 1, 1), "char": ("brakk", "shocked"),
+             "caption": "You stand firm till his power spends!", "bubble": "You... outlasted ME?"}]},
+        "next": "ch3_friend"},
+    "ch3_friend": {
+        "page": {"cols": 1, "rows": 1, "panels": [
+            {"grid": (0, 0, 1, 1), "char": ("brakk", "grin"),
+             "caption": "Brakk's top wobbles out— you WIN!",
+             "bubble": "HAHA! A worthy champ.\nGo win it all, friend!", "bubble_style": "round"}]},
+        "next": "finals_open"},
+
+    # == CHAPTER 4 : THE GRAND FINAL — a friendly rematch vs Kael =========
+    "finals_open": {
+        "page": {"cols": 1, "rows": 3, "panels": [
+            {"grid": (0, 0, 1, 1), "bg": "finals", "caption": "THE GRAND FINAL",
+             "border": "bold"},
+            {"grid": (0, 1, 1, 1), "char": ("mentor", "smile"),
+             "bubble": "This is it. Everything\nyou've learned— let your spirit FLY!"},
+            {"grid": (0, 2, 1, 1), "bg": "finals", "border": "none",
+             "caption": "Mira & Brakk cheer from the stands!"}]},
+        "next": "finals_meet"},
+    "finals_meet": {
+        "page": {"cols": 1, "rows": 2, "panels": [
+            {"grid": (0, 0, 1, 1), "bg": "finals",
+             "caption": "Across the ring stands... Kael, the other finalist!"},
+            {"grid": (0, 1, 1, 1), "char": ("kael", "neutral"),
+             "bubble": "We both made it, rookie.\nNo holding back—\nas friends!"}]},
+        "next": "finals_battle"},
+    "finals_battle": {
+        "page": {"cols": 1, "rows": 2, "panels": [
+            {"grid": (0, 0, 1, 1), "bg": "finals", "caption": "FINAL SPIN— SPIRITS, FLY!",
+             "border": "impact"},
+            {"grid": (0, 1, 1, 1), "char": ("kael", "fierce"),
+             "bubble": "Show me how far\nyou've come!", "bubble_style": "shout"}]},
+        "choices": [
+            {"label": "Unleash everything", "to": "finals_unleash"},
+            {"label": "Read him, then counter", "to": "finals_counter"},
+            {"label": "Defend and outlast him", "to": "finals_defend"}]},
+    "finals_unleash": {
+        "page": {"cols": 1, "rows": 1, "panels": [
+            {"grid": (0, 0, 1, 1), "char": ("kael", "shocked"),
+             "caption": "Your spirit-beast blazes brighter than ever!", "bubble": "Whoa—!"}]},
+        "next": "ending"},
+    "finals_counter": {
+        "page": {"cols": 1, "rows": 1, "panels": [
+            {"grid": (0, 0, 1, 1), "char": ("kael", "shocked"),
+             "caption": "You read Kael like an open book!", "bubble": "Our first match—\nreversed!"}]},
+        "next": "ending"},
+    "finals_defend": {
+        "page": {"cols": 1, "rows": 1, "panels": [
+            {"grid": (0, 0, 1, 1), "char": ("kael", "shocked"),
+             "caption": "You hold the center till the last spin!", "bubble": "Rock solid!"}]},
+        "next": "ending"},
+
+    # -- the ending: the champion TITLE is injected from your STYLE flags --
+    "ending": {
+        "page": {"cols": 1, "rows": 3, "panels": [
+            {"grid": (0, 0, 1, 1), "bg": "finals", "caption": "BOND TOURNAMENT CHAMPION!",
+             "border": "bold"},
+            {"grid": (0, 1, 1, 1), "char": ("mentor", "smile"), "ending_bubble": True},
+            {"grid": (0, 2, 1, 1), "bg": "finals", "border": "double",
+             "caption": "Kael, Mira & Brakk lift you high!"}]},
         "end": True},
 }
 

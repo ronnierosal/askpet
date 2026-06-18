@@ -1,11 +1,15 @@
 """Normalize raw ChatGPT black-and-white manga art into Spirit-Beast Blades assets.
 
 Drop raw PNGs into assets/spinstory/raw/ using these base names:
-    arena_bg.png                              (background, ~3:2, any size)
-    kael_neutral.png kael_smug.png kael_fierce.png kael_shocked.png
-                                              (the rival, on solid magenta #fe00fe)
+    backgrounds (~3:2, any size):  arena_bg.png  training_bg.png  finals_bg.png
+    characters  (on solid magenta #fe00fe), <name>_<expression>.png:
+        kael_*   with neutral/smug/fierce/shocked
+        mira_*   with neutral/cool/fierce/shocked
+        brakk_*  with neutral/grin/fierce/shocked
+        mentor_* with neutral/smile
 Then run:  python tools/prep_spin_art.py
-Outputs normalized GRAYSCALE PNGs into assets/spinstory/.
+Outputs normalized GRAYSCALE PNGs into assets/spinstory/. Names not listed in
+BACKGROUNDS/SPRITES below are ignored — add new ones there to process them.
 
 Build-time tool only; needs Pillow (pip install pillow). The game never imports PIL.
 """
@@ -23,8 +27,11 @@ OUT = ROOT / "assets" / "spinstory"
 KEY = (0xfe, 0x00, 0xfe)            # magenta -> transparent
 BG_SIZE = (720, 480)
 SPRITE_H = 300
-BACKGROUNDS = ("arena_bg.png",)
-SPRITES = ("kael_neutral", "kael_smug", "kael_fierce", "kael_shocked")
+BACKGROUNDS = ("arena_bg.png", "training_bg.png", "finals_bg.png")
+SPRITES = ("kael_neutral", "kael_smug", "kael_fierce", "kael_shocked",
+           "mira_neutral", "mira_cool", "mira_fierce", "mira_shocked",
+           "brakk_neutral", "brakk_grin", "brakk_fierce", "brakk_shocked",
+           "mentor_neutral", "mentor_smile")
 
 
 def key_to_alpha(img, tol=70):
