@@ -13858,7 +13858,7 @@ def _spin_bubble(canvas, px, pw, y, text):
     tw = max(1, min(pw - 18, max(len(s) for s in lines) * 9 + 24))
     th = len(lines) * 20 + 14
     cx = px + pw // 2
-    x0 = cx - tw // 2
+    x0 = max(px, min(cx - tw // 2, px + pw - tw))   # keep the bubble inside the panel
     canvas.create_rectangle(x0, y, x0 + tw, y + th,
                             fill=SPIN_PAPER, outline=SPIN_INK, width=3)
     canvas.create_polygon(cx - 7, y + th, cx + 7, y + th, cx, y + th + 13,
