@@ -6392,6 +6392,7 @@ SLASH_COMMANDS = [
     ("/play", "Start a game — e.g. /play hangman", "play"),
     ("/eldermark", "Walk the world of Eldermark (pixel adventure)", "eldermark"),
     ("/spinstory", "Spirit-Beast Blades — a manga story you steer", "spinstory"),
+    ("/spincomic", "Spirit-Beast Blades — a manga comic page", "spincomic"),
     ("/help", "Show what AskPet can do", "help"),
 ]
 SLASH_BY_NAME = {name[1:]: (desc, action) for name, desc, action in SLASH_COMMANDS}
@@ -13765,6 +13766,164 @@ class SpinMangaScreen:
             pass
 
 
+# ---------------------------------------------------------------------------
+# Spirit-Beast Blades — COMIC-PAGE layout (multi-panel manga page). A page is a
+# grid of panels (each may span rows/cols for the varied manga feel); each panel
+# is a framed cell with an optional background, a character + expression, a
+# caption, and a speech bubble. Stdlib-only render (no PIL). Pairs with the
+# single-panel SpinMangaScreen visual novel. Layout math is headless-testable.
+# ---------------------------------------------------------------------------
+
+SPIN_COMIC_SAMPLE = {
+    "cols": 2, "rows": 3,
+    "panels": [
+        {"grid": (0, 0, 2, 1), "bg": "arena", "caption": "The arena thunders..."},
+        {"grid": (0, 1, 1, 1), "char": ("kael", "smug"),
+         "bubble": "A rookie?\nThis'll be quick."},
+        {"grid": (1, 1, 1, 1), "char": ("kael", "fierce"),
+         "bubble": "Back it up,\nbeginner!"},
+        {"grid": (0, 2, 2, 1), "char": ("kael", "shocked"),
+         "caption": "LET IT RIP!", "bubble": "Wha—?!"},
+    ],
+}
+
+
+def spin_comic_rects(panels, cols, rows, W, H, margin=24, gutter=14):
+    """Pixel rect (x, y, w, h) for each panel from its (col, row, colspan,
+    rowspan) grid cell. Pure function — headless-testable."""
+    cw = (W - 2 * margin - (cols - 1) * gutter) / cols
+    ch = (H - 2 * margin - (rows - 1) * gutter) / rows
+    rects = []
+    for p in panels:
+        c, r, cs, rs = p["grid"]
+        rects.append((round(margin + c * (cw + gutter)),
+                      round(margin + r * (ch + gutter)),
+                      round(cs * cw + (cs - 1) * gutter),
+                      round(rs * ch + (rs - 1) * gutter)))
+    return rects
+
+
+class SpinComicPage:
+    """A manga comic PAGE: panels laid out on one page with gutters + ink
+    borders, each with a character and a speech bubble. Crash-isolated."""
+
+    PW, PH = 600, 800
+
+    def __init__(self, pet, page=SPIN_COMIC_SAMPLE):
+        self.pet = pet
+        self.page = page
+        self._refs = []
+        self._cache = {}
+        self._closed = False
+
+        self.win = tk.Toplevel(pet.root)
+        self.win.title("Spirit-Beast Blades — comic page")
+        self.win.resizable(False, False)
+        self.canvas = tk.Canvas(self.win, width=self.PW, height=self.PH,
+                                highlightthickness=0, bg=SPIN_PAPER)
+        self.canvas.pack()
+        self._draw()
+        self.win.bind("<KeyPress>", self._key)
+        self.win.protocol("WM_DELETE_WINDOW", self.close)
+        sw, sh = pet.root.winfo_screenwidth(), pet.root.winfo_screenheight()
+        self.win.update_idletasks()
+        self.win.geometry(f"+{max(0, (sw - self.PW) // 2)}+{max(0, (sh - self.PH) // 2 - 40)}")
+        self.win.focus_force()
+
+    def _bg_crop(self, bgid, w, h):
+        key = ("bg", bgid, w, h)
+        if key not in self._cache:
+            src = None
+            p = SPIN_ASSETS / f"{bgid}_bg.png"
+            if p.exists():
+                try:
+                    src = tk.PhotoImage(file=str(p))
+                except tk.TclError:
+                    src = None
+            img = tk.PhotoImage(width=w, height=h)
+            if src is None:
+                img.put(SPIN_TONE, to=(0, 0, w, h))
+            else:
+                sw, sh = src.width(), src.height()
+                sx, sy = max(0, (sw - w) // 2), max(0, (sh - h) // 2)
+                img.tk.call(img, "copy", src, "-from", sx, sy,
+                            min(sw, sx + w), min(sh, sy + h), "-to", 0, 0)
+                self._refs.append(src)
+            self._cache[key] = img
+            self._refs.append(img)
+        return self._cache[key]
+
+    def _char(self, cid, expr, max_h):
+        key = ("char", cid, expr, max_h)
+        if key not in self._cache:
+            img = None
+            p = SPIN_ASSETS / f"{cid}_{expr}.png"
+            if p.exists():
+                try:
+                    img = tk.PhotoImage(file=str(p))
+                except tk.TclError:
+                    img = None
+            if img is None:
+                img = tk.PhotoImage(width=120, height=200)
+                img.put(SPIN_INK, to=(40, 0, 80, 56))
+                img.put(SPIN_INK, to=(24, 56, 96, 200))
+            while img.height() > max_h and img.height() > 2:   # fit panel, never loop forever
+                img = img.subsample(2, 2)
+            self._cache[key] = img
+            self._refs.append(img)
+        return self._cache[key]
+
+    def _bubble(self, px, pw, y, text):
+        lines = text.split("\n")
+        tw = min(pw - 18, max(len(s) for s in lines) * 9 + 24)
+        th = len(lines) * 20 + 14
+        cx = px + pw // 2
+        x0 = cx - tw // 2
+        self.canvas.create_rectangle(x0, y, x0 + tw, y + th,
+                                     fill=SPIN_PAPER, outline=SPIN_INK, width=3)
+        self.canvas.create_polygon(cx - 7, y + th, cx + 7, y + th, cx, y + th + 13,
+                                   fill=SPIN_PAPER, outline=SPIN_INK, width=2)
+        self.canvas.create_text(cx, y + th // 2, text=text, fill=SPIN_INK,
+                                font=("Consolas", 13, "bold"), justify="center")
+
+    def _draw(self):
+        rects = spin_comic_rects(self.page["panels"], self.page["cols"],
+                                 self.page["rows"], self.PW, self.PH)
+        for p, (x, y, w, h) in zip(self.page["panels"], rects):
+            if p.get("bg"):
+                self.canvas.create_image(x, y, anchor="nw",
+                                         image=self._bg_crop(p["bg"], w, h))
+            else:
+                self.canvas.create_rectangle(x, y, x + w, y + h, fill=SPIN_TONE, outline="")
+            ch = p.get("char")
+            if ch:
+                self.canvas.create_image(x + w // 2, y + h - 6, anchor="s",
+                                         image=self._char(ch[0], ch[1], h - 16))
+            if p.get("caption"):
+                cap = p["caption"]
+                self.canvas.create_rectangle(x + 6, y + 6, x + 18 + len(cap) * 9, y + 30,
+                                             fill=SPIN_INK, outline=SPIN_INK)
+                self.canvas.create_text(x + 12, y + 18, anchor="w", text=cap,
+                                        fill=SPIN_PAPER, font=("Consolas", 12, "bold"))
+            if p.get("bubble"):
+                self._bubble(x, w, y + 10, p["bubble"])
+            self.canvas.create_rectangle(x, y, x + w, y + h, outline=SPIN_INK, width=4)
+
+    def _key(self, e):
+        if (e.keysym or "").lower() in ("escape", "space", "return"):
+            self.close()
+
+    def close(self):
+        if self._closed:
+            return
+        self._closed = True
+        try:
+            if self.win.winfo_exists():
+                self.win.destroy()
+        except Exception:
+            pass
+
+
 class ChatWindow:
     """iMessage-style chat window opened by clicking the pet.
 
@@ -14505,6 +14664,9 @@ class ChatWindow:
         if action == "spinstory":
             self._open_spin_story()
             return
+        if action == "spincomic":
+            self._open_spin_comic()
+            return
         if not arg:
             self._add("pet", f"Add your text after /{name} — e.g. “/{name} …”.")
             return
@@ -14542,6 +14704,14 @@ class ChatWindow:
         except Exception:
             self._add("pet", "Hmm, I couldn't open the story just now — try /games "
                              "for the arcade instead. 🐾")
+
+    def _open_spin_comic(self):
+        """Open a Spirit-Beast Blades comic page. A bug must never break chat."""
+        self._add("game", "Opening a Spirit-Beast Blades comic page. 🌀")
+        try:
+            SpinComicPage(self.pet)
+        except Exception:
+            self._add("pet", "Hmm, I couldn't open the comic page just now. 🐾")
 
     def _build_template_prompt(self, task, template_key):
         """Build a prompt with a specific template forced (used by the

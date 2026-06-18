@@ -49,9 +49,24 @@ def test_ending_varies_and_choose_guard():
     print("ending varies + choose guard OK")
 
 
+def test_comic_layout():
+    from askpet import spin_comic_rects, SPIN_COMIC_SAMPLE as P
+    rects = spin_comic_rects(P["panels"], P["cols"], P["rows"], 600, 800)
+    assert len(rects) == len(P["panels"])
+    for (x, y, w, h) in rects:
+        assert x >= 0 and y >= 0 and x + w <= 600 and y + h <= 800 and w > 0 and h > 0
+    for i in range(len(rects)):                 # panels must not overlap
+        ax, ay, aw, ah = rects[i]
+        for j in range(i + 1, len(rects)):
+            bx, by, bw, bh = rects[j]
+            assert not (ax < bx + bw and ax + aw > bx and ay < by + bh and ay + ah > by), (i, j)
+    print("comic layout OK")
+
+
 if __name__ == "__main__":
     test_graph_integrity()
     test_all_nodes_reachable()
     test_branching_playthroughs()
     test_ending_varies_and_choose_guard()
+    test_comic_layout()
     print("SPINSTORY TEST PASSED")
