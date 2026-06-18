@@ -204,3 +204,56 @@ and proportions — ONLY the expression changes: a big WARM, PROUD smile,
 encouraging and kind (cheering the player on). Black-and-white MANGA, ink +
 screentone, no color. SOLID FLAT MAGENTA (#fe00fe) background only. Same
 framing and size.
+
+
+==================================================================
+OPTIONAL EXTRA BACKGROUNDS  —  for scene variety (not required)
+==================================================================
+The game now CODE-DRAWS its action effects (concentration "focus" lines, a radial
+"flash" burst, soft "screen" screentone) behind characters, so blank panels are
+already fixed — you do NOT need to make speed-line / halftone images. These are
+just OPTIONAL extra SCENE backgrounds for more variety on the wide establishing
+panels. Same rules as arena/training/finals: black-and-white MANGA, ink line-art
++ screentone shading, NO color, NO characters, NO text/speech bubbles, landscape
+about 3:2 (e.g. 720x480), clean high-contrast. Drop in raw/ and I'll wire each
+into fitting panels.
+
+
+------------------------------------------------------------------
+FILE:  crowd_bg.png        (a wall of cheering fans)
+------------------------------------------------------------------
+Black-and-white MANGA panel, ink line-art + screentone shading, no color.
+A packed wall of EXCITED young spectators in stadium stands — many cheering
+faces, raised arms, a few waving banners/flags — viewed straight on, filling the
+frame. Bright, fun, kid-friendly energy. NO main characters in front, NO text,
+NO speech bubbles. Landscape ~3:2. Clean, high-contrast black and white.
+
+
+------------------------------------------------------------------
+FILE:  gate_bg.png         (the tournament entrance)
+------------------------------------------------------------------
+Black-and-white MANGA panel, ink line-art + screentone shading, no color.
+The grand ENTRANCE TUNNEL into the spinner-battle stadium: a big archway / gate
+with banners, bright light spilling in from the arena beyond, a sense of stepping
+into something epic. NO characters, NO text, NO speech bubbles. Landscape ~3:2.
+Clean, high-contrast black and white.
+
+
+------------------------------------------------------------------
+FILE:  sky_bg.png          (a dramatic manga sky)
+------------------------------------------------------------------
+Black-and-white MANGA panel, ink line-art + screentone shading, no color.
+A big dramatic SKY: bold billowing clouds with radiating light beams breaking
+through, maybe a few birds — an uplifting, emotional "big moment" backdrop. NO
+characters, NO text, NO speech bubbles. Landscape ~3:2. Clean, high-contrast
+black and white.
+
+
+------------------------------------------------------------------
+FILE:  podium_bg.png       (the winner's podium)
+------------------------------------------------------------------
+Black-and-white MANGA panel, ink line-art + screentone shading, no color.
+A CHAMPIONSHIP winner's podium / trophy stand under a spotlight, with confetti
+and streamers falling and a big trophy or cup, celebratory atmosphere. NO
+characters standing on it, NO text, NO speech bubbles. Landscape ~3:2. Clean,
+high-contrast black and white.

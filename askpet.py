@@ -13984,6 +13984,57 @@ def _spin_bubble(canvas, px, pw, y, text, style="speech"):
         label(tcx, y + boxh // 2)
 
 
+SPIN_FX = ("tone", "screen", "focus", "flash")     # panel background effects
+
+
+def _spin_ray_edge(cx, cy, dx, dy, x, y, w, h):
+    """Where a ray from (cx,cy) heading (dx,dy) meets the panel border — keeps
+    effect lines clipped inside the panel."""
+    ts = []
+    if dx > 1e-6:
+        ts.append((x + w - cx) / dx)
+    if dx < -1e-6:
+        ts.append((x - cx) / dx)
+    if dy > 1e-6:
+        ts.append((y + h - cy) / dy)
+    if dy < -1e-6:
+        ts.append((y - cy) / dy)
+    t = min([v for v in ts if v > 0], default=0.0)
+    return cx + dx * t, cy + dy * t
+
+
+def _spin_fx(canvas, x, y, w, h, fx="tone", fcy=None):
+    """A panel's manga background EFFECT, filling the whole panel behind any
+    character so no panel reads as blank (see SPIN_FX):
+      tone    flat screentone
+      screen  soft even screentone lines (calm dialogue fill)
+      focus   concentration lines converging on the subject (drama / shock)
+      flash   radial impact burst on white (power / unleash)
+    Code-drawn (no PIL). fcy is the focal Y (defaults to the panel centre)."""
+    cxp = x + w / 2
+    cyp = fcy if fcy is not None else y + h / 2
+    if fx == "flash":                                   # white burst, rays outward
+        canvas.create_rectangle(x, y, x + w, y + h, fill=SPIN_PAPER, outline="")
+        for i in range(56):
+            a = 2 * math.pi * i / 56
+            ex, ey = _spin_ray_edge(cxp, cyp, math.cos(a), math.sin(a), x, y, w, h)
+            canvas.create_line(cxp, cyp, ex, ey, fill=SPIN_INK, width=(2 if i % 2 else 1))
+        return
+    canvas.create_rectangle(x, y, x + w, y + h, fill=SPIN_TONE, outline="")
+    if fx == "screen":                                  # soft even screentone lines
+        yy = y + 5
+        while yy < y + h - 3:
+            canvas.create_line(x + 3, yy, x + w - 3, yy, fill=SPIN_GRAY, width=1)
+            yy += 6
+    elif fx == "focus":                                 # concentration lines -> subject
+        for i in range(96):
+            a = 2 * math.pi * i / 96
+            dx, dy = math.cos(a), math.sin(a)
+            ex, ey = _spin_ray_edge(cxp, cyp, dx, dy, x, y, w, h)
+            canvas.create_line(ex, ey, cxp + dx * w * 0.24, cyp + dy * h * 0.2,
+                               fill=SPIN_INK, width=(2 if i % 4 == 0 else 1))
+
+
 def spin_draw_page(canvas, page, W, H, cache, refs):
     """Draw a comic page (its panels) onto a canvas region (0,0)-(W,H). cache/refs
     are owned by the caller; refs keeps the PhotoImages alive."""
@@ -13992,8 +14043,10 @@ def spin_draw_page(canvas, page, W, H, cache, refs):
         if p.get("bg"):
             canvas.create_image(x, y, anchor="nw",
                                 image=_spin_bg_crop(p["bg"], w, h, cache, refs))
-        else:
-            canvas.create_rectangle(x, y, x + w, y + h, fill=SPIN_TONE, outline="")
+        else:                                   # no scene art -> a manga effect fill
+            fx = p.get("fx") or ("screen" if p.get("char") else "tone")
+            _spin_fx(canvas, x, y, w, h, fx,
+                     y + int(h * 0.6) if p.get("char") else None)
         ch = p.get("char")
         if ch:
             canvas.create_image(x + w // 2, y + h - 6, anchor="s",
@@ -14141,25 +14194,25 @@ SPIN_COMIC_STORY = {
         "page": {"cols": 1, "rows": 2, "panels": [
             {"grid": (0, 0, 1, 1), "bg": "arena", "caption": "3... 2... 1... SPIRITS, FLY!",
              "border": "impact"},
-            {"grid": (0, 1, 1, 1), "char": ("kael", "fierce"), "bubble": "Here I come!",
-             "bubble_style": "shout"}]},
+            {"grid": (0, 1, 1, 1), "char": ("kael", "fierce"), "fx": "focus",
+             "bubble": "Here I come!", "bubble_style": "shout"}]},
         "choices": [
             {"label": "Unleash your spirit-beast", "to": "ch1_unleash"},
             {"label": "Read him, then counter", "to": "ch1_counter"},
             {"label": "Defend and outlast him", "to": "ch1_defend"}]},
     "ch1_unleash": {
         "page": {"cols": 1, "rows": 1, "panels": [
-            {"grid": (0, 0, 1, 1), "char": ("kael", "shocked"),
+            {"grid": (0, 0, 1, 1), "char": ("kael", "shocked"), "fx": "flash",
              "caption": "Your blade BLAZES— a spinning storm!", "bubble": "Wha—?!"}]},
         "next": "ch1_friend"},
     "ch1_counter": {
         "page": {"cols": 1, "rows": 1, "panels": [
-            {"grid": (0, 0, 1, 1), "char": ("kael", "shocked"),
+            {"grid": (0, 0, 1, 1), "char": ("kael", "shocked"), "fx": "focus",
              "caption": "You wait... then strike on the perfect beat!", "bubble": "No way!"}]},
         "next": "ch1_friend"},
     "ch1_defend": {
         "page": {"cols": 1, "rows": 1, "panels": [
-            {"grid": (0, 0, 1, 1), "char": ("kael", "shocked"),
+            {"grid": (0, 0, 1, 1), "char": ("kael", "shocked"), "fx": "focus",
              "caption": "You hold steady till his spin fades!", "bubble": "Unreal..."}]},
         "next": "ch1_friend"},
     "ch1_friend": {
@@ -14201,25 +14254,25 @@ SPIN_COMIC_STORY = {
         "page": {"cols": 1, "rows": 2, "panels": [
             {"grid": (0, 0, 1, 1), "bg": "arena", "caption": "Steel sings! Tops collide!",
              "border": "impact"},
-            {"grid": (0, 1, 1, 1), "char": ("mira", "fierce"), "bubble": "Not bad!",
-             "bubble_style": "shout"}]},
+            {"grid": (0, 1, 1, 1), "char": ("mira", "fierce"), "fx": "focus",
+             "bubble": "Not bad!", "bubble_style": "shout"}]},
         "choices": [
             {"label": "Unleash your spirit-beast", "to": "ch2_unleash"},
             {"label": "Read her, then counter", "to": "ch2_counter"},
             {"label": "Defend and outlast her", "to": "ch2_defend"}]},
     "ch2_unleash": {
         "page": {"cols": 1, "rows": 1, "panels": [
-            {"grid": (0, 0, 1, 1), "char": ("mira", "shocked"),
+            {"grid": (0, 0, 1, 1), "char": ("mira", "shocked"), "fx": "flash",
              "caption": "Your spirit-beast roars to life!", "bubble": "Such power!"}]},
         "next": "ch2_friend"},
     "ch2_counter": {
         "page": {"cols": 1, "rows": 1, "panels": [
-            {"grid": (0, 0, 1, 1), "char": ("mira", "shocked"),
+            {"grid": (0, 0, 1, 1), "char": ("mira", "shocked"), "fx": "focus",
              "caption": "You read her pattern and counter!", "bubble": "You... predicted me?"}]},
         "next": "ch2_friend"},
     "ch2_defend": {
         "page": {"cols": 1, "rows": 1, "panels": [
-            {"grid": (0, 0, 1, 1), "char": ("mira", "shocked"),
+            {"grid": (0, 0, 1, 1), "char": ("mira", "shocked"), "fx": "focus",
              "caption": "You weather her assault and hold!", "bubble": "I can't break\nthrough!"}]},
         "next": "ch2_friend"},
     "ch2_friend": {
@@ -14269,25 +14322,25 @@ SPIN_COMIC_STORY = {
         "page": {"cols": 1, "rows": 2, "panels": [
             {"grid": (0, 0, 1, 1), "bg": "arena", "caption": "A QUAKING CLASH!",
              "border": "impact"},
-            {"grid": (0, 1, 1, 1), "char": ("brakk", "fierce"), "bubble": "Such SPIN!",
-             "bubble_style": "shout"}]},
+            {"grid": (0, 1, 1, 1), "char": ("brakk", "fierce"), "fx": "focus",
+             "bubble": "Such SPIN!", "bubble_style": "shout"}]},
         "choices": [
             {"label": "Unleash your spirit-beast", "to": "ch3_unleash"},
             {"label": "Read him, then counter", "to": "ch3_counter"},
             {"label": "Defend and outlast him", "to": "ch3_defend"}]},
     "ch3_unleash": {
         "page": {"cols": 1, "rows": 1, "panels": [
-            {"grid": (0, 0, 1, 1), "char": ("brakk", "shocked"),
+            {"grid": (0, 0, 1, 1), "char": ("brakk", "shocked"), "fx": "flash",
              "caption": "Your spirit-beast erupts in light!", "bubble": "Incredible!"}]},
         "next": "ch3_friend"},
     "ch3_counter": {
         "page": {"cols": 1, "rows": 1, "panels": [
-            {"grid": (0, 0, 1, 1), "char": ("brakk", "shocked"),
+            {"grid": (0, 0, 1, 1), "char": ("brakk", "shocked"), "fx": "focus",
              "caption": "You slip his charge and counter!", "bubble": "So nimble!"}]},
         "next": "ch3_friend"},
     "ch3_defend": {
         "page": {"cols": 1, "rows": 1, "panels": [
-            {"grid": (0, 0, 1, 1), "char": ("brakk", "shocked"),
+            {"grid": (0, 0, 1, 1), "char": ("brakk", "shocked"), "fx": "focus",
              "caption": "You stand firm till his power spends!", "bubble": "You... outlasted ME?"}]},
         "next": "ch3_friend"},
     "ch3_friend": {
@@ -14318,7 +14371,7 @@ SPIN_COMIC_STORY = {
         "page": {"cols": 1, "rows": 2, "panels": [
             {"grid": (0, 0, 1, 1), "bg": "finals", "caption": "FINAL SPIN— SPIRITS, FLY!",
              "border": "impact"},
-            {"grid": (0, 1, 1, 1), "char": ("kael", "fierce"),
+            {"grid": (0, 1, 1, 1), "char": ("kael", "fierce"), "fx": "focus",
              "bubble": "Show me how far\nyou've come!", "bubble_style": "shout"}]},
         "choices": [
             {"label": "Unleash everything", "to": "finals_unleash"},
@@ -14326,17 +14379,17 @@ SPIN_COMIC_STORY = {
             {"label": "Defend and outlast him", "to": "finals_defend"}]},
     "finals_unleash": {
         "page": {"cols": 1, "rows": 1, "panels": [
-            {"grid": (0, 0, 1, 1), "char": ("kael", "shocked"),
+            {"grid": (0, 0, 1, 1), "char": ("kael", "shocked"), "fx": "flash",
              "caption": "Your spirit-beast blazes brighter than ever!", "bubble": "Whoa—!"}]},
         "next": "ending"},
     "finals_counter": {
         "page": {"cols": 1, "rows": 1, "panels": [
-            {"grid": (0, 0, 1, 1), "char": ("kael", "shocked"),
+            {"grid": (0, 0, 1, 1), "char": ("kael", "shocked"), "fx": "focus",
              "caption": "You read Kael like an open book!", "bubble": "Our first match—\nreversed!"}]},
         "next": "ending"},
     "finals_defend": {
         "page": {"cols": 1, "rows": 1, "panels": [
-            {"grid": (0, 0, 1, 1), "char": ("kael", "shocked"),
+            {"grid": (0, 0, 1, 1), "char": ("kael", "shocked"), "fx": "focus",
              "caption": "You hold the center till the last spin!", "bubble": "Rock solid!"}]},
         "next": "ending"},
 
@@ -14345,7 +14398,7 @@ SPIN_COMIC_STORY = {
         "page": {"cols": 1, "rows": 3, "panels": [
             {"grid": (0, 0, 1, 1), "bg": "finals", "caption": "BOND TOURNAMENT CHAMPION!",
              "border": "bold"},
-            {"grid": (0, 1, 1, 1), "char": ("mentor", "smile"), "ending_bubble": True},
+            {"grid": (0, 1, 1, 1), "char": ("mentor", "smile"), "fx": "flash", "ending_bubble": True},
             {"grid": (0, 2, 1, 1), "bg": "finals", "border": "double",
              "caption": "Kael, Mira & Brakk lift you high!"}]},
         "end": True},

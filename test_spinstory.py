@@ -94,7 +94,8 @@ def _play(S, policy):
 
 def test_comic_story():
     from askpet import (SPIN_COMIC_STORY as S, SPIN_COMIC_SAMPLE, spin_comic_rects,
-                        spin_comic_ending, SPIN_HEART, SPIN_FIRE, SPIN_BORDERS, SPIN_BUBBLES)
+                        spin_comic_ending, SPIN_HEART, SPIN_FIRE, SPIN_BORDERS, SPIN_BUBBLES,
+                        SPIN_FX)
     arts = _documented_art()
     flags_set = set()
     for nid, n in S.items():
@@ -122,6 +123,7 @@ def test_comic_story():
             if p.get("bg"):
                 assert f"{p['bg']}_bg.png" in arts, f"{nid}: undocumented bg {p['bg']}_bg.png"
             assert p.get("border", "plain") in SPIN_BORDERS, f"{nid}: bad border {p.get('border')!r}"
+            assert p.get("fx", "tone") in SPIN_FX, f"{nid}: bad fx {p.get('fx')!r}"
             assert p.get("bubble_style", "speech") in SPIN_BUBBLES, \
                 f"{nid}: bad bubble_style {p.get('bubble_style')!r}"
             if p.get("bubble_style"):               # a style with no balloon is a silent no-op
@@ -149,6 +151,7 @@ def test_comic_story():
         if p.get("bg"):
             assert f"{p['bg']}_bg.png" in arts, f"SAMPLE: undocumented bg {p['bg']}_bg.png"
         assert p.get("border", "plain") in SPIN_BORDERS, f"SAMPLE: bad border {p.get('border')!r}"
+        assert p.get("fx", "tone") in SPIN_FX, f"SAMPLE: bad fx {p.get('fx')!r}"
         assert p.get("bubble_style", "speech") in SPIN_BUBBLES, "SAMPLE: bad bubble_style"
         if p.get("bubble_style"):
             assert p.get("bubble") or p.get("ending_bubble"), "SAMPLE: bubble_style w/o bubble"
@@ -206,7 +209,7 @@ def test_comic_render_styles():
     and EVERY story page renders with the ending's champion title injected."""
     import tkinter as tk
     from askpet import (spin_draw_page, spin_comic_ending, SPIN_BORDERS, SPIN_BUBBLES,
-                        SPIN_COMIC_SAMPLE, SPIN_COMIC_STORY)
+                        SPIN_FX, SPIN_COMIC_SAMPLE, SPIN_COMIC_STORY)
     try:
         root = tk.Tk(); root.withdraw()
     except tk.TclError:
@@ -230,6 +233,9 @@ def test_comic_render_styles():
             assert len(items) > control, f"bubble {st} drew nothing extra"
             texts = [cv.itemcget(i, "text") for i in items if cv.type(i) == "text"]
             assert any("there" in t for t in texts), f"bubble {st} lost its text"
+
+        for fx in SPIN_FX:                          # every background effect draws
+            assert render(one({"char": ("kael", "neutral"), "fx": fx})), f"fx {fx} drew nothing"
 
         # a page using every border x every bubble draws and stays on the canvas
         n = max(len(SPIN_BORDERS), len(SPIN_BUBBLES))

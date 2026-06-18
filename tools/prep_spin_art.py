@@ -2,6 +2,7 @@
 
 Drop raw PNGs into assets/spinstory/raw/ using these base names:
     backgrounds (~3:2, any size):  arena_bg.png  training_bg.png  finals_bg.png
+                                   (optional extras: crowd / gate / sky / podium)
     characters  (on solid magenta #fe00fe), <name>_<expression>.png:
         kael_*   with neutral/smug/fierce/shocked
         mira_*   with neutral/cool/fierce/shocked
@@ -27,7 +28,8 @@ OUT = ROOT / "assets" / "spinstory"
 KEY = (0xfe, 0x00, 0xfe)            # magenta -> transparent
 BG_SIZE = (720, 480)
 SPRITE_H = 300
-BACKGROUNDS = ("arena_bg.png", "training_bg.png", "finals_bg.png")
+BACKGROUNDS = ("arena_bg.png", "training_bg.png", "finals_bg.png",
+               "crowd_bg.png", "gate_bg.png", "sky_bg.png", "podium_bg.png")
 SPRITES = ("kael_neutral", "kael_smug", "kael_fierce", "kael_shocked",
            "mira_neutral", "mira_cool", "mira_fierce", "mira_shocked",
            "brakk_neutral", "brakk_grin", "brakk_fierce", "brakk_shocked",
