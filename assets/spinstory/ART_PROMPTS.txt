@@ -221,3 +221,79 @@ FILE:  podium_bg.png       (the winner's podium)
 A CHAMPIONSHIP winner's podium / trophy stand under a spotlight, with confetti and
 streamers falling and a big trophy or cup, celebratory atmosphere. NO characters
 standing on it, NO text.
+
+
+==================================================================
+DEEP STORY — NEW CHARACTERS & SCENES  (218-page novel; see STORY_BIBLE.md)
+==================================================================
+Same B&W manga style. Character sprites on SOLID FLAT MAGENTA (#fe00fe),
+head-and-upper-body; scene backgrounds landscape ~3:2, NO characters, NO text.
+ORIGINAL designs — not based on any existing toy, game, or brand.
+
+------------------------------------------------------------------
+RIN  —  the protagonist (they/them):  neutral / determined / shaken / joy
+------------------------------------------------------------------
+"Rin", a 15-year-old orphan challenger from the lower city, holding a chipped,
+plain, no-name battle-blade. Practical worn clothes, watchful eyes, NOT flashy —
+a scavenger kid who has learned to take up little space. Same character across the
+set; ONLY the expression changes. Magenta bg, B&W manga, original.
+  rin_neutral.png    — guarded, quietly watchful.
+  rin_determined.png — focused, resolved, chin up before a match.
+  rin_shaken.png     — wide-eyed, off balance, emotionally exposed.
+  rin_joy.png        — a rare, real, open smile (the armor down).
+
+------------------------------------------------------------------
+PAE  —  the younger orphan who idolizes Rin:  neutral / hopeful
+------------------------------------------------------------------
+"Pae", a younger lower-city orphan in a too-big shirt, hugging a wobbly beginner
+blade, all elbows and admiration. Magenta bg, B&W manga, original.
+  pae_neutral.png  — eager, a little anxious.
+  pae_hopeful.png  — wide-eyed, beaming up at someone they look up to.
+
+------------------------------------------------------------------
+ORU  —  the eldest Bond-Warden (honest judge):  neutral / stern
+------------------------------------------------------------------
+"Warden Oru", an aged, half-blind tournament judge in dignified old robes with a
+faded spiral Tournament emblem; wise, weathered, principled. Magenta bg, B&W manga.
+  oru_neutral.png  — calm, kindly, seeing more than her clouded eyes should.
+  oru_stern.png    — rising to invoke the old law; grave authority.
+
+------------------------------------------------------------------
+VEHESAL  —  the Frost-Sage (the villain behind Raze):  neutral / cold
+------------------------------------------------------------------
+"Vehesal", an elegant frost-haired elder who founded cold-style spinning and never
+holds a blade himself — courtly, composed, quietly chilling (NOT monstrous; the
+scariest kind of villain is reasonable). Fine cold-formal clothing. Magenta bg, B&W.
+  vehesal_neutral.png — courtly, composed, gracious on the surface.
+  vehesal_cold.png    — coldly certain, persuasive, severe.
+
+------------------------------------------------------------------
+FILE:  top_silent.png      (the Coach's silenced elk-blade)
+------------------------------------------------------------------
+A once-noble battle-top with a stately ELK / stag-spirit motif, now drawn DULL and
+LIGHTLESS and still — a blade whose spirit has gone silent; no motion lines, a
+sense of quiet grief. 3/4 view, magenta bg, B&W manga, original.
+
+------------------------------------------------------------------
+FILE:  dishhall_bg.png     (Rin's home — the orphan dish-hall)
+------------------------------------------------------------------
+A worn lower-city orphan practice hall at DAWN: humble, chalk-smeared battle-dishes,
+high windows with slanting gray light, dust in the air, a faded old Tournament
+banner and newer Concord posters on the wall. Quiet, lonely, lived-in. NO
+characters, NO text. Landscape ~3:2. B&W manga, ink + screentone.
+
+------------------------------------------------------------------
+FILE:  pavilion_bg.png     (the Concord pavilion interior)
+------------------------------------------------------------------
+The cold, sleek, modern interior of the Concord Guild pavilion: clean hard lines,
+sponsor banners, a frozen and expensive elegance — the antagonist faction's space.
+NO characters, NO text. Landscape ~3:2. B&W manga, ink + screentone.
+
+(STILL THE ONE BLOCKER: the KAEL re-export — kael_neutral/smug/fierce/shocked as
+4 SEPARATE new-style sprites — to adopt the staged cast regen. See ART_PROMPTS
+status above and raw/_regen/MANIFEST.txt.)
+
+(OPTIONAL, high-value: true_form_bg.png — Rin's awakened radiant TRUE-FORM beast
+rising over the dish at the finale peak; falls back to spirit_bg. hall_bg.png — a
+competitors' lounge; falls back to training_bg. group_bg.png — a found-family group
+shot for the epilogue.)

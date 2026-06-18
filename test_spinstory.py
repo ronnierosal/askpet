@@ -303,6 +303,108 @@ def test_comic_quads():
     print("comic quads OK")
 
 
+def test_book_story():
+    """The full NOVEL graph (data-driven, loaded from book.json): exactly one exit
+    per node (next / choices / end / flag_next), fully reachable from the start, the
+    six style flags all set, the flag-driven ending router intact, and every prose /
+    manga art-id documented."""
+    from askpet import (SPIN_BOOK_STORY as B, SPIN_BOOK_START, spin_flag_bucket,
+                        SPIN_HEART, SPIN_FIRE, spin_comic_rects, SPIN_BORDERS, SPIN_FX)
+    arts = _documented_art()
+    flags_set = set()
+    for nid, n in B.items():
+        kinds = ("next" in n) + ("choices" in n) + bool(n.get("end")) + ("flag_next" in n)
+        assert kinds == 1, f"{nid}: exactly one exit (has {kinds})"
+        if "next" in n:
+            assert n["next"] in B, f"{nid}.next -> {n['next']!r} missing"
+        for ch in n.get("choices", []):
+            assert ch["to"] in B, f"{nid} choice -> {ch['to']!r} missing"
+            assert ch["label"], f"{nid} choice missing label"
+            if "set" in ch:
+                flags_set.add(ch["set"])
+        for t in (n.get("flag_next") or {}).values():
+            assert t in B, f"{nid}.flag_next -> {t!r} missing"
+        if n.get("type") == "manga":
+            pg = n["page"]
+            assert pg["panels"], f"{nid} empty manga page"
+            for (x, y, w, h) in spin_comic_rects(pg["panels"], pg["cols"], pg["rows"], 720, 784):
+                assert w >= 1 and h >= 1 and 0 <= x and 0 <= y and x + w <= 720 and y + h <= 784, nid
+            for p in pg["panels"]:
+                if p.get("char"):
+                    assert f"{p['char'][0]}_{p['char'][1]}.png" in arts, f"{nid}: undoc {p['char']}"
+                if p.get("bg"):
+                    assert f"{p['bg']}_bg.png" in arts, f"{nid}: undoc {p['bg']}_bg.png"
+                assert p.get("border", "plain") in SPIN_BORDERS, f"{nid}: bad border"
+                assert p.get("fx", "tone") in SPIN_FX, f"{nid}: bad fx"
+        else:
+            a = n.get("art")
+            if a:
+                png = (f"{a[1]}_bg.png" if a[0] == "bg" else
+                       f"{a[1]}_{a[2]}.png" if a[0] == "char" else f"{a[1]}.png")
+                assert png in arts, f"{nid}: undocumented art {a} ({png})"
+            if not n.get("end"):
+                assert n.get("text"), f"{nid} prose page missing text"
+
+    seen, stack = set(), [SPIN_BOOK_START]
+    while stack:
+        cur = stack.pop()
+        if cur in seen or cur not in B:
+            continue
+        seen.add(cur)
+        nd = B[cur]
+        if nd.get("next"):
+            stack.append(nd["next"])
+        for ch in nd.get("choices", []):
+            stack.append(ch["to"])
+        stack.extend((nd.get("flag_next") or {}).values())
+    assert seen == set(B), f"unreachable {len(set(B) - seen)}: {sorted(set(B) - seen)[:6]}"
+    assert flags_set == set(SPIN_HEART) | set(SPIN_FIRE), flags_set
+
+    assert spin_flag_bucket(set(SPIN_HEART)) == "heart"
+    assert spin_flag_bucket(set(SPIN_FIRE)) == "fire"
+    assert spin_flag_bucket({"calm", "fierce", "steady"}) == "blade"
+    assert spin_flag_bucket(set()) == "blade"
+    # exactly one end node, and the three flag-driven endings all distinct + reachable
+    ends = [k for k, v in B.items() if v.get("end")]
+    assert len(ends) == 1, ends
+    routers = [v["flag_next"] for v in B.values() if v.get("flag_next")]
+    assert routers, "no flag-driven ending router"
+    assert len(set(routers[0].values())) == 3, routers[0]
+    print(f"book story OK ({len(B)} nodes, {sum(v.get('type')=='manga' for v in B.values())} manga)")
+
+
+def test_book_render():
+    """Drive the REAL reader: instantiate SpinStoryBook (loads book.json) and render
+    EVERY node — first screen and the last paginated screen of long pages — so a
+    runtime render bug can't slip past."""
+    import tkinter as tk
+    from askpet import SPIN_BOOK_STORY as B, SpinStoryBook
+    try:
+        root = tk.Tk(); root.withdraw()
+    except tk.TclError:
+        print("book render SKIPPED (no display)"); return
+    try:
+        class _Pet:
+            pass
+        pet = _Pet(); pet.root = root
+        book = SpinStoryBook(pet)
+        for nid in B:
+            book.logic.node_id = nid
+            book.sel = 0
+            book.sub = 0
+            book._render()
+            assert book.canvas.find_all(), nid
+            if book._nsub > 1:                   # last screen of a paginated page
+                book.sub = book._nsub - 1
+                book._render()
+                assert book.canvas.find_all(), nid + "#last"
+        book.close()
+        root.update_idletasks()
+    finally:
+        root.destroy()
+    print("book render OK")
+
+
 if __name__ == "__main__":
     test_graph_integrity()
     test_all_nodes_reachable()
@@ -312,4 +414,6 @@ if __name__ == "__main__":
     test_comic_story()
     test_comic_quads()
     test_comic_render_styles()
+    test_book_story()
+    test_book_render()
     print("SPINSTORY TEST PASSED")

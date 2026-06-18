@@ -30,14 +30,20 @@ BG_SIZE = (720, 480)
 SPRITE_H = 440                      # taller source -> sprites DOWNSCALE in-game (sharper)
 BACKGROUNDS = ("arena_bg.png", "training_bg.png", "finals_bg.png",
                "clash_bg.png", "launch_bg.png", "spirit_bg.png",          # action scenes
-               "crowd_bg.png", "gate_bg.png", "sky_bg.png", "podium_bg.png")
+               "crowd_bg.png", "gate_bg.png", "sky_bg.png", "podium_bg.png",
+               "dishhall_bg.png", "pavilion_bg.png")                      # deep-story scenes
 SPRITES = ("kael_neutral", "kael_smug", "kael_fierce", "kael_shocked",
            "mira_neutral", "mira_cool", "mira_fierce", "mira_shocked",
            "brakk_neutral", "brakk_grin", "brakk_fierce", "brakk_shocked",
            "mentor_neutral", "mentor_smile",
            "raze_masked", "raze_cold", "raze_shocked",                   # the Masked Ace
            "sign_focus", "sign_burst",                                   # spirit-weaving hand signs
-           "top_hero", "top_kael", "top_mira", "top_brakk")              # spirit-beast tops
+           "top_hero", "top_kael", "top_mira", "top_brakk",              # spirit-beast tops
+           "rin_neutral", "rin_determined", "rin_shaken", "rin_joy",     # the protagonist (deep story)
+           "pae_neutral", "pae_hopeful",                                 # young orphan friend
+           "oru_neutral", "oru_stern",                                   # the Bond-Warden judge
+           "vehesal_neutral", "vehesal_cold",                            # the Frost-Sage (villain behind Raze)
+           "top_silent")                                                 # the Coach's silenced elk-blade
 
 
 def key_to_alpha(img, tol=70):

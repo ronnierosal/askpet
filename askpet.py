@@ -6391,7 +6391,7 @@ SLASH_COMMANDS = [
     ("/games", "See the games we can play", "games"),
     ("/play", "Start a game — e.g. /play hangman", "play"),
     ("/eldermark", "Walk the world of Eldermark (pixel adventure)", "eldermark"),
-    ("/spinstory", "Spirit-Beast Blades — a manga story you steer", "spinstory"),
+    ("/spinstory", "Spirit-Beast Blades — an illustrated story book you steer", "spinstory"),
     ("/spincomic", "Spirit-Beast Blades — a manga comic page", "spincomic"),
     ("/help", "Show what AskPet can do", "help"),
 ]
@@ -12494,7 +12494,7 @@ SCENE_W, SCENE_H = 720, 480
 
 # The slice's one location. `solids` are rectangles the player can't enter
 # (x, y, w, h); `npcs` are interaction points (sprite optional) with reading
-# pages. A position is the sprite BASE (feet), anchored bottom-centre on draw.
+# pages. A position is the sprite BASE (feet), anchored bottom-center on draw.
 ELDER_SCENES = {
     "mosslight_gate": {
         "id": "mosslight_gate",
@@ -12703,7 +12703,7 @@ class EldermarkSceneLogic:
         return None
 
     def exit_at(self):
-        """The exit whose zone holds the player's feet centre, or None."""
+        """The exit whose zone holds the player's feet center, or None."""
         fx, fy = self.x + self.PW / 2, self.y + self.PH / 2
         for ex in self.exits:
             rx, ry, rw, rh = ex["at"]
@@ -13852,7 +13852,7 @@ def _spin_quad_safe(quad):
 
 
 def _spin_bg_crop(bgid, w, h, cache, refs, zoom=1):
-    """A panel-sized centre crop of a manga background (optionally zoomed in for a
+    """A panel-sized center crop of a manga background (optionally zoomed in for a
     close-up behind a character — lets us reuse one scene at several depths), else
     a tone fill."""
     w, h = max(1, w), max(1, h)
@@ -13869,7 +13869,7 @@ def _spin_bg_crop(bgid, w, h, cache, refs, zoom=1):
         if src is None:
             img.put(SPIN_TONE, to=(0, 0, w, h))
         else:
-            if zoom > 1:                                # zoom in, then centre-crop
+            if zoom > 1:                                # zoom in, then center-crop
                 z = src.zoom(int(zoom), int(zoom))
                 refs.append(src)
                 src = z
@@ -13941,7 +13941,7 @@ def _spin_char(cid, expr, max_h, cache, refs):
 
 def _spin_char_crop(cid, expr, w, h, cache, refs):
     """An upper-body/face CLOSE-UP that COVERS the panel (w x h) — scaled so the
-    sprite fills both dimensions, then a top-centre pixel crop (the head fills the
+    sprite fills both dimensions, then a top-center pixel crop (the head fills the
     frame, the body runs off the bottom edge under the border). No floating cut.
     Stdlib-only; keeps the sprite's transparency so it sits over the panel scene."""
     w, h = max(1, w), max(1, h)
@@ -13955,7 +13955,7 @@ def _spin_char_crop(cid, expr, w, h, cache, refs):
             refs.append(src)
             sw, sh = src.width(), src.height()
         out = tk.PhotoImage(width=w, height=h)
-        sx0 = max(0, (sw - w) // 2)                      # centre horizontally, take the TOP (head)
+        sx0 = max(0, (sw - w) // 2)                      # center horizontally, take the TOP (head)
         out.tk.call(out, "copy", src, "-from", sx0, 0,
                     min(sw, sx0 + w), min(sh, h), "-to", 0, 0)
         cache[key] = out
@@ -14119,7 +14119,7 @@ def _spin_fx(canvas, x, y, w, h, fx="tone", fcy=None):
       screen  soft even screentone lines (calm dialogue fill)
       focus   concentration lines converging on the subject (drama / shock)
       flash   radial impact burst on white (power / unleash)
-    Code-drawn (no PIL). fcy is the focal Y (defaults to the panel centre)."""
+    Code-drawn (no PIL). fcy is the focal Y (defaults to the panel center)."""
     cxp = x + w / 2
     cyp = fcy if fcy is not None else y + h / 2
     if fx in _SPIN_STIPPLE:                             # real halftone screentone (dots)
@@ -14925,6 +14925,708 @@ class SpinComicStory:
             pass
 
 
+# ===========================================================================
+# Spirit-Beast Blades — the CHAPTER STORY BOOK. The /spinstory experience is an
+# illustrated prose book (proper English, no slang) with a framed illustration
+# above the chapter text, and a FEW full manga pages (type="manga") at the big
+# beats. The reader's choices steer the story and, via the style flags, decide
+# the ending. Walks the same graph as the comic with SpinStoryLogic; the manga
+# pages reuse spin_draw_page. Logic + art-ids are headless-tested.
+# ===========================================================================
+
+def _spin_img_fit(name, w, h, cache, refs):
+    """A plain sprite png (a spirit-beast top / hand-sign), scaled to fit w x h."""
+    w, h = max(1, w), max(1, h)
+    key = ("imgfit", name, w, h)
+    if key not in cache:
+        src = None
+        p = SPIN_ASSETS / f"{name}.png"
+        if p.exists():
+            try:
+                src = tk.PhotoImage(file=str(p))
+            except tk.TclError:
+                src = None
+        if src is None:
+            src = tk.PhotoImage(width=80, height=80)
+            src.put(SPIN_INK, to=(0, 0, 80, 80))
+        else:
+            f = min(w / src.width(), h / src.height())
+            if abs(f - 1) > 0.03:
+                src = _spin_apply_ratio(src, f)
+        cache[key] = src
+        refs.append(src)
+    return cache[key]
+
+
+def _spin_bg_fit(bgid, w, h, cache, refs):
+    """A full background scene scaled to COVER w x h and centre-cropped to it, so a
+    storybook illustration fills its frame with no empty letterbox margins."""
+    w, h = max(1, w), max(1, h)
+    key = ("bgcover", bgid, w, h)
+    if key not in cache:
+        src = None
+        p = SPIN_ASSETS / f"{bgid}_bg.png"
+        if p.exists():
+            try:
+                src = tk.PhotoImage(file=str(p))
+            except tk.TclError:
+                src = None
+        if src is None:
+            out = tk.PhotoImage(width=w, height=h)
+            out.put(SPIN_TONE, to=(0, 0, w, h))
+            cache[key] = out
+            refs.append(out)
+            return out
+        sw, sh = src.width(), src.height()
+        f = max(w / sw, h / sh)                           # COVER the frame
+        if abs(f - 1) > 0.03:
+            src = _spin_apply_ratio(src, f)
+            refs.append(src)
+            sw, sh = src.width(), src.height()
+        out = tk.PhotoImage(width=w, height=h)
+        sx0 = max(0, (sw - w) // 2)
+        sy0 = max(0, (sh - h) // 2)
+        out.tk.call(out, "copy", src, "-from", sx0, sy0,
+                    min(sw, sx0 + w), min(sh, sy0 + h), "-to", 0, 0)
+        cache[key] = out
+        refs.append(out)
+    return cache[key]
+
+
+def _spin_book_art(canvas, art, x, y, w, h, cache, refs):
+    """Draw a framed storybook illustration in (x,y,w,h): ("bg", id) a full scene,
+    ("char", cid, expr) a character portrait, or ("img", name) a top / hand-sign."""
+    canvas.create_rectangle(x, y, x + w, y + h, fill=SPIN_TONE, outline="")
+    kind = art[0]
+    if kind == "bg":
+        img = _spin_bg_fit(art[1], w - 8, h - 8, cache, refs)
+        canvas.create_image(x + w // 2, y + h // 2, image=img)
+    elif kind == "char":
+        img = _spin_char(art[1], art[2], h - 26, cache, refs)
+        canvas.create_image(x + w // 2, y + h - 7, anchor="s", image=img)
+    else:                                                # ("img", name)
+        img = _spin_img_fit(art[1], w - 26, h - 26, cache, refs)
+        canvas.create_image(x + w // 2, y + h // 2, image=img)
+    canvas.create_rectangle(x, y, x + w, y + h, outline=SPIN_INK, width=4)
+
+
+def spin_book_ending(flags):
+    """The closing paragraph, chosen by the style flags earned across the three
+    rival chapters (see SPIN_HEART / SPIN_FIRE). Keeps the HEART / FIRE / BLADE
+    title words. Pure function of flags — headless-testable."""
+    heart = sum(f in flags for f in SPIN_HEART)
+    fire = sum(f in flags for f in SPIN_FIRE)
+    if heart and not fire:
+        return ("When the final blade came to rest, the judges named Rin the new "
+                "champion of the Bond Tournament. Yet the title the crowd chanted "
+                "mattered far more: Champion of HEART. Rin had turned every rival "
+                "into a true and lasting friend, and left no one behind. Kael, Mira, "
+                "and Brakk lifted Rin onto their shoulders, and even Raze offered a "
+                "small, honest bow.")
+    if fire and not heart:
+        return ("When the final blade came to rest, the whole arena rose to its feet, "
+                "roaring Rin's name like a rising flame. The judges crowned Rin the "
+                "Champion of FIRE, the boldest and most daring spinner the tournament "
+                "had ever seen. Rin's friends cheered the loudest of all, proud to "
+                "have battled beside such a fearless heart.")
+    return ("When the final blade came to rest, the judges searched for the right "
+            "words, for Rin had won with both a gentle heart and a daring fire. In "
+            "the end they crowned Rin the Heart of the BLADE, the champion who proved "
+            "that kindness and courage spin best when they spin as one. It was a title "
+            "no spinner had earned in a very long time.")
+
+
+def spin_flag_bucket(flags):
+    """Which of the three endings the accumulated style flags earn: all-heart ->
+    'heart', all-fire -> 'fire', any mix (or none) -> 'blade'."""
+    heart = sum(f in flags for f in SPIN_HEART)
+    fire = sum(f in flags for f in SPIN_FIRE)
+    if heart and not fire:
+        return "heart"
+    if fire and not heart:
+        return "fire"
+    return "blade"
+
+
+# The built-in SHORT book below is only a FALLBACK; the full 218-page novel loads
+# from assets/spinstory/book.json (built by tools/build_book.py) — see the loader
+# just above class SpinStoryBook.
+SPIN_BOOK_STORY = {
+    # -- PROLOGUE ---------------------------------------------------------
+    "open": {
+        "chapter": "PROLOGUE", "title": "The Bond Tournament",
+        "art": ("bg", "gate"),
+        "text": ("The great doors of the Coliseum swung wide, and a roar of cheering "
+                 "washed over Rin like an ocean wave. Banners snapped in the wind, each "
+                 "one painted with a different spirit-beast. Tonight the most famous "
+                 "spinning-blade tournament in the world would begin, and for the very "
+                 "first time, Rin's name was written on the list of challengers."),
+        "next": "open2"},
+    "open2": {
+        "art": ("char", "mentor", "neutral"),
+        "text": ("A silver-haired man with a kind, weathered face was waiting by the "
+                 "entrance. This was the Coach, who had trained Rin all year long. "
+                 "\"Three rivals stand between you and the crown,\" he said quietly. "
+                 "\"Each of them is strong. But strength alone will never be enough.\""),
+        "next": "open3"},
+    "open3": {
+        "art": ("char", "mentor", "smile"),
+        "text": ("The Coach rested a hand on Rin's shoulder. \"A true champion does not "
+                 "only win battles,\" he said. \"A true champion turns rivals into "
+                 "friends. That is the secret of the bond.\" Then his smile faded. "
+                 "\"But take care. One finalist is called the Masked Ace, and he "
+                 "believes that bonds only make a spinner weak.\""),
+        "next": "c1_meet"},
+
+    # == CHAPTER ONE : KAEL ===============================================
+    "c1_meet": {
+        "chapter": "CHAPTER ONE", "title": "The Cocky Qualifier",
+        "art": ("char", "kael", "smug"),
+        "text": ("The first opponent was already waiting in the ring. His name was "
+                 "Kael, and he wore his confidence like a favorite jacket. He looked "
+                 "Rin up and down and smirked. \"So you are the new challenger everyone "
+                 "keeps talking about,\" he said. \"This should not take very long.\""),
+        "next": "c1_meet2"},
+    "c1_meet2": {
+        "art": ("img", "top_kael"),
+        "text": ("Kael raised his launcher and showed off his blade. At its center spun "
+                 "the fierce silver head of a wolf, all sharp edges and bared teeth. "
+                 "\"My spirit-beast is fast, and it shows no mercy,\" he warned. The "
+                 "crowd leaned forward. It was time for Rin to answer him."),
+        "choices": [
+            {"label": "Smile, and offer Kael a fair and friendly match.",
+             "set": "calm", "to": "c1_calm"},
+            {"label": "Meet his confidence with confidence of your own.",
+             "set": "bold", "to": "c1_bold"}]},
+    "c1_calm": {
+        "art": ("char", "kael", "neutral"),
+        "text": ("Rin smiled and held out a hand. \"May the best blade win,\" Rin said "
+                 "warmly. For a moment Kael seemed surprised, as if he had expected an "
+                 "argument instead. He gave a short nod and studied Rin with new, "
+                 "careful eyes. \"We will see about that,\" he murmured."),
+        "next": "c1_ready"},
+    "c1_bold": {
+        "art": ("char", "kael", "fierce"),
+        "text": ("Rin lifted the launcher high. \"Then let us not waste another "
+                 "second,\" Rin said. Kael laughed, delighted, and his eyes lit up like "
+                 "a fire catching the wind. \"Now that is the spirit!\" he shouted. "
+                 "\"Show me what you can truly do!\""),
+        "next": "c1_ready"},
+    "c1_ready": {
+        "art": ("img", "sign_focus"),
+        "text": ("Rin breathed in slowly and wove their fingers into the spirit-weaving "
+                 "sign, the gesture the Coach had taught them for calming the heart and "
+                 "listening to the blade. Across the ring, Kael locked his blade into "
+                 "place. The referee raised one hand. \"Three... two... one... Spirits, "
+                 "fly!\""),
+        "next": "c1_battle"},
+    "c1_battle": {
+        "type": "manga",
+        "page": {"cols": 2, "rows": 3, "panels": [
+            {"grid": (0, 0, 2, 1), "bg": "clash", "caption": "THE BLADES COLLIDE!",
+             "border": "impact"},
+            {"grid": (0, 1, 1, 1), "char": ("kael", "fierce"), "shot": "close", "fx": "focus"},
+            {"grid": (1, 1, 1, 1), "bg": "arena", "caption": "Steel sings!"},
+            {"grid": (0, 2, 2, 1), "bg": "launch", "caption": "What will Rin do?"}]},
+        "choices": [
+            {"label": "Unleash your spirit-beast.", "to": "c1_win_a"},
+            {"label": "Read his pattern, then counter.", "to": "c1_win_b"},
+            {"label": "Defend, and outlast him.", "to": "c1_win_c"}]},
+    "c1_win_a": {
+        "art": ("bg", "spirit"),
+        "text": ("Rin called out, and their spirit-beast answered. Light burst from the "
+                 "center of the blade and swept across the ring in a shining storm. "
+                 "Kael's wolf spun bravely, but the wave was simply too strong. His "
+                 "blade lifted from the dish and came to rest, still and silent, upon "
+                 "the floor."),
+        "next": "c1_friend"},
+    "c1_win_b": {
+        "art": ("bg", "arena"),
+        "text": ("Rin waited, and watched, and waited a moment longer. Kael charged in "
+                 "hard, certain he had already won. At the very last heartbeat, Rin's "
+                 "blade slipped aside and struck back with perfect timing. Kael's wolf "
+                 "wobbled once, then twice, and at last spun gently to a stop."),
+        "next": "c1_friend"},
+    "c1_win_c": {
+        "art": ("bg", "arena"),
+        "text": ("Rin held steady, guarding the center of the ring while Kael's blade "
+                 "hammered against it again and again. Rin did not panic. Slowly, surely, "
+                 "Kael's spin began to fade, until his tired blade slowed and toppled. "
+                 "The match belonged to Rin."),
+        "next": "c1_friend"},
+    "c1_friend": {
+        "art": ("char", "kael", "neutral"),
+        "text": ("Kael stared at his fallen blade, and then, to everyone's surprise, he "
+                 "began to laugh. \"You really are something,\" he admitted, picking it "
+                 "up. He offered Rin his hand. \"I have not had a battle like that in a "
+                 "long time. Friends?\" Rin shook it firmly. One rival had become one "
+                 "friend."),
+        "next": "c2_meet"},
+
+    # == CHAPTER TWO : MIRA ===============================================
+    "c2_meet": {
+        "chapter": "CHAPTER TWO", "title": "The Quiet Strategist",
+        "art": ("char", "mira", "neutral"),
+        "text": ("The second opponent did not boast at all. Her name was Mira, and she "
+                 "stood very still, studying Rin the way a chess player studies a board. "
+                 "\"I have watched every match you have ever spun,\" she said calmly. "
+                 "\"I know your habits. I know your tricks. I am ready for all of them.\""),
+        "next": "c2_meet2"},
+    "c2_meet2": {
+        "art": ("img", "top_mira"),
+        "text": ("Mira's blade carried the elegant shape of a fox, graceful and "
+                 "balanced, with nine flowing tails. \"Precision will always beat "
+                 "passion,\" she said, and there was no anger in her voice, only "
+                 "certainty. Rin understood at once that this match would be won with "
+                 "the mind as much as the hand."),
+        "choices": [
+            {"label": "Praise her skill honestly, and spin a clean, fair match.",
+             "set": "kind", "to": "c2_kind"},
+            {"label": "Push the pace, and overwhelm her before she can plan.",
+             "set": "fierce", "to": "c2_fierce"}]},
+    "c2_kind": {
+        "art": ("char", "mira", "cool"),
+        "text": ("\"Your form is the finest I have ever seen,\" Rin said, and meant "
+                 "every word. Mira blinked, caught off guard by the honesty, and a "
+                 "small, genuine smile touched the corner of her mouth. \"Thank you,\" "
+                 "she said softly. \"Now stay focused, because I intend to earn this.\""),
+        "next": "c2_ready"},
+    "c2_fierce": {
+        "art": ("char", "mira", "fierce"),
+        "text": ("Rin surged forward without waiting, launching fast and pressing hard "
+                 "from the very first second. Mira's eyes widened. \"So reckless,\" she "
+                 "said, scrambling to change her plan, \"and yet so quick!\" For the "
+                 "first time, the strategist found herself a step behind."),
+        "next": "c2_ready"},
+    "c2_ready": {
+        "art": ("img", "sign_focus"),
+        "text": ("Both spinners drew their fingers into the spirit-weaving sign. The "
+                 "arena fell so quiet that Rin could hear their own heartbeat. \"Three... "
+                 "two... one... Spirits, fly!\" The blades dropped into the dish, and "
+                 "steel began to sing."),
+        "next": "c2_battle"},
+    "c2_battle": {
+        "type": "manga",
+        "page": {"cols": 2, "rows": 3, "panels": [
+            {"grid": (0, 0, 2, 1), "bg": "clash", "caption": "MIND AGAINST MIND!",
+             "border": "impact"},
+            {"grid": (0, 1, 1, 1), "char": ("mira", "fierce"), "shot": "close", "fx": "focus"},
+            {"grid": (1, 1, 1, 1), "bg": "arena", "caption": "Every spin counts!"},
+            {"grid": (0, 2, 2, 1), "bg": "launch", "caption": "What will Rin do?"}]},
+        "choices": [
+            {"label": "Unleash your spirit-beast.", "to": "c2_win_a"},
+            {"label": "Read her pattern, then counter.", "to": "c2_win_b"},
+            {"label": "Defend, and outlast her.", "to": "c2_win_c"}]},
+    "c2_win_a": {
+        "art": ("bg", "spirit"),
+        "text": ("Rin's spirit-beast roared to life in a blaze of light. Mira's careful "
+                 "plans could not answer such raw power. \"Incredible,\" she breathed, "
+                 "watching as her graceful fox slowed and spun gently to rest."),
+        "next": "c2_friend"},
+    "c2_win_b": {
+        "art": ("bg", "arena"),
+        "text": ("Rin studied Mira's pattern, exactly the way she had studied theirs, "
+                 "and read it perfectly. When her blade made its move, Rin was already "
+                 "there to meet it. \"You... predicted me?\" she said, astonished, as "
+                 "her blade slowed to a stop."),
+        "next": "c2_friend"},
+    "c2_win_c": {
+        "art": ("bg", "arena"),
+        "text": ("Rin weathered Mira's relentless attacks, holding the center no matter "
+                 "how hard she pressed. \"I cannot break through,\" she admitted at "
+                 "last, and her fox, out of momentum, came quietly to rest."),
+        "next": "c2_friend"},
+    "c2_friend": {
+        "art": ("char", "mira", "cool"),
+        "text": ("Mira gathered her blade and bowed her head, thoughtful rather than "
+                 "upset. \"Would you teach me how you did that one day?\" she asked. "
+                 "Then she offered her hand. \"It would be an honour to call you my "
+                 "friend.\" Rin took it gladly. Two rivals had become two friends."),
+        "next": "mentor1"},
+
+    # -- INTERLUDE : the Coach's secret -----------------------------------
+    "mentor1": {
+        "chapter": "INTERLUDE", "title": "The Coach's Secret",
+        "art": ("bg", "training"),
+        "text": ("Between rounds, the Coach led Rin to a quiet practice hall. He grew "
+                 "unusually still, turning an old, worn blade over in his hands. \"There "
+                 "is something I have never told you,\" he said. \"Long ago, before the "
+                 "grey came into my hair, they called me the Spirit-Sage. I was the "
+                 "greatest champion alive.\""),
+        "next": "mentor2"},
+    "mentor2": {
+        "art": ("char", "mentor", "neutral"),
+        "text": ("\"But one day I faced a rival who scorned bonds, who believed that "
+                 "friendship was only weakness. He spun my blade out cold, and something "
+                 "inside me went quiet. My own spirit-beast has not woken since that "
+                 "day.\" He looked at the silent blade with an old, deep sadness."),
+        "next": "mentor3"},
+    "mentor3": {
+        "art": ("char", "mentor", "smile"),
+        "text": ("Then the Coach looked up, and his eyes were bright once more. \"But "
+                 "watching you these past two rounds, watching the friends you have "
+                 "made, I feel it stirring again, after all these years.\" He pressed "
+                 "the old blade to his chest. \"Go on, now. Win it all.\""),
+        "next": "c3_meet"},
+
+    # == CHAPTER THREE : BRAKK ============================================
+    "c3_meet": {
+        "chapter": "CHAPTER THREE", "title": "The Gentle Giant",
+        "art": ("char", "brakk", "fierce"),
+        "text": ("The semifinal opponent was the largest spinner Rin had ever seen. His "
+                 "name was Brakk, and he laughed like distant thunder. \"I am the "
+                 "strongest blade in the entire league!\" he boomed, flexing arms like "
+                 "tree trunks. \"A little challenger like you should run home now.\""),
+        "next": "c3_meet2"},
+    "c3_meet2": {
+        "art": ("img", "top_brakk"),
+        "text": ("Brakk's blade was heavy and mighty, crowned with a fierce eagle "
+                 "wrapped in crackling lightning. It looked as though it could shatter "
+                 "stone. \"Do not feel bad when you lose,\" Brakk said, grinning so "
+                 "widely it was almost friendly. \"Many strong spinners have fallen to "
+                 "my power.\""),
+        "choices": [
+            {"label": "Stand tall, and tell him you respect his strength.",
+             "set": "steady", "to": "c3_steady"},
+            {"label": "Match his power head-on, with everything you have.",
+             "set": "reckless", "to": "c3_reckless"}]},
+    "c3_steady": {
+        "art": ("char", "brakk", "neutral"),
+        "text": ("\"You are strong, Brakk,\" Rin said, standing tall and unafraid. \"So "
+                 "let us both give this everything we have.\" Brakk's grin softened into "
+                 "something like respect. \"You have courage, little one,\" he rumbled, "
+                 "lowering his voice. \"I like that. I like that very much.\""),
+        "next": "c3_ready"},
+    "c3_reckless": {
+        "art": ("char", "brakk", "fierce"),
+        "text": ("Rin charged forward to meet him, fearless, refusing to give a single "
+                 "step. Brakk's eyes blazed with delight. \"Yes!\" he roared, and the "
+                 "whole arena seemed to shake with the sound. \"Show me your power! Hold "
+                 "nothing back!\""),
+        "next": "c3_ready"},
+    "c3_ready": {
+        "art": ("img", "sign_burst"),
+        "text": ("Rin snapped their fingers through the final spirit-weaving sign, and a "
+                 "rush of energy bloomed around their hands. Brakk slammed his blade "
+                 "into place with a force that rattled the dish. \"Three... two... "
+                 "one... Spirits, fly!\""),
+        "next": "c3_battle"},
+    "c3_battle": {
+        "type": "manga",
+        "page": {"cols": 2, "rows": 3, "panels": [
+            {"grid": (0, 0, 2, 1), "bg": "clash", "caption": "A QUAKING CLASH!",
+             "border": "impact"},
+            {"grid": (0, 1, 1, 1), "char": ("brakk", "fierce"), "shot": "close", "fx": "focus"},
+            {"grid": (1, 1, 1, 1), "bg": "launch", "caption": "The dish trembles!"},
+            {"grid": (0, 2, 2, 1), "bg": "arena", "caption": "What will Rin do?"}]},
+        "choices": [
+            {"label": "Unleash your spirit-beast.", "to": "c3_win_a"},
+            {"label": "Read his charge, then counter.", "to": "c3_win_b"},
+            {"label": "Defend, and outlast him.", "to": "c3_win_c"}]},
+    "c3_win_a": {
+        "art": ("bg", "spirit"),
+        "text": ("Rin's spirit-beast erupted upward in a tower of light. Even Brakk's "
+                 "tremendous strength could not stand against a bond so bright. "
+                 "\"Incredible!\" he bellowed, half in shock and half in pure joy, as "
+                 "his mighty eagle finally came to rest."),
+        "next": "c3_friend"},
+    "c3_win_b": {
+        "art": ("bg", "launch"),
+        "text": ("Rin slipped neatly aside as Brakk's blade thundered past, then struck "
+                 "the instant it was off balance. \"So nimble!\" Brakk gasped. His "
+                 "powerful blade spun out before he understood what had happened."),
+        "next": "c3_friend"},
+    "c3_win_c": {
+        "art": ("bg", "arena"),
+        "text": ("Rin stood firm, absorbing blow after thunderous blow, refusing to "
+                 "break. Little by little Brakk's enormous power spent itself. \"You... "
+                 "outlasted me?\" he said in wonder, as his eagle slowed and stilled."),
+        "next": "c3_friend"},
+    "c3_friend": {
+        "art": ("char", "brakk", "grin"),
+        "text": ("Brakk threw back his head and laughed with his whole heart. \"What a "
+                 "battle! What a worthy champion you are!\" He clapped Rin on the "
+                 "shoulder, nearly knocking them off their feet. \"Go and win it all, my "
+                 "friend!\" Three rivals had become three friends. Only the final match "
+                 "now lay ahead."),
+        "next": "f_open"},
+
+    # == CHAPTER FOUR : THE GRAND FINAL ===================================
+    "f_open": {
+        "chapter": "CHAPTER FOUR", "title": "The Grand Final",
+        "art": ("bg", "finals"),
+        "text": ("The final arena was vast and gleaming, packed to the rafters with a "
+                 "roaring crowd. The Coach walked Rin to the edge of the great dish. "
+                 "\"This is the last match, and the most important one,\" he said. \"A "
+                 "single battle now stands between you and the crown.\" Across the ring, "
+                 "one lone figure waited in shadow."),
+        "next": "f_reveal"},
+    "f_reveal": {
+        "type": "manga",
+        "page": {"cols": 2, "rows": 3, "panels": [
+            {"grid": (0, 0, 2, 1), "bg": "finals", "caption": "THE MASKED ACE",
+             "border": "bold"},
+            {"grid": (0, 1, 1, 2), "char": ("raze", "masked"), "shot": "close", "fx": "focus"},
+            {"grid": (1, 1, 1, 1), "bg": "gate", "caption": "Who is he?"},
+            {"grid": (1, 2, 1, 1), "bg": "crowd", "caption": "The crowd holds its breath."}]},
+        "next": "f_unmask"},
+    "f_unmask": {
+        "art": ("char", "raze", "cold"),
+        "text": ("The masked finalist stepped into the light and drew the mask from his "
+                 "face. He was a cold, proud young man with sharp and watchful eyes. "
+                 "\"Bonds are nothing but sentiment,\" he said. \"I have defeated a "
+                 "hundred bonded blades, and yours will be the next.\" The Coach drew a "
+                 "sharp breath. \"That cold style... he is the heir of my old rival. "
+                 "His name is Raze.\""),
+        "next": "f_clash"},
+    "f_clash": {
+        "art": ("bg", "clash"),
+        "text": ("Raze's blade was merciless. It struck again and again, faster and "
+                 "colder than anything Rin had faced before. \"Is this truly all your "
+                 "bonds have given you?\" Raze called out. \"Friendship only makes a "
+                 "spinner slow.\" For the first time in the whole tournament, Rin was "
+                 "being pushed to the very edge."),
+        "next": "f_low"},
+    "f_low": {
+        "title": "The Hardest Moment",
+        "art": ("bg", "launch"),
+        "text": ("With a screech of metal, Rin's blade was knocked high into the air. It "
+                 "was falling now, its spin nearly gone, and below it Raze's cold blade "
+                 "waited to finish the match. The crowd went silent. Rin had only one "
+                 "breath left in which to decide what to do."),
+        "choices": [
+            {"label": "Reach out for the bonds you have forged.", "to": "f_unite"},
+            {"label": "Stand your ground, and refuse to give up.", "to": "f_unite"},
+            {"label": "Trust that your friends are with you.", "to": "f_unite"}]},
+    "f_unite": {
+        "type": "manga",
+        "page": {"cols": 2, "rows": 3, "panels": [
+            {"grid": (0, 0, 2, 1), "bg": "finals", "caption": "YOU ARE NOT ALONE!",
+             "border": "bold"},
+            {"grid": (0, 1, 1, 1), "char": ("kael", "fierce"), "shot": "close", "fx": "flash"},
+            {"grid": (1, 1, 1, 1), "char": ("mira", "fierce"), "shot": "close", "fx": "flash"},
+            {"grid": (0, 2, 2, 1), "char": ("brakk", "grin"), "fx": "focus",
+             "caption": "Three friends stand with Rin."}]},
+        "next": "f_awaken"},
+    "f_awaken": {
+        "type": "manga",
+        "page": {"cols": 2, "rows": 3, "panels": [
+            {"grid": (0, 0, 2, 1), "bg": "spirit", "caption": "THE TRUE FORM AWAKENS!",
+             "border": "bold"},
+            {"grid": (0, 1, 1, 1), "bg": "spirit", "fx": "flash", "caption": "Radiant!"},
+            {"grid": (1, 1, 1, 1), "char": ("mentor", "smile"), "shot": "close", "fx": "flash"},
+            {"grid": (0, 2, 2, 1), "bg": "finals", "caption": "The bond blazes bright."}]},
+        "next": "f_finish"},
+    "f_finish": {
+        "art": ("char", "raze", "shocked"),
+        "text": ("Rin's blade came down wreathed in brilliant light, the true form of "
+                 "their spirit-beast soaring above it. Raze's cold blade met it once, "
+                 "and was swept aside. \"Impossible,\" Raze whispered, staring at the "
+                 "glow. \"This bond... how can it be so strong?\" For the first time, the "
+                 "Masked Ace had been defeated."),
+        "next": "ending"},
+
+    # -- EPILOGUE : the title is chosen by your style flags ---------------
+    "ending": {
+        "chapter": "EPILOGUE", "title": "Champion",
+        "art": ("bg", "podium"),
+        "ending_text": True,
+        "end": True},
+}
+
+
+SPIN_BOOK_START = "open"
+
+
+def _spin_load_book():
+    """Load the full novel graph from assets/spinstory/book.json (built by
+    tools/build_book.py). Falls back to the built-in short book if the file is
+    missing or unreadable, so /spinstory always opens."""
+    try:
+        data = json.loads((SPIN_ASSETS / "book.json").read_text(encoding="utf-8"))
+        if isinstance(data.get("nodes"), dict) and data["nodes"]:
+            return data.get("start", "open"), data["nodes"]
+    except Exception:
+        pass
+    return "open", SPIN_BOOK_STORY
+
+
+SPIN_BOOK_START, SPIN_BOOK_STORY = _spin_load_book()
+
+
+class SpinStoryBook:
+    """Spirit-Beast Blades as an illustrated NOVEL: paginated prose pages (a framed
+    illustration above the chapter text) with a few full manga pages at the biggest
+    beats. Choices steer the story; the accumulated style flags decide the ending.
+    Walks the graph with SpinStoryLogic. Crash-isolated by its caller."""
+
+    PW, PH = 720, 880
+    ART_H = 260
+    BAR = 96
+
+    def __init__(self, pet, story=SPIN_BOOK_STORY, start=None):
+        import tkinter.font as tkfont
+        self.pet = pet
+        self.logic = SpinStoryLogic(story, start=start or SPIN_BOOK_START)
+        self._refs = []
+        self._cache = {}
+        self.sel = 0
+        self.sub = 0                       # current screen within a long prose page
+        self._nsub = 1
+        self._closed = False
+        self._body = tkfont.Font(family="Georgia", size=14)
+
+        self.win = tk.Toplevel(pet.root)
+        self.win.title("Spirit-Beast Blades")
+        self.win.resizable(False, False)
+        self.canvas = tk.Canvas(self.win, width=self.PW, height=self.PH,
+                                highlightthickness=0, bg=SPIN_PAPER)
+        self.canvas.pack()
+        self._render()
+        self.win.bind("<KeyPress>", self._key)
+        self.win.protocol("WM_DELETE_WINDOW", self.close)
+        sw, sh = pet.root.winfo_screenwidth(), pet.root.winfo_screenheight()
+        self.win.update_idletasks()
+        self.win.geometry(f"+{max(0, (sw - self.PW) // 2)}+{max(0, (sh - self.PH) // 2 - 30)}")
+        self.win.focus_force()
+
+    def _wrap(self, text, max_w):
+        """Word-wrap text (honoring blank-line paragraph breaks) into display lines."""
+        out = []
+        for para in (text or "").split("\n"):
+            if not para.strip():
+                out.append("")
+                continue
+            cur = ""
+            for word in para.split(" "):
+                trial = word if not cur else cur + " " + word
+                if not cur or self._body.measure(trial) <= max_w:
+                    cur = trial
+                else:
+                    out.append(cur)
+                    cur = word
+            out.append(cur)
+        return out
+
+    def _render(self):
+        self.canvas.delete("all")
+        self._refs.clear()
+        self._cache.clear()
+        n = self.logic.node
+        if n.get("type") == "manga":
+            self._nsub = 1
+            spin_draw_page(self.canvas, n["page"], self.PW, self.PH - self.BAR,
+                           self._cache, self._refs)
+        else:
+            self._render_prose(n)
+        self._draw_controls(self.PH - self.BAR + 6)
+
+    def _render_prose(self, n):
+        m = 26
+        if n.get("art"):
+            _spin_book_art(self.canvas, n["art"], m, m, self.PW - 2 * m, self.ART_H,
+                           self._cache, self._refs)
+        ty0 = m + self.ART_H + 18
+        line_h = self._body.metrics("linespace") + 5
+        head = []
+        if self.sub == 0 and n.get("chapter"):
+            head.append((n["chapter"], ("Georgia", 12, "italic"), SPIN_GRAY, 22))
+        if self.sub == 0 and n.get("title"):
+            head.append((n["title"], ("Georgia", 20, "bold"), SPIN_INK, 36))
+        head_h = sum(h for _, _, _, h in head)
+        bottom = self.PH - self.BAR - 12
+        per0 = max(1, int((bottom - (ty0 + head_h)) // line_h))   # screen 0 (with heading)
+        per = max(1, int((bottom - ty0) // line_h))               # later screens
+        lines = self._wrap(n.get("text", ""), self.PW - 2 * m - 4)
+        screens, i, first = [], 0, True
+        while i < len(lines) or not screens:
+            cap = per0 if first else per
+            screens.append(lines[i:i + cap])
+            i += cap
+            first = False
+            if i >= len(lines):
+                break
+        self._nsub = max(1, len(screens))
+        self.sub = min(self.sub, self._nsub - 1)
+        yy = ty0
+        if self.sub == 0:
+            for txt, font, fill, h in head:
+                self.canvas.create_text(m + 2, yy, anchor="nw", text=txt, fill=fill, font=font)
+                yy += h
+        for ln in screens[self.sub]:
+            self.canvas.create_text(m + 2, yy, anchor="nw", text=ln, fill=SPIN_INK, font=self._body)
+            yy += line_h
+
+    def _draw_controls(self, by):
+        self.canvas.create_line(0, by, self.PW, by, fill=SPIN_INK, width=2)
+        n = self.logic.node
+        chs = self.logic.choices()
+        if chs:
+            for i, ch in enumerate(chs):
+                self.canvas.create_text(50, by + 22 + i * 24, anchor="w", fill=SPIN_INK,
+                                        font=("Georgia", 13, "bold"),
+                                        text=f"{i + 1}. {ch['label']}")
+            self.canvas.create_text(28, by + 22 + self.sel * 24, anchor="w", fill=SPIN_INK,
+                                    font=("Georgia", 13, "bold"), text="▸")
+        else:
+            if self.sub < self._nsub - 1:
+                msg = "Press Space to keep reading  ▾"
+            elif self.logic.over and not n.get("flag_next"):
+                msg = "Press Space to close"
+            else:
+                msg = "Press Space to turn the page  ▸"
+            self.canvas.create_text(self.PW // 2, by + 30, fill=SPIN_GRAY,
+                                    font=("Georgia", 13, "italic"), text=msg)
+
+    def _advance(self):
+        n = self.logic.node
+        fn = n.get("flag_next")
+        if fn:
+            self.logic.node_id = fn.get(spin_flag_bucket(self.logic.flags),
+                                        next(iter(fn.values())))
+        elif self.logic.over:
+            self.close()
+            return
+        else:
+            self.logic.advance()
+        self.sel = 0
+        self.sub = 0
+        self._render()
+
+    def _key(self, e):
+        ks = (e.keysym or "").lower()
+        if ks == "escape":
+            self.close()
+            return
+        chs = self.logic.choices()
+        if chs:
+            if ks in ("down", "s"):
+                self.sel = (self.sel + 1) % len(chs); self._render()
+            elif ks in ("up", "w"):
+                self.sel = (self.sel - 1) % len(chs); self._render()
+            elif ks in ("1", "2", "3") and int(ks) - 1 < len(chs):
+                self.logic.choose(int(ks) - 1); self.sel = 0; self.sub = 0; self._render()
+            elif ks in ("return", "space"):
+                self.logic.choose(self.sel); self.sel = 0; self.sub = 0; self._render()
+        elif ks in ("return", "space", "down", "right"):
+            if self.sub < self._nsub - 1:
+                self.sub += 1; self._render()
+            else:
+                self._advance()
+        elif ks in ("up", "left") and self.sub > 0:
+            self.sub -= 1; self._render()
+
+    def close(self):
+        if self._closed:
+            return
+        self._closed = True
+        try:
+            if self.win.winfo_exists():
+                self.win.destroy()
+        except Exception:
+            pass
+
+
 class ChatWindow:
     """iMessage-style chat window opened by clicking the pet.
 
@@ -15697,12 +16399,13 @@ class ChatWindow:
                              "play a game instead? Say /play. 🐾")
 
     def _open_spin_story(self):
-        """Open the Spirit-Beast Blades comic story (comic pages + choices). A bug
-        must never break chat."""
-        self._add("game", "Opening Spirit-Beast Blades — a manga comic story. Read "
-                          "each page, then your choices steer what happens next. 🌀")
+        """Open the Spirit-Beast Blades chapter story book (illustrated prose with a
+        few manga pages + choices). A bug must never break chat."""
+        self._add("game", "Opening Spirit-Beast Blades — an illustrated story book. "
+                          "Read each page, press Space to turn the page, and your "
+                          "choices steer how the story unfolds. 🌀")
         try:
-            SpinComicStory(self.pet)
+            SpinStoryBook(self.pet)
         except Exception:
             self._add("pet", "Hmm, I couldn't open the story just now — try /games "
                              "for the arcade instead. 🐾")
