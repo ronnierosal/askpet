@@ -13984,7 +13984,9 @@ def _spin_bubble(canvas, px, pw, y, text, style="speech"):
         label(tcx, y + boxh // 2)
 
 
-SPIN_FX = ("tone", "screen", "focus", "flash")     # panel background effects
+SPIN_FX = ("tone", "screen", "focus", "flash",     # panel background effects
+           "tone12", "tone25", "tone50", "dotfade")  # real halftone screentone (Tk stipple)
+_SPIN_STIPPLE = {"tone12": "gray12", "tone25": "gray25", "tone50": "gray50"}
 
 
 def _spin_ray_edge(cx, cy, dx, dy, x, y, w, h):
@@ -14013,6 +14015,19 @@ def _spin_fx(canvas, x, y, w, h, fx="tone", fcy=None):
     Code-drawn (no PIL). fcy is the focal Y (defaults to the panel centre)."""
     cxp = x + w / 2
     cyp = fcy if fcy is not None else y + h / 2
+    if fx in _SPIN_STIPPLE:                             # real halftone screentone (dots)
+        canvas.create_rectangle(x, y, x + w, y + h, fill=SPIN_PAPER, outline="")
+        canvas.create_rectangle(x, y, x + w, y + h, fill=SPIN_INK, outline="",
+                                stipple=_SPIN_STIPPLE[fx])
+        return
+    if fx == "dotfade":                                 # screentone ramping toward a corner
+        canvas.create_rectangle(x, y, x + w, y + h, fill=SPIN_PAPER, outline="")
+        canvas.create_rectangle(x, y, x + w, y + h, fill=SPIN_INK, outline="", stipple="gray12")
+        canvas.create_polygon(x, y + h, x + w, y, x + w, y + h,
+                              fill=SPIN_INK, outline="", stipple="gray25")
+        canvas.create_polygon(x + w * 0.45, y + h, x + w, y + h * 0.45, x + w, y + h,
+                              fill=SPIN_INK, outline="", stipple="gray50")
+        return
     if fx == "flash":                                   # white burst, rays outward
         canvas.create_rectangle(x, y, x + w, y + h, fill=SPIN_PAPER, outline="")
         for i in range(56):
@@ -14044,7 +14059,7 @@ def spin_draw_page(canvas, page, W, H, cache, refs):
             canvas.create_image(x, y, anchor="nw",
                                 image=_spin_bg_crop(p["bg"], w, h, cache, refs))
         else:                                   # no scene art -> a manga effect fill
-            fx = p.get("fx") or ("screen" if p.get("char") else "tone")
+            fx = p.get("fx") or ("tone12" if p.get("char") else "tone")
             _spin_fx(canvas, x, y, w, h, fx,
                      y + int(h * 0.6) if p.get("char") else None)
         ch = p.get("char")
