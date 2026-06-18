@@ -1,0 +1,92 @@
+SPIRIT-BEAST BLADES  —  COMPLETED art prompts (archive)
+=======================================================
+These prompts are for art that is ALREADY DONE and in the game. Kept here in case
+a piece ever needs to be regenerated (same character, same style). The active
+to-do list of art still to create lives in ART_PROMPTS.txt.
+
+STYLE: black-and-white MANGA — ink line-art with screentone (dot) shading, NO
+color, high contrast, shounen-manga energy. Kid-friendly (ages 6-12): heroic and
+fun, never scary or violent, fully clothed, no blood.
+
+For each character's expression set: SAME character — identical hair, outfit, face
+shape and proportions — with ONLY the expression changing. Generate them back-to-
+back and tell ChatGPT "same character, new expression, identical design."
+
+
+------------------------------------------------------------------
+FILE:  arena_bg.png        (the round-arena background scene)
+------------------------------------------------------------------
+Black-and-white MANGA panel, ink line-art with screentone shading, no color.
+A dramatic spinner-battle arena (a stadium for spinning-top duels): a big round
+battle dish / ring in the center-foreground, tiered crowd seats blurred in the
+background, dynamic speed-lines and spotlight beams, exciting shounen atmosphere.
+NO characters, NO text, NO speech bubbles. Landscape about 3:2 (e.g. 720x480).
+Clean, high-contrast black and white.
+
+
+------------------------------------------------------------------
+FILE:  training_bg.png     (the coaching / between-rounds scene)
+------------------------------------------------------------------
+Black-and-white MANGA panel, ink line-art with screentone shading, no color.
+A spinner-battle TRAINING HALL / practice dojo: a worn practice battle-dish on
+the floor, racks of spinner launchers and tops along the wall, a window with
+soft light, a calm focused atmosphere. NO characters, NO text, NO speech bubbles.
+Landscape about 3:2 (e.g. 720x480). Clean, high-contrast black and white.
+
+
+------------------------------------------------------------------
+FILE:  finals_bg.png       (the grand championship arena)
+------------------------------------------------------------------
+Black-and-white MANGA panel, ink line-art with screentone shading, no color.
+A GRAND CHAMPIONSHIP spinner-battle arena — bigger and more epic than the round
+arena: a huge central battle dish under a beam of spotlights, a packed roaring
+crowd in tall tiered stands, banners and confetti, big dramatic speed-lines, a
+"final showdown" atmosphere. NO characters, NO text, NO speech bubbles.
+Landscape about 3:2 (e.g. 720x480). Clean, high-contrast black and white.
+
+
+------------------------------------------------------------------
+KAEL  (rival 1 — the cocky qualifier):  neutral / smug / fierce / shocked
+------------------------------------------------------------------
+"Kael", a confident teenage rival blade-spinner in shounen-manga style: cool
+spiky hair, a sporty jacket, holding a spinner launcher. Head-and-upper-body,
+facing the viewer, on a SOLID FLAT MAGENTA (#fe00fe) background — nothing else.
+Portrait-ish (e.g. 600x900). B&W manga, ink + screentone. Kid-friendly.
+  kael_neutral.png  — calm, cool.
+  kael_smug.png     — smug cocky smirk, one eyebrow raised.
+  kael_fierce.png   — fierce, fired-up, intense battle face, maybe mid-shout.
+  kael_shocked.png  — shocked, wide-eyed, caught off guard (he just lost). Not scary.
+
+
+------------------------------------------------------------------
+MIRA  (rival 2 — the calm strategist):  neutral / cool / fierce / shocked
+------------------------------------------------------------------
+"Mira", a cool, precise teenage girl blade-spinner: neat practical hair (tidy
+ponytail or bob), a sporty vest or jacket, holding a spinner launcher. Same
+magenta background + framing as Kael.
+  mira_neutral.png  — calm, composed, analytical.
+  mira_cool.png     — cool, quietly confident, small knowing half-smile (not mean).
+  mira_fierce.png   — fierce, focused-intense, fully engaged. Determined, not angry.
+  mira_shocked.png  — shocked, wide-eyed (she just lost). Surprised + a little impressed.
+
+
+------------------------------------------------------------------
+BRAKK  (rival 3 — the big-hearted powerhouse):  neutral / grin / fierce / shocked
+------------------------------------------------------------------
+"Brakk", a BIG, burly, broad-shouldered teenage powerhouse (a gentle giant), wild
+hair, a heavy-duty launcher that looks tiny in his huge hands. Same magenta
+background + framing.
+  brakk_neutral.png  — calm, good-humored.
+  brakk_grin.png     — big boastful grin, chest puffed out. Playful, NOT mean.
+  brakk_fierce.png   — fierce, fired-up, huge excited battle grin, LOVING the fight.
+  brakk_shocked.png  — shocked, jaw-dropped (he just lost) but already grinning with respect.
+
+
+------------------------------------------------------------------
+THE COACH / MENTOR:  neutral / smile
+------------------------------------------------------------------
+"The Coach", a kindly veteran blade-spinner mentor: older, warm, experienced
+(greying hair, a coach's jacket or headband, maybe a retired champion's spinner
+on a cord). Same magenta background + framing.
+  mentor_neutral.png  — calm, wise.
+  mentor_smile.png    — big warm, proud smile, encouraging and kind.

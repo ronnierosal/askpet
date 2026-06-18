@@ -69,12 +69,15 @@ def _comic_exits(n):
 
 
 def _documented_art():
-    """The set of art filenames promised in ART_PROMPTS.txt (the source of truth
-    for which cid_expr.png / id_bg.png the story may reference)."""
+    """The set of art filenames promised across the prompt files (ART_PROMPTS.txt
+    = to-create, ART_PROMPTS_DONE.txt = completed) — the source of truth for which
+    cid_expr.png / id_bg.png the story may reference."""
     import re
     from askpet import SPIN_ASSETS
-    txt = (SPIN_ASSETS / "ART_PROMPTS.txt").read_text(encoding="utf-8", errors="ignore")
-    return set(re.findall(r"FILE:\s+(\S+\.png)", txt))
+    arts = set()
+    for f in sorted(SPIN_ASSETS.glob("ART_PROMPTS*.txt")):
+        arts |= set(re.findall(r"([A-Za-z0-9_]+\.png)", f.read_text(encoding="utf-8", errors="ignore")))
+    return arts
 
 
 def _play(S, policy):

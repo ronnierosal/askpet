@@ -29,11 +29,13 @@ KEY = (0xfe, 0x00, 0xfe)            # magenta -> transparent
 BG_SIZE = (720, 480)
 SPRITE_H = 300
 BACKGROUNDS = ("arena_bg.png", "training_bg.png", "finals_bg.png",
+               "clash_bg.png", "launch_bg.png", "spirit_bg.png",          # action scenes
                "crowd_bg.png", "gate_bg.png", "sky_bg.png", "podium_bg.png")
 SPRITES = ("kael_neutral", "kael_smug", "kael_fierce", "kael_shocked",
            "mira_neutral", "mira_cool", "mira_fierce", "mira_shocked",
            "brakk_neutral", "brakk_grin", "brakk_fierce", "brakk_shocked",
-           "mentor_neutral", "mentor_smile")
+           "mentor_neutral", "mentor_smile",
+           "top_hero", "top_kael", "top_mira", "top_brakk")              # spirit-beast tops
 
 
 def key_to_alpha(img, tol=70):

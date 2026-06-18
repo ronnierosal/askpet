@@ -1,259 +1,148 @@
-SPIRIT-BEAST BLADES  —  manga story art prompts
-================================================
-Generate each image in ChatGPT, then SAVE it using the FILENAME shown above its
-prompt — into:  AskPet\assets\spinstory\raw\   (or your Downloads folder; either
-works, I can grab them).
+SPIRIT-BEAST BLADES  —  ART TO CREATE  (to-do list)
+===================================================
+Generate each image in ChatGPT, SAVE it with the FILENAME shown above its prompt,
+and drop it into:  AskPet\assets\spinstory\raw\  (or your Downloads folder —
+either works, I'll grab + process it). Prompts for art that is already DONE have
+been moved to ART_PROMPTS_DONE.txt.
 
-STYLE: black-and-white MANGA — ink line-art with screentone (dot) shading, NO
-color, high contrast, shounen-manga energy. Kid-friendly (ages 6-12): heroic and
-fun, never scary or violent, fully clothed, no blood.
-
-IMPORTANT for the four "kael_*" images: they must look like the SAME character —
-identical hair, outfit, face shape and proportions — with ONLY the expression
-changing. Generate them back-to-back and tell ChatGPT "same character, new
-expression, identical design" so they stay consistent.
+STYLE (everything): black-and-white MANGA — ink line-art with screentone (dot)
+shading, NO color, high contrast, shounen energy. Kid-friendly (ages 6-12):
+heroic and fun, never scary or violent, no blood.
 
 
-------------------------------------------------------------------
-FILE:  arena_bg.png        (the background scene)
-------------------------------------------------------------------
-Black-and-white MANGA panel, ink line-art with screentone shading, no color.
-A dramatic spinner-battle arena (a stadium for spinning-top duels): a big round
-battle dish / ring in the center-foreground, tiered crowd seats blurred in the
-background, dynamic speed-lines and spotlight beams, exciting shounen atmosphere.
-NO characters, NO text, NO speech bubbles. Landscape about 3:2 (e.g. 720x480).
-Clean, high-contrast black and white.
+STATUS
+------
+DONE (in the game)  — see ART_PROMPTS_DONE.txt
+    backgrounds   arena_bg   training_bg   finals_bg
+    Kael          neutral  smug  fierce  shocked
+    Mira          neutral  cool  fierce  shocked
+    Brakk         neutral  grin  fierce  shocked
+    Coach         neutral  smile
+
+TO CREATE (this file)
+    [ ] TOPS      top_hero   top_kael   top_mira   top_brakk      (the spinning blades)
+    [ ] ACTION    clash_bg   launch_bg  spirit_bg                 (cool battle scenes)
+    [ ] SCENERY   crowd_bg   gate_bg    sky_bg     podium_bg      (optional variety)
 
 
-------------------------------------------------------------------
-FILE:  kael_neutral.png    (the rival — calm)
-------------------------------------------------------------------
-Black-and-white MANGA character, ink line-art + screentone shading, no color.
-"Kael", a confident teenage rival blade-spinner in shounen-manga style: cool
-spiky hair, a sporty jacket, holding a spinner launcher. NEUTRAL, calm, cool
-expression. Facing the viewer, head-and-upper-body. Place him on a SOLID FLAT
-MAGENTA (#fe00fe) background — nothing else: no shadow, no border, no text.
-Portrait-ish (e.g. 600x900). High-contrast black and white. Kid-friendly.
-
-
-------------------------------------------------------------------
-FILE:  kael_smug.png       (the rival — smug / taunting)
-------------------------------------------------------------------
-The SAME character "Kael" as kael_neutral — identical hair, jacket, face and
-proportions — ONLY the expression changes: a SMUG, cocky smirk, looking down on
-the viewer, one eyebrow raised. Black-and-white MANGA, ink + screentone, no
-color. SOLID FLAT MAGENTA (#fe00fe) background only. Same framing and size.
-
-
-------------------------------------------------------------------
-FILE:  kael_fierce.png     (the rival — fired up)
-------------------------------------------------------------------
-The SAME character "Kael" — identical design — ONLY the expression changes:
-FIERCE and fired-up, an intense determined battle face, maybe mid-shout, with
-manga action energy. Black-and-white MANGA, ink + screentone, no color. SOLID
-FLAT MAGENTA (#fe00fe) background only. Same framing and size.
-
-
-------------------------------------------------------------------
-FILE:  kael_shocked.png    (the rival — caught off guard / just lost)
-------------------------------------------------------------------
-The SAME character "Kael" — identical design — ONLY the expression changes:
-SHOCKED, wide-eyed, gasping, caught completely off guard (he just lost the
-battle). Surprised, not scary. Black-and-white MANGA, ink + screentone, no
-color. SOLID FLAT MAGENTA (#fe00fe) background only. Same framing and size.
+KEEPING IT ORIGINAL  (not Beyblade)
+-----------------------------------
+(I'm not a lawyer — this is just practical guidance.) The general IDEA of spinning-
+top battling and ripcord launchers isn't owned by anyone. What IS protected are
+specific DESIGNS, character/creature designs, brand names and logos. So to stay
+clearly in the clear:
+  - Make the TOPS and the LAUNCHERS clearly ORIGINAL — your own silhouette and
+    style, NOT a copy of any real toy. Our tops are "spirit-beast blades": each
+    has its own animal-spirit motif (below).
+  - NO real brand names, logos, or mascots anywhere in the art.
+  - When prompting, add this line: "original design, not based on any existing toy,
+    game, or brand."
+  - Our text is already original (e.g. the launch cry is "Spirits, fly!", not any
+    trademarked slogan).
+  (Optional, if you want extra distance: the launchers in the CURRENT character
+   art look fairly generic — if you'd like, we can regenerate the cast later with
+   a more distinct original launcher design. Just say the word.)
 
 
 ==================================================================
-THE BOND TOURNAMENT — additional cast & backgrounds
+SPIRIT-BEAST TOPS  —  the spinning blades  (original designs!)
 ==================================================================
-These finish the full 4-chapter story: rival 2 (Mira), rival 3 (Brakk), the
-coach (Mentor), and two more backgrounds. Same B&W manga style as above:
-ink line-art + screentone shading, no color, high contrast, kid-friendly
-(ages 6-12) — heroic and fun, never scary or violent.
-
-As with Kael, the four expression images for EACH character (Mira, Brakk) must
-be the SAME character — identical hair, outfit, face and proportions — with
-ONLY the expression changing. Generate each character's four back-to-back and
-tell ChatGPT "same character, new expression, identical design." Mira's four:
-neutral / cool / fierce / shocked. Brakk's four: neutral / grin / fierce /
-shocked. The mentor has two expressions (neutral, smile), same rule.
-
+Draw the TOP itself (the spinning battle-blade), 3/4 view, mid-spin with a little
+motion blur / spin-lines, centered on a SOLID FLAT MAGENTA (#fe00fe) background so
+I can cut it out and drop it into panels. B&W manga, ink + screentone, no color.
+ORIGINAL design — "not based on any existing toy, game, or brand."
 
 ------------------------------------------------------------------
-FILE:  training_bg.png     (the coaching / between-rounds scene)
+FILE:  top_hero.png        (the player's top — heroic)
 ------------------------------------------------------------------
-Black-and-white MANGA panel, ink line-art with screentone shading, no color.
-A spinner-battle TRAINING HALL / practice dojo: a worn practice battle-dish on
-the floor, racks of spinner launchers and tops along the wall, a window with
-soft light, a calm focused atmosphere (this is where the coach gives pep talks
-between matches). NO characters, NO text, NO speech bubbles. Landscape about
-3:2 (e.g. 720x480). Clean, high-contrast black and white.
-
+A sleek, heroic spinning battle-top with a noble SPIRIT-BEAST motif on its spin-
+disc (e.g. a phoenix or lion crest), bold and brave. Mid-spin with motion lines.
+SOLID FLAT MAGENTA (#fe00fe) background. B&W manga, ink + screentone. Original.
 
 ------------------------------------------------------------------
-FILE:  finals_bg.png       (the grand championship arena)
+FILE:  top_kael.png        (Kael's top — fast & sharp)
 ------------------------------------------------------------------
-Black-and-white MANGA panel, ink line-art with screentone shading, no color.
-A GRAND CHAMPIONSHIP spinner-battle arena — bigger and more epic than the round
-arena: a huge central battle dish under a beam of spotlights, a packed roaring
-crowd in tall tiered stands, banners and confetti, big dramatic speed-lines, a
-"final showdown" atmosphere. NO characters, NO text, NO speech bubbles.
-Landscape about 3:2 (e.g. 720x480). Clean, high-contrast black and white.
-
+A fast, aggressive battle-top with a sharp predatory beast motif (e.g. a hawk or
+wolf), edgy and quick. Mid-spin, motion lines. Same magenta background + B&W
+manga style. Original — not based on any existing toy or brand.
 
 ------------------------------------------------------------------
-FILE:  mira_neutral.png    (rival 2 — calm / focused)
+FILE:  top_mira.png        (Mira's top — precise & elegant)
 ------------------------------------------------------------------
-Black-and-white MANGA character, ink line-art + screentone shading, no color.
-"Mira", a cool, precise teenage girl blade-spinner in shounen-manga style: neat
-practical hair (e.g. a tidy ponytail or bob), a sporty vest or jacket, holding
-a spinner launcher with calm focus. NEUTRAL, calm, composed, analytical
-expression. Facing the viewer, head-and-upper-body. Place her on a SOLID FLAT
-MAGENTA (#fe00fe) background — nothing else: no shadow, no border, no text.
-Portrait-ish (e.g. 600x900). High-contrast black and white. Kid-friendly.
-
+An elegant, precise battle-top with a graceful beast motif (e.g. a fox or crane),
+clean and balanced. Mid-spin, motion lines. Same magenta background + B&W manga
+style. Original — not based on any existing toy or brand.
 
 ------------------------------------------------------------------
-FILE:  mira_cool.png       (rival 2 — cool / quietly confident)
+FILE:  top_brakk.png       (Brakk's top — heavy & mighty)
 ------------------------------------------------------------------
-The SAME character "Mira" as mira_neutral — identical hair, outfit, face and
-proportions — ONLY the expression changes: a COOL, aloof, quietly confident
-look — calmly sure she'll win ("precision beats passion"), a small knowing
-half-smile, NOT mean. Black-and-white MANGA, ink + screentone, no color. SOLID
-FLAT MAGENTA (#fe00fe) background only. Same framing and size.
-
-
-------------------------------------------------------------------
-FILE:  mira_fierce.png     (rival 2 — fired up)
-------------------------------------------------------------------
-The SAME character "Mira" — identical design — ONLY the expression changes:
-FIERCE and focused-intense, eyes sharp, fully engaged in the battle (impressed
-that you're keeping up). Determined, not angry. Black-and-white MANGA, ink +
-screentone, no color. SOLID FLAT MAGENTA (#fe00fe) background only. Same
-framing and size.
-
-
-------------------------------------------------------------------
-FILE:  mira_shocked.png    (rival 2 — caught off guard / just lost)
-------------------------------------------------------------------
-The SAME character "Mira" — identical design — ONLY the expression changes:
-SHOCKED, wide-eyed, gasping, caught completely off guard (she just lost).
-Surprised and a little impressed, not scary. Black-and-white MANGA, ink +
-screentone, no color. SOLID FLAT MAGENTA (#fe00fe) background only. Same
-framing and size.
-
-
-------------------------------------------------------------------
-FILE:  brakk_neutral.png   (rival 3 — the big friendly powerhouse, calm)
-------------------------------------------------------------------
-Black-and-white MANGA character, ink line-art + screentone shading, no color.
-"Brakk", a BIG, burly, broad-shouldered teenage powerhouse blade-spinner in
-shounen-manga style: tall and muscular but good-natured (a gentle giant), wild
-hair, a heavy-duty launcher that looks tiny in his huge hands. NEUTRAL, calm,
-good-humored expression. Facing the viewer, head-and-upper-body. Place him on a
-SOLID FLAT MAGENTA (#fe00fe) background — nothing else: no shadow, no border, no
-text. Portrait-ish (e.g. 600x900). High-contrast black and white. Kid-friendly.
-
-
-------------------------------------------------------------------
-FILE:  brakk_grin.png      (rival 3 — big boastful grin)
-------------------------------------------------------------------
-The SAME character "Brakk" as brakk_neutral — identical hair, outfit, face and
-proportions — ONLY the expression changes: a big BOASTFUL GRIN, chest puffed
-out, sure he's the strongest. Playful bravado, NOT mean or scary. Black-and-
-white MANGA, ink + screentone, no color. SOLID FLAT MAGENTA (#fe00fe)
-background only. Same framing and size.
-
-
-------------------------------------------------------------------
-FILE:  brakk_fierce.png    (rival 3 — fired up, having a blast)
-------------------------------------------------------------------
-The SAME character "Brakk" — identical design — ONLY the expression changes:
-FIERCE and fired-up, a huge excited battle grin, LOVING the fight, full of
-energy. Exciting, not threatening. Black-and-white MANGA, ink + screentone, no
-color. SOLID FLAT MAGENTA (#fe00fe) background only. Same framing and size.
-
-
-------------------------------------------------------------------
-FILE:  brakk_shocked.png   (rival 3 — caught off guard / just lost)
-------------------------------------------------------------------
-The SAME character "Brakk" — identical design — ONLY the expression changes:
-SHOCKED, wide-eyed, jaw-dropped, caught completely off guard (he just lost) —
-but already grinning with respect. Surprised and delighted, not scary. Black-
-and-white MANGA, ink + screentone, no color. SOLID FLAT MAGENTA (#fe00fe)
-background only. Same framing and size.
-
-
-------------------------------------------------------------------
-FILE:  mentor_neutral.png  (the coach — calm / wise)
-------------------------------------------------------------------
-Black-and-white MANGA character, ink line-art + screentone shading, no color.
-"The Coach", a kindly veteran blade-spinner mentor in shounen-manga style: an
-older, warm, experienced trainer (e.g. greying hair, a coach's jacket or
-headband, maybe a retired champion's spinner on a cord). NEUTRAL, calm, wise
-expression. Facing the viewer, head-and-upper-body. Place them on a SOLID FLAT
-MAGENTA (#fe00fe) background — nothing else: no shadow, no border, no text.
-Portrait-ish (e.g. 600x900). High-contrast black and white. Kid-friendly.
-
-
-------------------------------------------------------------------
-FILE:  mentor_smile.png    (the coach — warm, proud)
-------------------------------------------------------------------
-The SAME character "The Coach" as mentor_neutral — identical hair, outfit, face
-and proportions — ONLY the expression changes: a big WARM, PROUD smile,
-encouraging and kind (cheering the player on). Black-and-white MANGA, ink +
-screentone, no color. SOLID FLAT MAGENTA (#fe00fe) background only. Same
-framing and size.
+A big, heavy, powerful battle-top with a mighty beast motif (e.g. a bear or
+rhino), chunky and tough. Mid-spin, motion lines. Same magenta background + B&W
+manga style. Original — not based on any existing toy or brand.
 
 
 ==================================================================
-OPTIONAL EXTRA BACKGROUNDS  —  for scene variety (not required)
+ACTION SCENES  —  the cool battle moments  (full-panel backgrounds)
 ==================================================================
-The game now CODE-DRAWS its action effects (concentration "focus" lines, a radial
-"flash" burst, soft "screen" screentone) behind characters, so blank panels are
-already fixed — you do NOT need to make speed-line / halftone images. These are
-just OPTIONAL extra SCENE backgrounds for more variety on the wide establishing
-panels. Same rules as arena/training/finals: black-and-white MANGA, ink line-art
-+ screentone shading, NO color, NO characters, NO text/speech bubbles, landscape
-about 3:2 (e.g. 720x480), clean high-contrast. Drop in raw/ and I'll wire each
-into fitting panels.
+Full-panel action backgrounds, used behind the captions/effects on battle pages.
+B&W manga, ink + screentone, NO color, NO people, NO text / speech bubbles,
+landscape about 3:2 (e.g. 720x480). Show the TOPS (original designs) in dynamic
+action. Original — not based on any existing toy, game, or brand.
 
+------------------------------------------------------------------
+FILE:  clash_bg.png        (the collision!)
+------------------------------------------------------------------
+Two spinning battle-tops SLAMMING into each other in the center of the dish — a
+burst of sparks and a shockwave ring, dramatic speed-lines radiating outward, huge
+impact energy. NO people, NO text. Landscape ~3:2. Clean high-contrast B&W manga.
+
+------------------------------------------------------------------
+FILE:  launch_bg.png       (a top flying through the air)
+------------------------------------------------------------------
+A battle-top ROCKETING through the air over the dish with a long motion-trail and
+speed-lines — like it just got launched or knocked sky-high. Dynamic upward-
+diagonal energy. NO people, NO text. Landscape ~3:2. B&W manga, ink + screentone.
+
+------------------------------------------------------------------
+FILE:  spirit_bg.png       (the special move!)
+------------------------------------------------------------------
+A glowing SPIRIT-BEAST erupting upward out of a spinning top in a special move —
+a giant heroic ghostly beast (a phoenix / lion / dragon-like spirit, your choice)
+rising over the dish with radiant light beams and energy. Epic and heroic, NOT
+scary. NO text. Landscape ~3:2. B&W manga, ink + screentone. Original design.
+
+
+==================================================================
+OPTIONAL EXTRA SCENERY  —  for variety  (not required)
+==================================================================
+Optional extra SCENE backgrounds for more variety on the wide establishing panels.
+Same rules: B&W manga, ink + screentone, NO color, NO characters, NO text/speech
+bubbles, landscape ~3:2 (e.g. 720x480), clean high-contrast.
 
 ------------------------------------------------------------------
 FILE:  crowd_bg.png        (a wall of cheering fans)
 ------------------------------------------------------------------
-Black-and-white MANGA panel, ink line-art + screentone shading, no color.
-A packed wall of EXCITED young spectators in stadium stands — many cheering
-faces, raised arms, a few waving banners/flags — viewed straight on, filling the
-frame. Bright, fun, kid-friendly energy. NO main characters in front, NO text,
-NO speech bubbles. Landscape ~3:2. Clean, high-contrast black and white.
-
+A packed wall of EXCITED young spectators in stadium stands — many cheering faces,
+raised arms, a few waving banners/flags — viewed straight on, filling the frame.
+Bright, fun, kid-friendly energy. NO main characters in front, NO text.
 
 ------------------------------------------------------------------
 FILE:  gate_bg.png         (the tournament entrance)
 ------------------------------------------------------------------
-Black-and-white MANGA panel, ink line-art + screentone shading, no color.
 The grand ENTRANCE TUNNEL into the spinner-battle stadium: a big archway / gate
 with banners, bright light spilling in from the arena beyond, a sense of stepping
-into something epic. NO characters, NO text, NO speech bubbles. Landscape ~3:2.
-Clean, high-contrast black and white.
-
+into something epic. NO characters, NO text.
 
 ------------------------------------------------------------------
 FILE:  sky_bg.png          (a dramatic manga sky)
 ------------------------------------------------------------------
-Black-and-white MANGA panel, ink line-art + screentone shading, no color.
 A big dramatic SKY: bold billowing clouds with radiating light beams breaking
 through, maybe a few birds — an uplifting, emotional "big moment" backdrop. NO
-characters, NO text, NO speech bubbles. Landscape ~3:2. Clean, high-contrast
-black and white.
-
+characters, NO text.
 
 ------------------------------------------------------------------
 FILE:  podium_bg.png       (the winner's podium)
 ------------------------------------------------------------------
-Black-and-white MANGA panel, ink line-art + screentone shading, no color.
-A CHAMPIONSHIP winner's podium / trophy stand under a spotlight, with confetti
-and streamers falling and a big trophy or cup, celebratory atmosphere. NO
-characters standing on it, NO text, NO speech bubbles. Landscape ~3:2. Clean,
-high-contrast black and white.
+A CHAMPIONSHIP winner's podium / trophy stand under a spotlight, with confetti and
+streamers falling and a big trophy or cup, celebratory atmosphere. NO characters
+standing on it, NO text.
