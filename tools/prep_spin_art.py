@@ -36,6 +36,7 @@ SPRITES = ("kael_neutral", "kael_smug", "kael_fierce", "kael_shocked",
            "brakk_neutral", "brakk_grin", "brakk_fierce", "brakk_shocked",
            "mentor_neutral", "mentor_smile",
            "raze_masked", "raze_cold", "raze_shocked",                   # the Masked Ace
+           "sign_focus", "sign_burst",                                   # spirit-weaving hand signs
            "top_hero", "top_kael", "top_mira", "top_brakk")              # spirit-beast tops
 
 

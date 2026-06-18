@@ -22,6 +22,7 @@ DONE (in the game)  — see ART_PROMPTS_DONE.txt
 TO CREATE (this file)
     [ ] VILLAIN   raze_masked  raze_cold  raze_shocked            (the Masked Ace — story!)
     [ ] ACTION    clash_bg   launch_bg  spirit_bg                 (cool battle scenes)
+    [ ] SIGNS     sign_focus  sign_burst                          (spirit-weaving hand signs)
     [ ] TOPS      top_hero   top_kael   top_mira   top_brakk      (the spinning blades)
     [ ] SCENERY   crowd_bg   gate_bg    sky_bg     podium_bg      (optional variety)
 
@@ -76,6 +77,44 @@ FILE:  raze_shocked.png    (mask off — stunned / humbled)
 The SAME character "Raze" with the mask OFF: SHOCKED and stunned, wide-eyed,
 caught completely off guard (he just felt the power of a true bond) — surprised,
 on the edge of being humbled. Not scary. Same magenta background + framing.
+
+
+==================================================================
+LAUNCHING & SPIRIT-WEAVING  —  hand signs to control the blade
+==================================================================
+The idea (yours!): a spinner THROWS their top, then weaves their fingers through
+quick hand signs to channel and steer their spirit-beast — a cool "spirit-weaving"
+move.
+
+IS THIS COPYRIGHT-SAFE? (not legal advice) — yes, with care. Finger hand-signs /
+"mudras" are REAL traditional gestures (used in Buddhism and martial arts for
+centuries); a gesture itself can't be copyrighted, and "hand signs to focus power"
+is a generic idea. What you must NOT copy is another work's specific character
+designs, art style, or technique NAMES. So:
+  - Use OUR characters and our OWN term ("spirit-weaving" / "blade-binding"),
+    never another franchise's jutsu / technique names or logos.
+  - Draw original hands and poses; don't trace or imitate a specific show's frames.
+  - Add to each prompt: "original spirit-weaving hand sign, not from any existing
+    anime, game, or brand."
+
+------------------------------------------------------------------
+FILE:  sign_focus.png      (spirit-weaving — calm focus)
+------------------------------------------------------------------
+Close-up of two hands (the player's own) interlocking / weaving the fingers into a
+focused "spirit-weaving" hand sign, faint energy lines curling around them. Calm,
+concentrated. SOLID FLAT MAGENTA (#fe00fe) background, B&W manga, ink + screentone.
+Original gesture — not from any existing anime, game, or brand.
+
+------------------------------------------------------------------
+FILE:  sign_burst.png      (spirit-weaving — release!)
+------------------------------------------------------------------
+Close-up of two hands SNAPPING into a final hand sign (a sharp release pose) with a
+burst of energy and spin-lines exploding outward — the instant the spirit-beast is
+unleashed. SOLID FLAT MAGENTA (#fe00fe) background, B&W manga. Original gesture.
+
+(Want the named characters to do it too? Also make <name>_launch.png — that
+character mid-THROW, arm extended with their launcher — and/or <name>_sign.png —
+that character weaving the hand sign. Tell me and I'll wire those into the battles.)
 
 
 ==================================================================
