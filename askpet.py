@@ -14170,15 +14170,19 @@ def _spin_panel_content(canvas, p, sx, sy, sw, sh, setting, cache, refs):
     bg = p.get("bg")
     fx = p.get("fx")
     focal = sy + int(sh * 0.6) if has_char else None
-    if bg:                                                # explicit scene (zoom in behind a character)
+    bg_ready = bool(bg) and (SPIN_ASSETS / f"{bg}_bg.png").exists()
+    set_ready = bool(setting) and (SPIN_ASSETS / f"{setting}_bg.png").exists()
+    if bg_ready:                                          # explicit scene (zoom in behind a character)
         canvas.create_image(int(sx), int(sy), anchor="nw",
                             image=_spin_bg_crop(bg, int(sw), int(sh), cache, refs, 2 if has_char else 1))
+    elif bg:                                              # scene art not drawn yet -> dramatic fx, never blank
+        _spin_fx(canvas, sx, sy, sw, sh, fx or ("tone12" if has_char else "focus"), focal)
     elif fx:                                              # an explicit manga effect wins (focus/flash/tone*)
         _spin_fx(canvas, sx, sy, sw, sh, fx, focal)
-    elif has_char and setting:                            # reuse the page's scene, zoomed close-up
+    elif has_char and set_ready:                          # reuse the page's scene, zoomed close-up
         canvas.create_image(int(sx), int(sy), anchor="nw",
                             image=_spin_bg_crop(setting, int(sw), int(sh), cache, refs, 2))
-    else:                                                 # no scene at all -> a manga effect fill
+    else:                                                 # no scene (or art not drawn yet) -> manga effect fill
         _spin_fx(canvas, sx, sy, sw, sh, "tone12" if has_char else "tone", focal)
 
     cap = p.get("caption")
@@ -14192,7 +14196,8 @@ def _spin_panel_content(canvas, p, sx, sy, sw, sh, setting, cache, refs):
         canvas.create_image(int(sx + sw / 2), int(sy + sh - 6), anchor="s",
                             image=_spin_char(ch[0], ch[1], max_h, cache, refs))
     if cap:
-        canvas.create_rectangle(sx + 6, sy + 6, sx + 18 + len(cap) * 9, sy + 30,
+        cap_r = min(sx + 18 + len(cap) * 9, sx + sw - 6)   # keep the tag inside its panel
+        canvas.create_rectangle(sx + 6, sy + 6, cap_r, sy + 30,
                                 fill=SPIN_INK, outline=SPIN_INK)
         canvas.create_text(sx + 12, sy + 18, anchor="w", text=cap,
                            fill=SPIN_PAPER, font=("Consolas", 12, "bold"))
@@ -14285,10 +14290,10 @@ def spin_comic_ending(flags):
     heart = sum(f in flags for f in SPIN_HEART)
     fire = sum(f in flags for f in SPIN_FIRE)
     if heart and not fire:
-        return "CHAMPION OF HEART!\nYou turned every rival\ninto a true friend."
+        return "CHAMPION OF HEART!\nRin turned every rival\ninto a true friend."
     if fire and not heart:
-        return "CHAMPION OF FIRE!\nThe crowd ROARS your\nname— a blazing champ!"
-    return "HEART OF THE BLADE!\nHeart and fire as one—\nyou found your own way."
+        return "CHAMPION OF FIRE!\nThe crowd ROARS for\nRin— a blazing champ!"
+    return "HEART OF THE BLADE!\nHeart and fire as one—\nRin found their own way."
 
 
 # ---------------------------------------------------------------------------
@@ -14318,280 +14323,441 @@ def spin_comic_ending(flags):
 # ---------------------------------------------------------------------------
 SPIN_COMIC_STORY = {
     # -- prologue: the mentor sets the stage ------------------------------
+    # NOTE: pages are multi-panel manga storyboards (cols=2, 4+ cells, varied
+    # spans) — a wide establishing panel, looming character close-ups, reaction
+    # and impact beats — NOT one centered figure per page. The hero is named RIN
+    # (third person); the reader HELPS Rin choose at each decision.
     "open": {
-        "page": {"frame": "dynamic", "cols": 1, "rows": 3, "panels": [
-            {"grid": (0, 0, 1, 1), "bg": "arena", "caption": "THE BOND TOURNAMENT",
+        "page": {"cols": 2, "rows": 3, "panels": [
+            {"grid": (0, 0, 2, 1), "bg": "arena", "caption": "THE BOND TOURNAMENT",
              "border": "bold"},
             {"grid": (0, 1, 1, 1), "char": ("mentor", "neutral"),
-             "bubble": "Welcome, rookie! Three\nrivals stand between you\nand the crown."},
-            {"grid": (0, 2, 1, 1), "char": ("mentor", "smile"),
-             "bubble": "Win with bonds, not just\nskill. But beware the Masked\nAce— they say bonds make\nyou WEAK!"}]},
+             "bubble": "Welcome,\nRin!"},
+            {"grid": (1, 1, 1, 1), "char": ("mentor", "smile"),
+             "bubble": "Win with BONDS,\nnot just skill."},
+            {"grid": (0, 2, 2, 1), "fx": "focus",
+             "bubble": "But beware the Masked Ace— they\nsay bonds make you WEAK!",
+             "bubble_style": "narration"}]},
         "next": "ch1_meet"},
 
     # == CHAPTER 1 : KAEL — the cocky qualifier ===========================
     "ch1_meet": {
-        "page": {"frame": "dynamic", "cols": 1, "rows": 2, "panels": [
-            {"grid": (0, 0, 1, 1), "bg": "arena", "caption": "ROUND 1 — KAEL"},
-            {"grid": (0, 1, 1, 1), "char": ("kael", "smug"),
-             "bubble": "So YOU'RE the new kid\neveryone's talking\nabout? Heh."}]},
+        "page": {"cols": 2, "rows": 3, "panels": [
+            {"grid": (0, 0, 2, 1), "bg": "arena", "caption": "ROUND 1 — KAEL",
+             "border": "bold"},
+            {"grid": (0, 1, 1, 2), "char": ("kael", "smug"),
+             "bubble": "So YOU'RE Rin?\nThe new kid?"},
+            {"grid": (1, 1, 1, 1), "fx": "screen", "caption": "The crowd hushes."},
+            {"grid": (1, 2, 1, 1), "char": ("kael", "neutral"),
+             "bubble": "Heh— this'll\nbe quick."}]},
         "next": "ch1_taunt"},
     "ch1_taunt": {
-        "page": {"frame": "dynamic", "cols": 1, "rows": 2, "panels": [
+        "page": {"cols": 2, "rows": 2, "panels": [
             {"grid": (0, 0, 1, 1), "char": ("kael", "smug"),
-             "bubble": "This'll be over before\nit even starts, rookie!"},
-            {"grid": (0, 1, 1, 1), "bg": "arena", "bubble": "How do I\nplay this?",
-             "bubble_style": "thought"}]},
+             "bubble": "Over before it\neven starts!"},
+            {"grid": (1, 0, 1, 1), "fx": "focus", "caption": "Rin steps up."},
+            {"grid": (0, 1, 1, 1), "char": ("kael", "fierce"),
+             "bubble": "Well, rookie?"},
+            {"grid": (1, 1, 1, 1), "bg": "arena", "caption": "HELP RIN DECIDE",
+             "bubble": "How should I\nplay this?", "bubble_style": "thought"}]},
         "choices": [
-            {"label": "Smile — offer him a fair match", "set": "calm", "to": "ch1_calm"},
-            {"label": "Fire right back at him", "set": "bold", "to": "ch1_bold"}]},
+            {"label": "Smile — offer Kael a fair match", "set": "calm", "to": "ch1_calm"},
+            {"label": "Fire right back at Kael", "set": "bold", "to": "ch1_bold"}]},
     "ch1_calm": {
-        "page": {"cols": 1, "rows": 1, "panels": [
-            {"grid": (0, 0, 1, 1), "char": ("kael", "neutral"),
-             "caption": "You: \"May the best blade win!\"",
-             "bubble": "...Tch. We'll\nsee about that."}]},
+        "page": {"cols": 2, "rows": 3, "panels": [
+            {"grid": (0, 0, 2, 1), "bg": "arena", "border": "soft",
+             "caption": "Rin smiles: \"May the best blade win!\""},
+            {"grid": (0, 1, 1, 1), "char": ("kael", "neutral"),
+             "bubble": "...Tch."},
+            {"grid": (1, 1, 1, 1), "char": ("kael", "smug"),
+             "bubble": "We'll see\nabout that."},
+            {"grid": (0, 2, 2, 1), "fx": "focus",
+             "caption": "Game on— the dish lights up!"}]},
         "next": "ch1_battle"},
     "ch1_bold": {
-        "page": {"cols": 1, "rows": 1, "panels": [
-            {"grid": (0, 0, 1, 1), "char": ("kael", "fierce"),
-             "caption": "You: \"Bring it on!\"",
-             "bubble": "HA! Big talk—\nnow back it up!"}]},
+        "page": {"cols": 2, "rows": 3, "panels": [
+            {"grid": (0, 0, 2, 1), "bg": "arena", "border": "impact",
+             "caption": "Rin grins: \"Bring it on!\""},
+            {"grid": (0, 1, 1, 1), "char": ("kael", "fierce"),
+             "bubble": "HA! Big talk!"},
+            {"grid": (1, 1, 1, 1), "char": ("kael", "fierce"), "fx": "focus",
+             "bubble": "Back it up!", "bubble_style": "shout"},
+            {"grid": (0, 2, 2, 1), "fx": "flash",
+             "caption": "Sparks fly before the first spin!"}]},
         "next": "ch1_battle"},
     "ch1_battle": {
-        "page": {"frame": "dynamic", "cols": 1, "rows": 2, "panels": [
-            {"grid": (0, 0, 1, 1), "bg": "arena", "caption": "3... 2... 1... SPIRITS, FLY!",
+        "page": {"cols": 2, "rows": 3, "panels": [
+            {"grid": (0, 0, 2, 1), "bg": "arena", "caption": "3... 2... 1... SPIRITS, FLY!",
              "border": "impact"},
             {"grid": (0, 1, 1, 1), "char": ("kael", "fierce"), "fx": "focus",
-             "bubble": "Here I come!", "bubble_style": "shout"}]},
+             "bubble": "Here I\ncome!", "bubble_style": "shout"},
+            {"grid": (1, 1, 1, 1), "fx": "flash", "caption": "CLANG!"},
+            {"grid": (0, 2, 2, 1), "bg": "arena", "caption": "HELP RIN DECIDE",
+             "bubble": "Read his spin...\nnow choose!", "bubble_style": "thought"}]},
         "choices": [
-            {"label": "Unleash your spirit-beast", "to": "ch1_unleash"},
-            {"label": "Read him, then counter", "to": "ch1_counter"},
-            {"label": "Defend and outlast him", "to": "ch1_defend"}]},
+            {"label": "Unleash the spirit-beast", "to": "ch1_unleash"},
+            {"label": "Read Kael, then counter", "to": "ch1_counter"},
+            {"label": "Defend and outlast Kael", "to": "ch1_defend"}]},
     "ch1_unleash": {
-        "page": {"cols": 1, "rows": 1, "panels": [
-            {"grid": (0, 0, 1, 1), "char": ("kael", "shocked"), "fx": "flash",
-             "caption": "Your blade BLAZES— a spinning storm!", "bubble": "Wha—?!"}]},
+        "page": {"cols": 2, "rows": 3, "panels": [
+            {"grid": (0, 0, 2, 1), "bg": "arena", "border": "impact",
+             "caption": "Rin's blade BLAZES— a spinning storm!"},
+            {"grid": (0, 1, 1, 1), "char": ("kael", "shocked"), "fx": "flash",
+             "bubble": "Wha—?!", "bubble_style": "shout"},
+            {"grid": (1, 1, 1, 1), "fx": "focus", "caption": "SPIN-OUT!"},
+            {"grid": (0, 2, 2, 1), "bg": "arena", "caption": "Kael never saw it coming."}]},
         "next": "ch1_friend"},
     "ch1_counter": {
-        "page": {"cols": 1, "rows": 1, "panels": [
-            {"grid": (0, 0, 1, 1), "char": ("kael", "shocked"), "fx": "focus",
-             "caption": "You wait... then strike on the perfect beat!", "bubble": "No way!"}]},
+        "page": {"cols": 2, "rows": 3, "panels": [
+            {"grid": (0, 0, 2, 1), "bg": "arena", "border": "impact",
+             "caption": "Rin waits... then strikes on the beat!"},
+            {"grid": (0, 1, 1, 1), "char": ("kael", "shocked"), "fx": "focus",
+             "bubble": "No way!", "bubble_style": "shout"},
+            {"grid": (1, 1, 1, 1), "fx": "flash", "caption": "PERFECT!"},
+            {"grid": (0, 2, 2, 1), "bg": "arena", "caption": "One clean hit— that's all it took."}]},
         "next": "ch1_friend"},
     "ch1_defend": {
-        "page": {"cols": 1, "rows": 1, "panels": [
-            {"grid": (0, 0, 1, 1), "char": ("kael", "shocked"), "fx": "focus",
-             "caption": "You hold steady till his spin fades!", "bubble": "Unreal..."}]},
+        "page": {"cols": 2, "rows": 3, "panels": [
+            {"grid": (0, 0, 2, 1), "bg": "arena", "border": "bold",
+             "caption": "Rin holds steady till his spin fades!"},
+            {"grid": (0, 1, 1, 1), "char": ("kael", "shocked"), "fx": "focus",
+             "bubble": "Unreal...", "bubble_style": "whisper"},
+            {"grid": (1, 1, 1, 1), "fx": "screen", "caption": "Wobble..."},
+            {"grid": (0, 2, 2, 1), "bg": "arena", "caption": "Patience wins the round."}]},
         "next": "ch1_friend"},
     "ch1_friend": {
-        "page": {"cols": 1, "rows": 1, "panels": [
-            {"grid": (0, 0, 1, 1), "char": ("kael", "neutral"),
-             "caption": "Kael's top spins out— you WIN!",
-             "bubble": "Heh... you're alright,\nrookie. Friends?", "bubble_style": "round"}]},
+        "page": {"cols": 2, "rows": 3, "panels": [
+            {"grid": (0, 0, 2, 1), "bg": "arena", "border": "bold",
+             "caption": "Kael's top spins out— RIN WINS!"},
+            {"grid": (0, 1, 1, 1), "char": ("kael", "shocked"), "fx": "focus",
+             "caption": "GG."},
+            {"grid": (1, 1, 1, 1), "char": ("kael", "neutral"),
+             "bubble": "You're alright,\nRin."},
+            {"grid": (0, 2, 2, 1), "char": ("kael", "smug"),
+             "bubble": "Friends?", "bubble_style": "round"}]},
         "next": "ch2_meet"},
 
     # == CHAPTER 2 : MIRA — the calm strategist ===========================
     "ch2_meet": {
-        "page": {"frame": "dynamic", "cols": 1, "rows": 2, "panels": [
-            {"grid": (0, 0, 1, 1), "bg": "arena", "caption": "ROUND 2 — MIRA"},
-            {"grid": (0, 1, 1, 1), "char": ("mira", "neutral"),
-             "bubble": "I've studied every spin\nyou've made. I know\nyour tricks."}]},
+        "page": {"cols": 2, "rows": 3, "panels": [
+            {"grid": (0, 0, 2, 1), "bg": "arena", "caption": "ROUND 2 — MIRA",
+             "border": "bold"},
+            {"grid": (0, 1, 1, 2), "char": ("mira", "neutral"),
+             "bubble": "I've studied every\nspin you've made."},
+            {"grid": (1, 1, 1, 1), "fx": "screen", "caption": "Cool. Calm."},
+            {"grid": (1, 2, 1, 1), "char": ("mira", "cool"),
+             "bubble": "I know your\ntricks, Rin."}]},
         "next": "ch2_taunt"},
     "ch2_taunt": {
-        "page": {"frame": "dynamic", "cols": 1, "rows": 2, "panels": [
+        "page": {"cols": 2, "rows": 2, "panels": [
             {"grid": (0, 0, 1, 1), "char": ("mira", "cool"),
-             "bubble": "Precision beats passion.\nWatch and learn."},
-            {"grid": (0, 1, 1, 1), "bg": "arena", "bubble": "Okay...\nmy move.",
-             "bubble_style": "thought"}]},
+             "bubble": "Precision beats\npassion."},
+            {"grid": (1, 0, 1, 1), "fx": "screen", "caption": "Watch and learn."},
+            {"grid": (0, 1, 1, 1), "char": ("mira", "neutral"),
+             "bubble": "Your move."},
+            {"grid": (1, 1, 1, 1), "bg": "arena", "caption": "HELP RIN DECIDE",
+             "bubble": "Okay...\nmy move.", "bubble_style": "thought"}]},
         "choices": [
-            {"label": "Praise her skill, spin clean", "set": "kind", "to": "ch2_kind"},
-            {"label": "Push the pace — overwhelm her", "set": "fierce", "to": "ch2_fierce"}]},
+            {"label": "Praise Mira's skill, spin clean", "set": "kind", "to": "ch2_kind"},
+            {"label": "Push the pace — overwhelm Mira", "set": "fierce", "to": "ch2_fierce"}]},
     "ch2_kind": {
-        "page": {"cols": 1, "rows": 1, "panels": [
-            {"grid": (0, 0, 1, 1), "char": ("mira", "neutral"),
-             "caption": "You: \"Your form is amazing!\"",
-             "bubble": "...Thank you.\nNow stay focused!"}]},
+        "page": {"cols": 2, "rows": 3, "panels": [
+            {"grid": (0, 0, 2, 1), "bg": "arena", "border": "soft",
+             "caption": "Rin: \"Your form is amazing!\""},
+            {"grid": (0, 1, 1, 1), "char": ("mira", "neutral"),
+             "bubble": "...Thank you."},
+            {"grid": (1, 1, 1, 1), "char": ("mira", "cool"),
+             "bubble": "Now stay\nfocused!"},
+            {"grid": (0, 2, 2, 1), "fx": "screen",
+             "caption": "Two blades, perfectly poised."}]},
         "next": "ch2_battle"},
     "ch2_fierce": {
-        "page": {"cols": 1, "rows": 1, "panels": [
-            {"grid": (0, 0, 1, 1), "char": ("mira", "fierce"),
-             "caption": "You surge forward!",
-             "bubble": "So reckless—\nbut so FAST!"}]},
+        "page": {"cols": 2, "rows": 3, "panels": [
+            {"grid": (0, 0, 2, 1), "bg": "arena", "border": "impact",
+             "caption": "Rin surges forward— full speed!"},
+            {"grid": (0, 1, 1, 1), "char": ("mira", "fierce"), "fx": "focus",
+             "bubble": "So reckless—", "bubble_style": "shout"},
+            {"grid": (1, 1, 1, 1), "char": ("mira", "fierce"),
+             "bubble": "but so FAST!"},
+            {"grid": (0, 2, 2, 1), "fx": "flash",
+             "caption": "The dish ROARS to life!"}]},
         "next": "ch2_battle"},
     "ch2_battle": {
-        "page": {"frame": "dynamic", "cols": 1, "rows": 2, "panels": [
-            {"grid": (0, 0, 1, 1), "bg": "arena", "caption": "Steel sings! Tops collide!",
+        "page": {"cols": 2, "rows": 3, "panels": [
+            {"grid": (0, 0, 2, 1), "bg": "arena", "caption": "Steel sings! Tops collide!",
              "border": "impact"},
             {"grid": (0, 1, 1, 1), "char": ("mira", "fierce"), "fx": "focus",
-             "bubble": "Not bad!", "bubble_style": "shout"}]},
+             "bubble": "Not bad!", "bubble_style": "shout"},
+            {"grid": (1, 1, 1, 1), "fx": "flash", "caption": "SHING!"},
+            {"grid": (0, 2, 2, 1), "bg": "arena", "caption": "HELP RIN DECIDE",
+             "bubble": "Find her\nrhythm...", "bubble_style": "thought"}]},
         "choices": [
-            {"label": "Unleash your spirit-beast", "to": "ch2_unleash"},
-            {"label": "Read her, then counter", "to": "ch2_counter"},
-            {"label": "Defend and outlast her", "to": "ch2_defend"}]},
+            {"label": "Unleash the spirit-beast", "to": "ch2_unleash"},
+            {"label": "Read Mira, then counter", "to": "ch2_counter"},
+            {"label": "Defend and outlast Mira", "to": "ch2_defend"}]},
     "ch2_unleash": {
-        "page": {"cols": 1, "rows": 1, "panels": [
-            {"grid": (0, 0, 1, 1), "char": ("mira", "shocked"), "fx": "flash",
-             "caption": "Your spirit-beast roars to life!", "bubble": "Such power!"}]},
+        "page": {"cols": 2, "rows": 3, "panels": [
+            {"grid": (0, 0, 2, 1), "bg": "arena", "border": "impact",
+             "caption": "Rin's spirit-beast roars to life!"},
+            {"grid": (0, 1, 1, 1), "char": ("mira", "shocked"), "fx": "flash",
+             "bubble": "Such power!", "bubble_style": "shout"},
+            {"grid": (1, 1, 1, 1), "fx": "focus", "caption": "SPIN-OUT!"},
+            {"grid": (0, 2, 2, 1), "bg": "arena",
+             "caption": "Even her precision can't answer that."}]},
         "next": "ch2_friend"},
     "ch2_counter": {
-        "page": {"cols": 1, "rows": 1, "panels": [
-            {"grid": (0, 0, 1, 1), "char": ("mira", "shocked"), "fx": "focus",
-             "caption": "You read her pattern and counter!", "bubble": "You... predicted me?"}]},
+        "page": {"cols": 2, "rows": 3, "panels": [
+            {"grid": (0, 0, 2, 1), "bg": "arena", "border": "impact",
+             "caption": "Rin reads her pattern— and counters!"},
+            {"grid": (0, 1, 1, 1), "char": ("mira", "shocked"), "fx": "focus",
+             "bubble": "You predicted\nme?", "bubble_style": "shout"},
+            {"grid": (1, 1, 1, 1), "fx": "flash", "caption": "GOTCHA!"},
+            {"grid": (0, 2, 2, 1), "bg": "arena", "caption": "Mind versus mind— Rin wins it."}]},
         "next": "ch2_friend"},
     "ch2_defend": {
-        "page": {"cols": 1, "rows": 1, "panels": [
-            {"grid": (0, 0, 1, 1), "char": ("mira", "shocked"), "fx": "focus",
-             "caption": "You weather her assault and hold!", "bubble": "I can't break\nthrough!"}]},
+        "page": {"cols": 2, "rows": 3, "panels": [
+            {"grid": (0, 0, 2, 1), "bg": "arena", "border": "bold",
+             "caption": "Rin weathers her assault and holds!"},
+            {"grid": (0, 1, 1, 1), "char": ("mira", "shocked"), "fx": "focus",
+             "bubble": "I can't break\nthrough!", "bubble_style": "shout"},
+            {"grid": (1, 1, 1, 1), "fx": "screen", "caption": "Steady..."},
+            {"grid": (0, 2, 2, 1), "bg": "arena", "caption": "The longer game belongs to Rin."}]},
         "next": "ch2_friend"},
     "ch2_friend": {
-        "page": {"cols": 1, "rows": 1, "panels": [
-            {"grid": (0, 0, 1, 1), "char": ("mira", "cool"),
-             "caption": "Mira's top spins out— you advance!",
-             "bubble": "Teach me that\nsometime? ...Friends.", "bubble_style": "round"}]},
+        "page": {"cols": 2, "rows": 3, "panels": [
+            {"grid": (0, 0, 2, 1), "bg": "arena", "border": "bold",
+             "caption": "Mira's top spins out— Rin advances!"},
+            {"grid": (0, 1, 1, 1), "char": ("mira", "shocked"), "fx": "focus",
+             "caption": "Incredible."},
+            {"grid": (1, 1, 1, 1), "char": ("mira", "neutral"),
+             "bubble": "Teach me that\nsometime?"},
+            {"grid": (0, 2, 2, 1), "char": ("mira", "cool"),
+             "bubble": "...Friends.", "bubble_style": "round"}]},
         "next": "mentor_secret"},
 
     # -- INTERLUDE : the Coach's secret (TWIST) ---------------------------
     "mentor_secret": {
-        "page": {"frame": "dynamic", "cols": 1, "rows": 2, "panels": [
-            {"grid": (0, 0, 1, 1), "bg": "training", "caption": "Between rounds, the Coach grows quiet."},
-            {"grid": (0, 1, 1, 1), "bg": "training", "char": ("mentor", "neutral"),
-             "bubble": "Long ago, they called me the\nSpirit-Sage— the greatest\nchampion alive."}]},
+        "page": {"cols": 2, "rows": 3, "panels": [
+            {"grid": (0, 0, 2, 1), "bg": "training", "border": "soft",
+             "caption": "Between rounds, the Coach grows quiet."},
+            {"grid": (0, 1, 1, 2), "char": ("mentor", "neutral"),
+             "bubble": "Long ago they called\nme the Spirit-Sage."},
+            {"grid": (1, 1, 1, 1), "bg": "training", "caption": "..."},
+            {"grid": (1, 2, 1, 1), "char": ("mentor", "neutral"),
+             "bubble": "The greatest\nchampion alive."}]},
         "next": "mentor_secret2"},
     "mentor_secret2": {
-        "page": {"cols": 1, "rows": 1, "panels": [
-            {"grid": (0, 0, 1, 1), "bg": "training", "char": ("mentor", "neutral"),
-             "border": "soft",
-             "bubble": "Then a rival who scorned\nbonds spun mine out cold— my\nspirit-blade's been quiet\never since."}]},
+        "page": {"cols": 2, "rows": 2, "panels": [
+            {"grid": (0, 0, 1, 1), "bg": "training", "caption": "A bitter memory."},
+            {"grid": (1, 0, 1, 1), "char": ("mentor", "neutral"),
+             "bubble": "A rival who\nscorned bonds..."},
+            {"grid": (0, 1, 1, 1), "char": ("mentor", "neutral"), "fx": "focus",
+             "bubble": "...spun mine\nout cold."},
+            {"grid": (1, 1, 1, 1), "bg": "training", "border": "soft",
+             "caption": "Quiet ever since."}]},
         "next": "mentor_secret3"},
     "mentor_secret3": {
-        "page": {"cols": 1, "rows": 1, "panels": [
-            {"grid": (0, 0, 1, 1), "bg": "training", "char": ("mentor", "smile"),
-             "bubble": "But watching your bonds...\nI feel it stirring again.\nGo— win it all, champ!"}]},
+        "page": {"cols": 2, "rows": 2, "panels": [
+            {"grid": (0, 0, 1, 1), "char": ("mentor", "neutral"),
+             "bubble": "But watching\nyour bonds..."},
+            {"grid": (1, 0, 1, 1), "bg": "training", "fx": "focus",
+             "caption": "...a spark!"},
+            {"grid": (0, 1, 1, 1), "char": ("mentor", "smile"),
+             "bubble": "It's stirring\nagain!"},
+            {"grid": (1, 1, 1, 1), "char": ("mentor", "smile"),
+             "bubble": "Go win it\nall, Rin!", "bubble_style": "round"}]},
         "next": "ch3_meet"},
 
     # == CHAPTER 3 : BRAKK — the big-hearted powerhouse ===================
     "ch3_meet": {
-        "page": {"frame": "dynamic", "cols": 1, "rows": 2, "panels": [
-            {"grid": (0, 0, 1, 1), "bg": "arena", "caption": "SEMIFINAL — BRAKK"},
-            {"grid": (0, 1, 1, 1), "char": ("brakk", "fierce"),
-             "bubble": "GRAAH! I'm the\nSTRONGEST blade\nin the league!", "bubble_style": "shout"}]},
+        "page": {"cols": 2, "rows": 3, "panels": [
+            {"grid": (0, 0, 2, 1), "bg": "arena", "caption": "SEMIFINAL — BRAKK",
+             "border": "bold"},
+            {"grid": (0, 1, 1, 2), "char": ("brakk", "fierce"), "fx": "focus",
+             "bubble": "GRAAH! I'm the\nSTRONGEST!", "bubble_style": "shout"},
+            {"grid": (1, 1, 1, 1), "fx": "flash", "caption": "BOOM!"},
+            {"grid": (1, 2, 1, 1), "char": ("brakk", "grin"),
+             "bubble": "Little blade,\nlittle chance!"}]},
         "next": "ch3_taunt"},
     "ch3_taunt": {
-        "page": {"frame": "dynamic", "cols": 1, "rows": 2, "panels": [
+        "page": {"cols": 2, "rows": 2, "panels": [
             {"grid": (0, 0, 1, 1), "char": ("brakk", "grin"),
-             "bubble": "Little blade,\nlittle chance!"},
-            {"grid": (0, 1, 1, 1), "bg": "arena", "bubble": "He's huge!\nWhat now?",
-             "bubble_style": "thought"}]},
+             "bubble": "Heh heh!"},
+            {"grid": (1, 0, 1, 1), "fx": "focus", "caption": "He's HUGE."},
+            {"grid": (0, 1, 1, 1), "char": ("brakk", "fierce"),
+             "bubble": "Bring it,\nsmall one!"},
+            {"grid": (1, 1, 1, 1), "bg": "arena", "caption": "HELP RIN DECIDE",
+             "bubble": "What now?", "bubble_style": "thought"}]},
         "choices": [
-            {"label": "Stand tall — respect his strength", "set": "steady", "to": "ch3_steady"},
-            {"label": "Match his power head-on", "set": "reckless", "to": "ch3_reckless"}]},
+            {"label": "Stand tall — respect Brakk's strength", "set": "steady", "to": "ch3_steady"},
+            {"label": "Match Brakk's power head-on", "set": "reckless", "to": "ch3_reckless"}]},
     "ch3_steady": {
-        "page": {"cols": 1, "rows": 1, "panels": [
-            {"grid": (0, 0, 1, 1), "char": ("brakk", "neutral"),
-             "caption": "You: \"You're strong— let's both go all out!\"",
-             "bubble": "Heh! You've got GUTS,\nsmall one. I respect that."}]},
+        "page": {"cols": 2, "rows": 3, "panels": [
+            {"grid": (0, 0, 2, 1), "bg": "arena", "border": "bold",
+             "caption": "Rin: \"You're strong— let's go all out!\""},
+            {"grid": (0, 1, 1, 1), "char": ("brakk", "neutral"),
+             "bubble": "Heh! You've\ngot GUTS."},
+            {"grid": (1, 1, 1, 1), "char": ("brakk", "grin"),
+             "bubble": "I respect\nthat!"},
+            {"grid": (0, 2, 2, 1), "fx": "focus", "caption": "Two big hearts, one big clash."}]},
         "next": "ch3_battle"},
     "ch3_reckless": {
-        "page": {"cols": 1, "rows": 1, "panels": [
-            {"grid": (0, 0, 1, 1), "char": ("brakk", "fierce"),
-             "caption": "You charge in, fearless!",
-             "bubble": "YES! Show me\nyour POWER!", "bubble_style": "shout"}]},
+        "page": {"cols": 2, "rows": 3, "panels": [
+            {"grid": (0, 0, 2, 1), "bg": "arena", "border": "impact",
+             "caption": "Rin charges in, fearless!"},
+            {"grid": (0, 1, 1, 1), "char": ("brakk", "fierce"), "fx": "focus",
+             "bubble": "YES!", "bubble_style": "shout"},
+            {"grid": (1, 1, 1, 1), "char": ("brakk", "fierce"),
+             "bubble": "Show me your\nPOWER!", "bubble_style": "shout"},
+            {"grid": (0, 2, 2, 1), "fx": "flash", "caption": "Power meets power— BOOM!"}]},
         "next": "ch3_battle"},
     "ch3_battle": {
-        "page": {"frame": "dynamic", "cols": 1, "rows": 2, "panels": [
-            {"grid": (0, 0, 1, 1), "bg": "arena", "caption": "A QUAKING CLASH!",
+        "page": {"cols": 2, "rows": 3, "panels": [
+            {"grid": (0, 0, 2, 1), "bg": "arena", "caption": "A QUAKING CLASH!",
              "border": "impact"},
             {"grid": (0, 1, 1, 1), "char": ("brakk", "fierce"), "fx": "focus",
-             "bubble": "Such SPIN!", "bubble_style": "shout"}]},
+             "bubble": "Such SPIN!", "bubble_style": "shout"},
+            {"grid": (1, 1, 1, 1), "fx": "flash", "caption": "KRA-KOOM!"},
+            {"grid": (0, 2, 2, 1), "bg": "arena", "caption": "HELP RIN DECIDE",
+             "bubble": "Hold on...\nnow!", "bubble_style": "thought"}]},
         "choices": [
-            {"label": "Unleash your spirit-beast", "to": "ch3_unleash"},
-            {"label": "Read him, then counter", "to": "ch3_counter"},
-            {"label": "Defend and outlast him", "to": "ch3_defend"}]},
+            {"label": "Unleash the spirit-beast", "to": "ch3_unleash"},
+            {"label": "Read Brakk, then counter", "to": "ch3_counter"},
+            {"label": "Defend and outlast Brakk", "to": "ch3_defend"}]},
     "ch3_unleash": {
-        "page": {"cols": 1, "rows": 1, "panels": [
-            {"grid": (0, 0, 1, 1), "char": ("brakk", "shocked"), "fx": "flash",
-             "caption": "Your spirit-beast erupts in light!", "bubble": "Incredible!"}]},
+        "page": {"cols": 2, "rows": 3, "panels": [
+            {"grid": (0, 0, 2, 1), "bg": "arena", "border": "impact",
+             "caption": "Rin's spirit-beast erupts in light!"},
+            {"grid": (0, 1, 1, 1), "char": ("brakk", "shocked"), "fx": "flash",
+             "bubble": "Incredible!", "bubble_style": "shout"},
+            {"grid": (1, 1, 1, 1), "fx": "focus", "caption": "SPIN-OUT!"},
+            {"grid": (0, 2, 2, 1), "bg": "arena", "caption": "Even raw power bows to a true bond."}]},
         "next": "ch3_friend"},
     "ch3_counter": {
-        "page": {"cols": 1, "rows": 1, "panels": [
-            {"grid": (0, 0, 1, 1), "char": ("brakk", "shocked"), "fx": "focus",
-             "caption": "You slip his charge and counter!", "bubble": "So nimble!"}]},
+        "page": {"cols": 2, "rows": 3, "panels": [
+            {"grid": (0, 0, 2, 1), "bg": "arena", "border": "impact",
+             "caption": "Rin slips his charge and counters!"},
+            {"grid": (0, 1, 1, 1), "char": ("brakk", "shocked"), "fx": "focus",
+             "bubble": "So nimble!", "bubble_style": "shout"},
+            {"grid": (1, 1, 1, 1), "fx": "flash", "caption": "WHIFF!"},
+            {"grid": (0, 2, 2, 1), "bg": "arena", "caption": "Speed beats strength today."}]},
         "next": "ch3_friend"},
     "ch3_defend": {
-        "page": {"cols": 1, "rows": 1, "panels": [
-            {"grid": (0, 0, 1, 1), "char": ("brakk", "shocked"), "fx": "focus",
-             "caption": "You stand firm till his power spends!", "bubble": "You... outlasted ME?"}]},
+        "page": {"cols": 2, "rows": 3, "panels": [
+            {"grid": (0, 0, 2, 1), "bg": "arena", "border": "bold",
+             "caption": "Rin stands firm till his power spends!"},
+            {"grid": (0, 1, 1, 1), "char": ("brakk", "shocked"), "fx": "focus",
+             "bubble": "You outlasted\nME?", "bubble_style": "shout"},
+            {"grid": (1, 1, 1, 1), "fx": "screen", "caption": "Tired out!"},
+            {"grid": (0, 2, 2, 1), "bg": "arena", "caption": "Grit over muscle— Rin endures."}]},
         "next": "ch3_friend"},
     "ch3_friend": {
-        "page": {"cols": 1, "rows": 1, "panels": [
-            {"grid": (0, 0, 1, 1), "char": ("brakk", "grin"),
-             "caption": "Brakk's top wobbles out— you WIN!",
-             "bubble": "HAHA! A worthy champ.\nGo win it all, friend!", "bubble_style": "round"}]},
+        "page": {"cols": 2, "rows": 3, "panels": [
+            {"grid": (0, 0, 2, 1), "bg": "arena", "border": "bold",
+             "caption": "Brakk's top wobbles out— RIN WINS!"},
+            {"grid": (0, 1, 1, 1), "char": ("brakk", "shocked"), "fx": "focus",
+             "caption": "Whoa!"},
+            {"grid": (1, 1, 1, 1), "char": ("brakk", "grin"),
+             "bubble": "HAHA! A worthy\nchamp!"},
+            {"grid": (0, 2, 2, 1), "char": ("brakk", "grin"),
+             "bubble": "Go win it all,\nfriend!", "bubble_style": "round"}]},
         "next": "finals_open"},
 
     # == CHAPTER 4 : THE GRAND FINAL — the Masked Ace (TWISTS) ============
     "finals_open": {
-        "page": {"frame": "dynamic", "cols": 1, "rows": 2, "panels": [
-            {"grid": (0, 0, 1, 1), "bg": "finals", "caption": "THE GRAND FINAL",
+        "page": {"cols": 2, "rows": 3, "panels": [
+            {"grid": (0, 0, 2, 1), "bg": "finals", "caption": "THE GRAND FINAL",
              "border": "bold"},
             {"grid": (0, 1, 1, 1), "char": ("mentor", "smile"),
-             "bubble": "This is it, champ. One match\nleft— for the crown."}]},
+             "bubble": "This is it,\nRin."},
+            {"grid": (1, 1, 1, 1), "bg": "finals", "caption": "One match left."},
+            {"grid": (0, 2, 2, 1), "fx": "focus", "caption": "For the crown."}]},
         "next": "finals_reveal"},
     "finals_reveal": {                                   # TWIST: the masked finalist
-        "page": {"frame": "dynamic", "cols": 1, "rows": 2, "panels": [
-            {"grid": (0, 0, 1, 1), "bg": "finals", "caption": "Across the ring waits... the MASKED ACE."},
-            {"grid": (0, 1, 1, 1), "char": ("raze", "masked"), "fx": "focus",
-             "bubble": "Bonds? Sentiment. I've\nbeaten a hundred blades.\nYours is next.", "bubble_style": "shout"}]},
+        "page": {"cols": 2, "rows": 3, "panels": [
+            {"grid": (0, 0, 2, 1), "bg": "finals", "border": "bold",
+             "caption": "Across the ring waits... the MASKED ACE."},
+            {"grid": (0, 1, 1, 2), "char": ("raze", "masked"), "fx": "focus",
+             "bubble": "Bonds?\nSentiment.", "bubble_style": "shout"},
+            {"grid": (1, 1, 1, 1), "fx": "screen", "caption": "Cold eyes."},
+            {"grid": (1, 2, 1, 1), "char": ("raze", "masked"),
+             "bubble": "Yours is\nnext, Rin."}]},
         "next": "finals_unmask"},
     "finals_unmask": {                                   # TWIST: the Coach's old rival
-        "page": {"frame": "dynamic", "cols": 1, "rows": 2, "panels": [
-            {"grid": (0, 0, 1, 1), "char": ("raze", "cold"), "fx": "focus",
-             "caption": "He tears off his mask— it's RAZE!"},
-            {"grid": (0, 1, 1, 1), "char": ("mentor", "neutral"),
-             "bubble": "That cold style— my old\nrival's HEIR! Here to spin\nout every bonded blade!"}]},
+        "page": {"cols": 2, "rows": 3, "panels": [
+            {"grid": (0, 0, 2, 1), "char": ("raze", "cold"), "fx": "focus",
+             "caption": "He tears off his mask— it's RAZE!", "border": "impact"},
+            {"grid": (0, 1, 1, 1), "char": ("raze", "cold"),
+             "bubble": "A bonded blade.\nHow quaint."},
+            {"grid": (1, 1, 1, 1), "char": ("mentor", "neutral"), "fx": "focus",
+             "bubble": "That cold\nstyle...!"},
+            {"grid": (0, 2, 2, 1), "char": ("mentor", "neutral"),
+             "bubble": "My old rival's HEIR— here to\nspin out every bonded blade!"}]},
         "next": "finals_clash"},
     "finals_clash": {
-        "page": {"frame": "dynamic", "cols": 1, "rows": 2, "panels": [
-            {"grid": (0, 0, 1, 1), "bg": "clash", "caption": "SPIRITS, FLY!", "border": "impact"},
+        "page": {"cols": 2, "rows": 3, "panels": [
+            {"grid": (0, 0, 2, 1), "bg": "clash", "fx": "flash",
+             "caption": "SPIRITS, FLY!", "border": "impact"},
             {"grid": (0, 1, 1, 1), "char": ("raze", "cold"), "fx": "focus",
-             "bubble": "Is that ALL? Bonds only\nmake you SLOW!", "bubble_style": "shout"}]},
+             "bubble": "Is that ALL?", "bubble_style": "shout"},
+            {"grid": (1, 1, 1, 1), "fx": "flash", "caption": "CLASH!"},
+            {"grid": (0, 2, 2, 1), "char": ("raze", "cold"),
+             "bubble": "Bonds only make you SLOW!", "bubble_style": "shout"}]},
         "next": "finals_low"},
     "finals_low": {                                      # a choice AT the climax (calls the rivals)
-        "page": {"cols": 1, "rows": 1, "panels": [
-            {"grid": (0, 0, 1, 1), "bg": "launch",
-             "caption": "Your top spins into the air— you're losing! What do you do?"}]},
+        "page": {"cols": 2, "rows": 3, "panels": [
+            {"grid": (0, 0, 2, 1), "bg": "launch", "fx": "focus", "border": "impact",
+             "caption": "Rin's top spins into the air— losing!"},
+            {"grid": (0, 1, 1, 1), "fx": "focus", "caption": "Falling..."},
+            {"grid": (1, 1, 1, 1), "char": ("raze", "cold"),
+             "bubble": "Finished.", "bubble_style": "whisper"},
+            {"grid": (0, 2, 2, 1), "bg": "finals", "caption": "HELP RIN — WHAT NOW?",
+             "bubble": "I can't...\ngive up!", "bubble_style": "thought"}]},
         "choices": [
-            {"label": "Reach for the bonds you forged", "to": "finals_unite"},
-            {"label": "Stand your ground— never give up", "to": "finals_unite"},
-            {"label": "Trust your friends are with you", "to": "finals_unite"}]},
+            {"label": "Reach for the bonds Rin forged", "to": "finals_unite"},
+            {"label": "Stand their ground— never give up", "to": "finals_unite"},
+            {"label": "Trust their friends are with them", "to": "finals_unite"}]},
     "finals_unite": {                                    # TWIST: rivals unite
-        "page": {"frame": "dynamic", "cols": 1, "rows": 3, "panels": [
-            {"grid": (0, 0, 1, 1), "bg": "finals", "caption": "Then— three voices ring out!"},
+        "page": {"cols": 2, "rows": 3, "panels": [
+            {"grid": (0, 0, 2, 1), "bg": "finals", "caption": "Then— three voices ring out!",
+             "border": "bold"},
             {"grid": (0, 1, 1, 1), "char": ("kael", "fierce"), "fx": "flash",
-             "bubble": "You're NOT alone,\nrookie!", "bubble_style": "shout"},
-            {"grid": (0, 2, 1, 1), "bg": "finals",
-             "caption": "Mira & Brakk stand with you— your bonds BLAZE!"}]},
+             "bubble": "You're NOT\nalone, Rin!", "bubble_style": "shout"},
+            {"grid": (1, 1, 1, 1), "char": ("mira", "fierce"), "fx": "flash",
+             "bubble": "We've got\nyou!", "bubble_style": "shout"},
+            {"grid": (0, 2, 2, 1), "char": ("brakk", "grin"), "fx": "focus",
+             "bubble": "Your bonds BLAZE— rise up!", "bubble_style": "shout"}]},
         "next": "finals_awaken"},
     "finals_awaken": {                                   # TWIST: the blade awakens
-        "page": {"frame": "dynamic", "cols": 1, "rows": 2, "panels": [
-            {"grid": (0, 0, 1, 1), "bg": "spirit", "caption": "Your spirit-beast awakens— its TRUE FORM!",
-             "border": "bold"},
-            {"grid": (0, 1, 1, 1), "char": ("mentor", "smile"), "fx": "flash",
-             "bubble": "There it is... a TRUE spirit!\nI feel my old bond alive\nagain— through YOU!", "bubble_style": "shout"}]},
+        "page": {"cols": 2, "rows": 3, "panels": [
+            {"grid": (0, 0, 2, 1), "bg": "spirit", "fx": "flash", "border": "bold",
+             "caption": "The spirit-beast awakens— its TRUE FORM!"},
+            {"grid": (0, 1, 1, 1), "fx": "flash", "caption": "RADIANT!"},
+            {"grid": (1, 1, 1, 1), "char": ("mentor", "smile"), "fx": "flash",
+             "bubble": "A TRUE\nspirit...!", "bubble_style": "shout"},
+            {"grid": (0, 2, 2, 1), "char": ("mentor", "smile"),
+             "bubble": "My old bond lives again—\nthrough YOU, Rin!", "bubble_style": "shout"}]},
         "next": "finals_finish"},
     "finals_finish": {
-        "page": {"frame": "dynamic", "cols": 1, "rows": 2, "panels": [
-            {"grid": (0, 0, 1, 1), "bg": "clash", "caption": "ONE FINAL CLASH!", "border": "impact"},
-            {"grid": (0, 1, 1, 1), "char": ("raze", "shocked"), "fx": "flash",
-             "bubble": "Impossible— this\nBOND...!", "bubble_style": "shout"}]},
+        "page": {"cols": 2, "rows": 3, "panels": [
+            {"grid": (0, 0, 2, 1), "bg": "clash", "fx": "flash",
+             "caption": "ONE FINAL CLASH!", "border": "impact"},
+            {"grid": (0, 1, 1, 1), "fx": "flash", "caption": "KA-BOOM!"},
+            {"grid": (1, 1, 1, 1), "char": ("raze", "shocked"), "fx": "focus",
+             "bubble": "Impossible—", "bubble_style": "shout"},
+            {"grid": (0, 2, 2, 1), "char": ("raze", "shocked"),
+             "bubble": "this BOND...!", "bubble_style": "shout"}]},
         "next": "ending"},
 
     # -- the ending: the champion TITLE is injected from your STYLE flags --
     "ending": {
-        "page": {"frame": "dynamic", "cols": 1, "rows": 3, "panels": [
-            {"grid": (0, 0, 1, 1), "bg": "finals", "caption": "BOND TOURNAMENT CHAMPION!",
+        "page": {"cols": 2, "rows": 3, "panels": [
+            {"grid": (0, 0, 2, 1), "bg": "finals", "caption": "BOND TOURNAMENT CHAMPION!",
              "border": "bold"},
             {"grid": (0, 1, 1, 1), "char": ("mentor", "smile"), "fx": "flash", "ending_bubble": True},
-            {"grid": (0, 2, 1, 1), "bg": "finals", "border": "double",
-             "caption": "Raze bows. Your bonds light up the whole arena!"}]},
+            {"grid": (1, 1, 1, 1), "char": ("raze", "shocked"), "caption": "Raze bows."},
+            {"grid": (0, 2, 2, 1), "bg": "finals", "border": "double",
+             "caption": "Rin's bonds light up the whole arena!"}]},
         "end": True},
 }
 

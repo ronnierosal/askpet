@@ -14,20 +14,52 @@ STATUS
 ------
 DONE (in the game)  — see ART_PROMPTS_DONE.txt
     backgrounds   arena_bg   training_bg   finals_bg
-    Kael          neutral  smug  fierce  shocked
+    Kael          neutral  smug  fierce  shocked      (OLD style — see KAEL re-export below)
     Mira          neutral  cool  fierce  shocked
     Brakk         neutral  grin  fierce  shocked
     Coach         neutral  smile
+    Raze          masked  cold  shocked               (the Masked Ace — villain; NEW, adopted)
 
 TO CREATE (this file)
-    [ ] VILLAIN   raze_masked  raze_cold  raze_shocked            (the Masked Ace — story!)
+    [ ] KAEL ***  kael_neutral  kael_smug  kael_fierce  kael_shocked
+                    RE-EXPORT as 4 SEPARATE sprites in the NEW launcher-holding style.
+                    The only Kael drop so far is a COMPOSITE sheet (4 expressions glued
+                    under an arena bg) — unusable as sprites. This UNBLOCKS adopting the
+                    staged cast regen (see CAST REGEN below).
     [ ] ACTION    clash_bg   launch_bg  spirit_bg                 (cool battle scenes)
     [ ] SIGNS     sign_focus  sign_burst                          (spirit-weaving hand signs)
     [ ] TOPS      top_hero   top_kael   top_mira   top_brakk      (the spinning blades)
     [ ] SCENERY   crowd_bg   gate_bg    sky_bg     podium_bg      (optional variety)
 
-(The finale already PLAYS on placeholders, but it really wants raze_* and the
-clash/launch/spirit action backgrounds to look its best.)
+(The finale already PLAYS on placeholders, but it really wants the clash/launch/spirit
+action backgrounds to look its best.)
+
+
+==================================================================
+CAST REGEN  —  new launcher-holding style  (STAGED, blocked on Kael)
+==================================================================
+On 2026-06-18 the cast was regenerated in a new, more detailed style (each character
+holds their launcher; a lightning-bolt motif on the jacket). Adopted so far: the new
+RAZE villain set. STAGED but NOT adopted: Mira x4, Brakk x4, Mentor x2, plus new
+training_bg / finals_bg — they sit base-named in assets/spinstory/raw/_regen/ (see its
+MANIFEST.txt for the source mapping + the one-step adopt procedure).
+
+WHY IT'S HELD: the new-style cast can't go in until KAEL matches, or the cast looks
+half-converted (old-style Kael next to new-style everyone else). So the ONE blocker is
+the Kael re-export above. Once those 4 Kael sprites land:
+    1. drop the 4 kael_*.png into raw/_regen/
+    2. from raw/:   cp _regen/*.png .
+    3. python tools/prep_spin_art.py   (then review the diff + commit)
+
+KAEL re-export prompt (NEW style — match Mira/Brakk/Mentor/Raze):
+"Kael", a confident teenage rival blade-spinner, cool spiky hair, sporty jacket with a
+lightning-bolt emblem, HOLDING his spinner launcher. Head-and-upper-body, facing the
+viewer, on a SOLID FLAT MAGENTA (#fe00fe) background — nothing else. B&W manga, ink +
+screentone. Same character, identical design, ONLY the expression changes:
+  kael_neutral.png  — calm, cool.
+  kael_smug.png     — smug cocky smirk, one eyebrow raised.
+  kael_fierce.png   — fierce, fired-up battle face, maybe mid-shout.
+  kael_shocked.png  — shocked, wide-eyed, caught off guard (he just lost). Not scary.
 
 
 KEEPING IT ORIGINAL  (not Beyblade)
@@ -44,39 +76,6 @@ clearly in the clear:
     game, or brand."
   - Our text is already original (e.g. the launch cry is "Spirits, fly!", not any
     trademarked slogan).
-  (Optional, if you want extra distance: the launchers in the CURRENT character
-   art look fairly generic — if you'd like, we can regenerate the cast later with
-   a more distinct original launcher design. Just say the word.)
-
-
-==================================================================
-RAZE  —  the Masked Ace  (the villain)   *needed for the finale*
-==================================================================
-"Raze", the undefeated masked finalist who believes bonds make you weak — a cold,
-arrogant teen champion. Kid-friendly: aloof and intense, NOT scary or monstrous.
-Same character across the set; head-and-upper-body, on SOLID FLAT MAGENTA
-(#fe00fe), B&W manga, ink + screentone, ORIGINAL design (not based on any brand).
-
-------------------------------------------------------------------
-FILE:  raze_masked.png     (the masked finalist — mysterious)
-------------------------------------------------------------------
-Raze wearing a cool, sleek MASK covering his eyes / upper face, arms crossed or
-holding a dark launcher, a confident aloof posture. Mysterious and intimidating-
-cool, NOT scary. Magenta background, B&W manga, original design.
-
-------------------------------------------------------------------
-FILE:  raze_cold.png       (mask off — cold & arrogant)
-------------------------------------------------------------------
-The SAME character "Raze" with the mask OFF: a cold, arrogant, dismissive look —
-sharp eyes, a slight sneer, chin up. Aloof and proud, NOT monstrous or scary.
-Same magenta background + framing + style.
-
-------------------------------------------------------------------
-FILE:  raze_shocked.png    (mask off — stunned / humbled)
-------------------------------------------------------------------
-The SAME character "Raze" with the mask OFF: SHOCKED and stunned, wide-eyed,
-caught completely off guard (he just felt the power of a true bond) — surprised,
-on the edge of being humbled. Not scary. Same magenta background + framing.
 
 
 ==================================================================
@@ -124,6 +123,9 @@ Draw the TOP itself (the spinning battle-blade), 3/4 view, mid-spin with a littl
 motion blur / spin-lines, centered on a SOLID FLAT MAGENTA (#fe00fe) background so
 I can cut it out and drop it into panels. B&W manga, ink + screentone, no color.
 ORIGINAL design — "not based on any existing toy, game, or brand."
+
+(NOTE: one top drop exists already — a snarling-wolf / predatory blade — but its
+character is undecided, so it's HELD, not named yet. top_kael vs top_hero TBD.)
 
 ------------------------------------------------------------------
 FILE:  top_hero.png        (the player's top — heroic)

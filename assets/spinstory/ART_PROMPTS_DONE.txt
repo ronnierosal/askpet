@@ -90,3 +90,16 @@ THE COACH / MENTOR:  neutral / smile
 on a cord). Same magenta background + framing.
   mentor_neutral.png  — calm, wise.
   mentor_smile.png    — big warm, proud smile, encouraging and kind.
+
+
+------------------------------------------------------------------
+RAZE  —  the Masked Ace  (the villain):  masked / cold / shocked   [adopted 2026-06-18]
+------------------------------------------------------------------
+"Raze", the undefeated masked finalist who believes bonds make you weak — a cold,
+arrogant teen champion. Kid-friendly: aloof and intense, NOT scary or monstrous.
+Same character across the set; head-and-upper-body, on SOLID FLAT MAGENTA (#fe00fe),
+B&W manga, ink + screentone, ORIGINAL design (not based on any brand).
+  raze_masked.png   — sleek mask over the eyes/upper face, arms crossed, aloof and
+                      mysterious (a launcher-holding pose alt also exists).
+  raze_cold.png     — mask OFF: cold, arrogant, slight sneer, chin up. Aloof and proud.
+  raze_shocked.png  — mask OFF: wide-eyed, stunned, humbled (he just felt a true bond).
