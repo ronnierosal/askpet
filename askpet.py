@@ -13798,9 +13798,98 @@ def spin_comic_rects(panels, cols, rows, W, H, margin=24, gutter=14):
         c, r, cs, rs = p["grid"]
         rects.append((round(margin + c * (cw + gutter)),
                       round(margin + r * (ch + gutter)),
-                      round(cs * cw + (cs - 1) * gutter),
-                      round(rs * ch + (rs - 1) * gutter)))
+                      max(1, round(cs * cw + (cs - 1) * gutter)),
+                      max(1, round(rs * ch + (rs - 1) * gutter))))
     return rects
+
+
+def _spin_bg_crop(bgid, w, h, cache, refs):
+    """A panel-sized centre crop of a manga background, else a tone fill."""
+    w, h = max(1, w), max(1, h)
+    key = ("bg", bgid, w, h)
+    if key not in cache:
+        src = None
+        p = SPIN_ASSETS / f"{bgid}_bg.png"
+        if p.exists():
+            try:
+                src = tk.PhotoImage(file=str(p))
+            except tk.TclError:
+                src = None
+        img = tk.PhotoImage(width=w, height=h)
+        if src is None:
+            img.put(SPIN_TONE, to=(0, 0, w, h))
+        else:
+            sw, sh = src.width(), src.height()
+            sx, sy = max(0, (sw - w) // 2), max(0, (sh - h) // 2)
+            img.tk.call(img, "copy", src, "-from", sx, sy,
+                        min(sw, sx + w), min(sh, sy + h), "-to", 0, 0)
+            refs.append(src)
+        cache[key] = img
+        refs.append(img)
+    return cache[key]
+
+
+def _spin_char(cid, expr, max_h, cache, refs):
+    """A character expression sprite, integer-subsampled to fit max_h."""
+    max_h = max(1, max_h)
+    key = ("char", cid, expr, max_h)
+    if key not in cache:
+        img = None
+        p = SPIN_ASSETS / f"{cid}_{expr}.png"
+        if p.exists():
+            try:
+                img = tk.PhotoImage(file=str(p))
+            except tk.TclError:
+                img = None
+        if img is None:
+            img = tk.PhotoImage(width=120, height=200)
+            img.put(SPIN_INK, to=(40, 0, 80, 56))
+            img.put(SPIN_INK, to=(24, 56, 96, 200))
+        while img.height() > max_h and img.height() > 2:
+            img = img.subsample(2, 2)
+        cache[key] = img
+        refs.append(img)
+    return cache[key]
+
+
+def _spin_bubble(canvas, px, pw, y, text):
+    """A manga speech bubble (clamped to the panel) with a downward tail."""
+    lines = text.split("\n")
+    tw = max(1, min(pw - 18, max(len(s) for s in lines) * 9 + 24))
+    th = len(lines) * 20 + 14
+    cx = px + pw // 2
+    x0 = cx - tw // 2
+    canvas.create_rectangle(x0, y, x0 + tw, y + th,
+                            fill=SPIN_PAPER, outline=SPIN_INK, width=3)
+    canvas.create_polygon(cx - 7, y + th, cx + 7, y + th, cx, y + th + 13,
+                          fill=SPIN_PAPER, outline=SPIN_INK, width=2)
+    canvas.create_text(cx, y + th // 2, text=text, fill=SPIN_INK,
+                       font=("Consolas", 13, "bold"), justify="center")
+
+
+def spin_draw_page(canvas, page, W, H, cache, refs):
+    """Draw a comic page (its panels) onto a canvas region (0,0)-(W,H). cache/refs
+    are owned by the caller; refs keeps the PhotoImages alive."""
+    rects = spin_comic_rects(page["panels"], page["cols"], page["rows"], W, H)
+    for p, (x, y, w, h) in zip(page["panels"], rects):
+        if p.get("bg"):
+            canvas.create_image(x, y, anchor="nw",
+                                image=_spin_bg_crop(p["bg"], w, h, cache, refs))
+        else:
+            canvas.create_rectangle(x, y, x + w, y + h, fill=SPIN_TONE, outline="")
+        ch = p.get("char")
+        if ch:
+            canvas.create_image(x + w // 2, y + h - 6, anchor="s",
+                                image=_spin_char(ch[0], ch[1], h - 16, cache, refs))
+        cap = p.get("caption")
+        if cap:
+            canvas.create_rectangle(x + 6, y + 6, x + 18 + len(cap) * 9, y + 30,
+                                    fill=SPIN_INK, outline=SPIN_INK)
+            canvas.create_text(x + 12, y + 18, anchor="w", text=cap,
+                               fill=SPIN_PAPER, font=("Consolas", 12, "bold"))
+        if p.get("bubble"):
+            _spin_bubble(canvas, x, w, y + 10, p["bubble"])
+        canvas.create_rectangle(x, y, x + w, y + h, outline=SPIN_INK, width=4)
 
 
 class SpinComicPage:
@@ -13830,88 +13919,164 @@ class SpinComicPage:
         self.win.geometry(f"+{max(0, (sw - self.PW) // 2)}+{max(0, (sh - self.PH) // 2 - 40)}")
         self.win.focus_force()
 
-    def _bg_crop(self, bgid, w, h):
-        key = ("bg", bgid, w, h)
-        if key not in self._cache:
-            src = None
-            p = SPIN_ASSETS / f"{bgid}_bg.png"
-            if p.exists():
-                try:
-                    src = tk.PhotoImage(file=str(p))
-                except tk.TclError:
-                    src = None
-            img = tk.PhotoImage(width=w, height=h)
-            if src is None:
-                img.put(SPIN_TONE, to=(0, 0, w, h))
-            else:
-                sw, sh = src.width(), src.height()
-                sx, sy = max(0, (sw - w) // 2), max(0, (sh - h) // 2)
-                img.tk.call(img, "copy", src, "-from", sx, sy,
-                            min(sw, sx + w), min(sh, sy + h), "-to", 0, 0)
-                self._refs.append(src)
-            self._cache[key] = img
-            self._refs.append(img)
-        return self._cache[key]
-
-    def _char(self, cid, expr, max_h):
-        key = ("char", cid, expr, max_h)
-        if key not in self._cache:
-            img = None
-            p = SPIN_ASSETS / f"{cid}_{expr}.png"
-            if p.exists():
-                try:
-                    img = tk.PhotoImage(file=str(p))
-                except tk.TclError:
-                    img = None
-            if img is None:
-                img = tk.PhotoImage(width=120, height=200)
-                img.put(SPIN_INK, to=(40, 0, 80, 56))
-                img.put(SPIN_INK, to=(24, 56, 96, 200))
-            while img.height() > max_h and img.height() > 2:   # fit panel, never loop forever
-                img = img.subsample(2, 2)
-            self._cache[key] = img
-            self._refs.append(img)
-        return self._cache[key]
-
-    def _bubble(self, px, pw, y, text):
-        lines = text.split("\n")
-        tw = min(pw - 18, max(len(s) for s in lines) * 9 + 24)
-        th = len(lines) * 20 + 14
-        cx = px + pw // 2
-        x0 = cx - tw // 2
-        self.canvas.create_rectangle(x0, y, x0 + tw, y + th,
-                                     fill=SPIN_PAPER, outline=SPIN_INK, width=3)
-        self.canvas.create_polygon(cx - 7, y + th, cx + 7, y + th, cx, y + th + 13,
-                                   fill=SPIN_PAPER, outline=SPIN_INK, width=2)
-        self.canvas.create_text(cx, y + th // 2, text=text, fill=SPIN_INK,
-                                font=("Consolas", 13, "bold"), justify="center")
-
     def _draw(self):
-        rects = spin_comic_rects(self.page["panels"], self.page["cols"],
-                                 self.page["rows"], self.PW, self.PH)
-        for p, (x, y, w, h) in zip(self.page["panels"], rects):
-            if p.get("bg"):
-                self.canvas.create_image(x, y, anchor="nw",
-                                         image=self._bg_crop(p["bg"], w, h))
-            else:
-                self.canvas.create_rectangle(x, y, x + w, y + h, fill=SPIN_TONE, outline="")
-            ch = p.get("char")
-            if ch:
-                self.canvas.create_image(x + w // 2, y + h - 6, anchor="s",
-                                         image=self._char(ch[0], ch[1], h - 16))
-            if p.get("caption"):
-                cap = p["caption"]
-                self.canvas.create_rectangle(x + 6, y + 6, x + 18 + len(cap) * 9, y + 30,
-                                             fill=SPIN_INK, outline=SPIN_INK)
-                self.canvas.create_text(x + 12, y + 18, anchor="w", text=cap,
-                                        fill=SPIN_PAPER, font=("Consolas", 12, "bold"))
-            if p.get("bubble"):
-                self._bubble(x, w, y + 10, p["bubble"])
-            self.canvas.create_rectangle(x, y, x + w, y + h, outline=SPIN_INK, width=4)
+        spin_draw_page(self.canvas, self.page, self.PW, self.PH, self._cache, self._refs)
 
     def _key(self, e):
         if (e.keysym or "").lower() in ("escape", "space", "return"):
             self.close()
+
+    def close(self):
+        if self._closed:
+            return
+        self._closed = True
+        try:
+            if self.win.winfo_exists():
+                self.win.destroy()
+        except Exception:
+            pass
+
+
+def spin_comic_ending(flags):
+    """Kael's short closing line — changes with how you played (choices matter)."""
+    if "bold" in flags:
+        return "Heh...\nRematch soon,\nrookie."
+    return "You earned\nthat win.\nRespect."
+
+
+# The blended chapter: every node is a comic PAGE; choice nodes pop a choice bar.
+SPIN_COMIC_STORY = {
+    "open": {
+        "page": {"cols": 1, "rows": 3, "panels": [
+            {"grid": (0, 0, 1, 1), "bg": "arena", "caption": "The arena thunders..."},
+            {"grid": (0, 1, 1, 2), "char": ("kael", "smug"),
+             "bubble": "A rookie?\nThis'll be over quick."}]},
+        "choices": [
+            {"label": "Stay calm and focused", "set": "calm", "to": "calm"},
+            {"label": "Fire right back at him", "set": "bold", "to": "bold"}]},
+    "calm": {
+        "page": {"cols": 1, "rows": 1, "panels": [
+            {"grid": (0, 0, 1, 1), "char": ("kael", "neutral"),
+             "caption": "You breathe. Steady.", "bubble": "Hmph.\nWe'll see."}]},
+        "next": "clash"},
+    "bold": {
+        "page": {"cols": 1, "rows": 1, "panels": [
+            {"grid": (0, 0, 1, 1), "char": ("kael", "fierce"),
+             "bubble": "Big words!\nBack them up!"}]},
+        "next": "clash"},
+    "clash": {
+        "page": {"cols": 1, "rows": 3, "panels": [
+            {"grid": (0, 0, 1, 1), "bg": "arena", "caption": "LET IT RIP!"},
+            {"grid": (0, 1, 1, 2), "char": ("kael", "fierce"), "bubble": "Here I come!"}]},
+        "choices": [
+            {"label": "Unleash your Spirit Move", "to": "power"},
+            {"label": "Defend, then counter", "to": "clever"}]},
+    "power": {
+        "page": {"cols": 1, "rows": 1, "panels": [
+            {"grid": (0, 0, 1, 1), "char": ("kael", "shocked"),
+             "caption": "Your blade SLAMS in!", "bubble": "Wha—?!"}]},
+        "next": "ending"},
+    "clever": {
+        "page": {"cols": 1, "rows": 1, "panels": [
+            {"grid": (0, 0, 1, 1), "char": ("kael", "shocked"),
+             "caption": "You counter at the last beat!", "bubble": "No way!"}]},
+        "next": "ending"},
+    "ending": {
+        "page": {"cols": 1, "rows": 2, "panels": [
+            {"grid": (0, 0, 1, 1), "bg": "arena", "caption": "VICTORY!  -  THE END"},
+            {"grid": (0, 1, 1, 1), "char": ("kael", "neutral"), "ending_bubble": True}]},
+        "end": True},
+}
+
+
+class SpinComicStory:
+    """Comic book + interactive: each beat is a manga PAGE; at a decision point a
+    choice bar overlays the bottom. Reuses SpinStoryLogic to walk the graph.
+    Crash-isolated by its caller."""
+
+    PW, PH = 600, 820
+    BAR = 96
+
+    def __init__(self, pet, story=SPIN_COMIC_STORY, start="open"):
+        self.pet = pet
+        self.logic = SpinStoryLogic(story, start=start)
+        self._refs = []
+        self._cache = {}
+        self.sel = 0
+        self._closed = False
+
+        self.win = tk.Toplevel(pet.root)
+        self.win.title("Spirit-Beast Blades")
+        self.win.resizable(False, False)
+        self.canvas = tk.Canvas(self.win, width=self.PW, height=self.PH,
+                                highlightthickness=0, bg=SPIN_PAPER)
+        self.canvas.pack()
+        self._render()
+        self.win.bind("<KeyPress>", self._key)
+        self.win.protocol("WM_DELETE_WINDOW", self.close)
+        sw, sh = pet.root.winfo_screenwidth(), pet.root.winfo_screenheight()
+        self.win.update_idletasks()
+        self.win.geometry(f"+{max(0, (sw - self.PW) // 2)}+{max(0, (sh - self.PH) // 2 - 40)}")
+        self.win.focus_force()
+
+    def _page(self):
+        node = self.logic.node
+        page = node["page"]
+        if node.get("end"):                  # fill the ending bubble from your flags
+            page = {**page, "panels": [
+                ({**p, "bubble": spin_comic_ending(self.logic.flags)}
+                 if p.get("ending_bubble") else p) for p in page["panels"]]}
+        return page
+
+    def _render(self):
+        self.canvas.delete("all")
+        self._refs.clear()
+        self._cache.clear()
+        spin_draw_page(self.canvas, self._page(), self.PW, self.PH - self.BAR,
+                       self._cache, self._refs)
+        by = self.PH - self.BAR + 6
+        self.canvas.create_line(0, by, self.PW, by, fill=SPIN_INK, width=3)
+        chs = self.logic.choices()
+        if chs:
+            for i, ch in enumerate(chs):
+                self.canvas.create_text(46, by + 24 + i * 30, anchor="w", fill=SPIN_INK,
+                                        font=("Consolas", 14, "bold"),
+                                        text=f"{i + 1}. {ch['label']}")
+            self.canvas.create_text(24, by + 24 + self.sel * 30, anchor="w", fill=SPIN_INK,
+                                    font=("Consolas", 14, "bold"), text="▸")
+        else:
+            self.canvas.create_text(self.PW // 2, by + 42, fill=SPIN_GRAY,
+                                    font=("Consolas", 13, "bold"),
+                                    text="Space to close" if self.logic.over else
+                                    "Space  ▸  continue")
+
+    def _key(self, e):
+        ks = (e.keysym or "").lower()
+        if ks == "escape":
+            self.close()
+            return
+        chs = self.logic.choices()
+        if chs:
+            if ks in ("down", "s", "right"):
+                self.sel = (self.sel + 1) % len(chs)
+                self._render()
+            elif ks in ("up", "w", "left"):
+                self.sel = (self.sel - 1) % len(chs)
+                self._render()
+            elif ks in ("1", "2", "3") and int(ks) - 1 < len(chs):
+                self.logic.choose(int(ks) - 1)
+                self.sel = 0
+                self._render()
+            elif ks in ("return", "space"):
+                self.logic.choose(self.sel)
+                self.sel = 0
+                self._render()
+        elif ks in ("return", "space"):
+            if self.logic.over:
+                self.close()
+            else:
+                self.logic.advance()
+                self._render()
 
     def close(self):
         if self._closed:
@@ -14696,11 +14861,12 @@ class ChatWindow:
                              "play a game instead? Say /play. 🐾")
 
     def _open_spin_story(self):
-        """Open the Spirit-Beast Blades manga story. A bug must never break chat."""
-        self._add("game", "Opening Spirit-Beast Blades — a manga story. Read on; "
-                          "your choices steer how it goes. 🌀")
+        """Open the Spirit-Beast Blades comic story (comic pages + choices). A bug
+        must never break chat."""
+        self._add("game", "Opening Spirit-Beast Blades — a manga comic story. Read "
+                          "each page, then your choices steer what happens next. 🌀")
         try:
-            SpinMangaScreen(self.pet)
+            SpinComicStory(self.pet)
         except Exception:
             self._add("pet", "Hmm, I couldn't open the story just now — try /games "
                              "for the arcade instead. 🐾")

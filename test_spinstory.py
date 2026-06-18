@@ -63,10 +63,42 @@ def test_comic_layout():
     print("comic layout OK")
 
 
+def test_comic_story():
+    from askpet import SPIN_COMIC_STORY as S, spin_comic_rects, spin_comic_ending
+    for nid, n in S.items():
+        assert n["page"]["panels"], f"{nid} empty page"
+        assert ("next" in n) or ("choices" in n) or n.get("end"), f"{nid} dead-ends"
+        if "next" in n:
+            assert n["next"] in S
+        for ch in n.get("choices", []):
+            assert ch["to"] in S and ch["label"]
+        for (x, y, w, h) in spin_comic_rects(n["page"]["panels"], n["page"]["cols"],
+                                             n["page"]["rows"], 600, 724):
+            assert w >= 1 and h >= 1 and 0 <= x and 0 <= y and x + w <= 600 and y + h <= 724, nid
+    seen, stack = set(), ["open"]
+    while stack:
+        nid = stack.pop()
+        if nid in seen:
+            continue
+        seen.add(nid)
+        n = S[nid]
+        if "next" in n:
+            stack.append(n["next"])
+        for ch in n.get("choices", []):
+            stack.append(ch["to"])
+    assert seen == set(S), set(S) - seen
+    L = SpinStoryLogic(S, start="open")
+    L.choose(1); L.advance(); L.choose(0); L.advance()   # bold -> clash -> power -> end
+    assert L.over and "bold" in L.flags
+    assert spin_comic_ending({"bold"}) != spin_comic_ending({"calm"})
+    print("comic story OK")
+
+
 if __name__ == "__main__":
     test_graph_integrity()
     test_all_nodes_reachable()
     test_branching_playthroughs()
     test_ending_varies_and_choose_guard()
     test_comic_layout()
+    test_comic_story()
     print("SPINSTORY TEST PASSED")
