@@ -342,6 +342,8 @@ def test_book_story():
                 png = (f"{a[1]}_bg.png" if a[0] == "bg" else
                        f"{a[1]}_{a[2]}.png" if a[0] == "char" else f"{a[1]}.png")
                 assert png in arts, f"{nid}: undocumented art {a} ({png})"
+                if a[0] == "char" and len(a) > 3:
+                    assert f"{a[3]}_bg.png" in arts, f"{nid}: undocumented scene {a[3]}"
             if not n.get("end"):
                 assert n.get("text"), f"{nid} prose page missing text"
 

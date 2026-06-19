@@ -120,6 +120,11 @@ HEART = ("calm", "kind", "steady")
 FIRE = ("bold", "fierce", "reckless")
 SCORING = set(HEART) | set(FIRE)
 
+# fallback scene behind a character portrait when the chapter has no bg page
+CHAR_BG = {"kael": "arena", "mira": "arena", "brakk": "arena", "raze": "finals",
+           "mentor": "training", "pae": "dishhall", "vehesal": "pavilion",
+           "oru": "finals", "rin": "arena"}
+
 nodes = {}
 start = nid(1, chapters[0]["pages"][0]["id"])
 
@@ -130,6 +135,19 @@ for ci, ch in enumerate(chapters):
     num = ch["chapter"]
     pages = ch["pages"]
     idx = {p["id"]: j for j, p in enumerate(pages)}
+
+    bg_pages = [(j, pp["art"].split(":")[1]) for j, pp in enumerate(pages)
+                if (pp.get("art") or "").startswith("bg:")]
+
+    def scene_for(j, cid):
+        """A scene id to place behind a character portrait: the chapter's nearest
+        preceding background, else its first, else a per-character default."""
+        prev = [b for (k, b) in bg_pages if k <= j]
+        if prev:
+            return prev[-1]
+        if bg_pages:
+            return bg_pages[0][1]
+        return CHAR_BG.get(cid, "arena")
 
     def default_next(j):
         if j + 1 < len(pages):
@@ -164,7 +182,10 @@ for ci, ch in enumerate(chapters):
         pid = p["id"]
         n = nid(num, pid)
         if p.get("art"):
-            node["art"] = art_ref(p["art"])
+            a = art_ref(p["art"])
+            if a and a[0] == "char":
+                a = a + [scene_for(j, a[1])]      # composite the portrait over a scene
+            node["art"] = a
         if p.get("text"):
             node["text"] = p["text"]
         if num == 1 and j == 0 and "chapter" not in node:
@@ -227,16 +248,16 @@ for f in sorted(SPIN.glob("ART_PROMPTS*.txt")):
 def check_art(a, where):
     if not a:
         return
+    pngs = []
     if a[0] == "bg":
-        png = f"{a[1]}_bg.png"
+        pngs = [f"{a[1]}_bg.png"]
     elif a[0] == "char":
-        png = f"{a[1]}_{a[2]}.png"
+        pngs = [f"{a[1]}_{a[2]}.png"] + ([f"{a[3]}_bg.png"] if len(a) > 3 else [])
     elif a[0] == "img":
-        png = f"{a[1]}.png"
-    else:
-        png = None
-    if png and png not in arts:
-        errs.append(f"{where}: undocumented art {png} ({a})")
+        pngs = [f"{a[1]}.png"]
+    for png in pngs:
+        if png not in arts:
+            errs.append(f"{where}: undocumented art {png} ({a})")
 
 
 for n, node in nodes.items():

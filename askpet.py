@@ -13900,25 +13900,30 @@ def _spin_load_sprite(cid, expr, refs):
     return img
 
 
-def _spin_ratio(f):
+def _spin_ratio(f, cover=False):
     """Small integer (zoom, subsample) factors whose ratio best approximates f —
     the only stdlib PhotoImage resize. Lets a sprite hit ~any target size (so it
-    FILLS its space) instead of just halving past it. a,b<=6 keeps the transient
-    zoomed image small."""
+    FILLS its space) instead of just halving past it. cover=True only considers
+    ratios >= f, so a cover-crop fully fills its frame (no letterbox gap)."""
     best = None
-    for b in range(1, 7):
-        for a in range(1, 7):
-            d = abs(a / b - f)
+    for b in range(1, 9):
+        for a in range(1, 9):
+            r = a / b
+            if cover and r < f - 1e-6:
+                continue
+            d = abs(r - f)
             if best is None or d < best[2]:
                 best = (a, b, d)
+    if best is None:                          # f bigger than any a/b in range
+        return min(8, max(1, round(f))), 1
     return best[0], best[1]
 
 
-def _spin_apply_ratio(img, f):
+def _spin_apply_ratio(img, f, cover=False):
     """Scale a PhotoImage by ~f via an integer zoom/subsample ratio."""
     if f <= 0:
         return img
-    a, b = _spin_ratio(f)
+    a, b = _spin_ratio(f, cover)
     if a > 1:
         img = img.zoom(a, a)
     if b > 1:
@@ -14979,8 +14984,8 @@ def _spin_bg_fit(bgid, w, h, cache, refs):
             return out
         sw, sh = src.width(), src.height()
         f = max(w / sw, h / sh)                           # COVER the frame
-        if abs(f - 1) > 0.03:
-            src = _spin_apply_ratio(src, f)
+        if abs(f - 1) > 0.02:
+            src = _spin_apply_ratio(src, f, cover=True)   # >= f so it fully fills
             refs.append(src)
             sw, sh = src.width(), src.height()
         out = tk.PhotoImage(width=w, height=h)
@@ -15002,6 +15007,10 @@ def _spin_book_art(canvas, art, x, y, w, h, cache, refs):
         img = _spin_bg_fit(art[1], w - 8, h - 8, cache, refs)
         canvas.create_image(x + w // 2, y + h // 2, image=img)
     elif kind == "char":
+        scene = art[3] if len(art) > 3 else None         # a scene id behind the figure
+        if scene:
+            canvas.create_image(x + w // 2, y + h // 2,
+                                image=_spin_bg_fit(scene, w - 8, h - 8, cache, refs))
         img = _spin_char(art[1], art[2], h - 26, cache, refs)
         canvas.create_image(x + w // 2, y + h - 7, anchor="s", image=img)
     else:                                                # ("img", name)
