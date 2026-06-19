@@ -33,7 +33,7 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 APP_NAME = "AskPet"
-APP_VERSION = "0.39.0"
+APP_VERSION = "0.40.0"
 CONTENT_VERSION = "2026.06.17"
 
 # ---------------------------------------------------------------------------
